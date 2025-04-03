@@ -20,11 +20,12 @@ from minirag.llm.hf import (
     hf_embed,
 )
 
-from lightrag import LightRAG
+# from lightrag import LightRAG
+from minirag import MiniRAG
 from minirag.utils import EmbeddingFunc
 from transformers import AutoModel, AutoTokenizer
 
-from lightrag.llm import openai_complete_if_cache
+from lightrag.llm.openai import openai_complete_if_cache
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -61,22 +62,22 @@ async def llm_model_func(
         **kwargs
     )
 
-
-rag = LightRAG(
-    working_dir=WORKING_DIR,
-    llm_model_func=llm_model_func,
-    # llm_model_func= LLM_MODEL,
-    llm_model_max_token_size=200,
-    embedding_func=EmbeddingFunc(
-        embedding_dim=384,
-        max_token_size=1000,
-        func=lambda texts: hf_embed(
-            texts,
-            tokenizer=AutoTokenizer.from_pretrained(EMBEDDING_MODEL),
-            embed_model=AutoModel.from_pretrained(EMBEDDING_MODEL),
+def init_rag():
+    return MiniRAG(
+        working_dir=WORKING_DIR,
+        llm_model_func=llm_model_func,
+        # llm_model_func= LLM_MODEL,
+        llm_model_max_token_size=1024,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=384,
+            max_token_size=512,
+            func=lambda texts: hf_embed(
+                texts,
+                tokenizer=AutoTokenizer.from_pretrained(EMBEDDING_MODEL),
+                embed_model=AutoModel.from_pretrained(EMBEDDING_MODEL),
+            ),
         ),
-    ),
-)
+    )
 
 
 
@@ -97,12 +98,14 @@ def find_txt_files(files_dir):
     return txt_files
 
 
-WEEK_LIST = find_txt_files(DATA_PATH)
+if __name__ == "__main__":
+    rag = init_rag()
+    WEEK_LIST = find_txt_files(DATA_PATH)
 
-print("FOUND WEEKS:", WEEK_LIST)
+    print("FOUND WEEKS:", WEEK_LIST)
 
-for WEEK in WEEK_LIST:
-    id = WEEK_LIST.index(WEEK)
-    print(f"{id}/{len(WEEK_LIST)}")
-    with open(WEEK, encoding='utf-8') as f:
-        rag.insert(f.read())
+    for WEEK in WEEK_LIST:
+        id = WEEK_LIST.index(WEEK)
+        print(f"{id}/{len(WEEK_LIST)}")
+        with open(WEEK, encoding='utf-8') as f:
+            rag.insert(f.read())
