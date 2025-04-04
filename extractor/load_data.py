@@ -13,6 +13,8 @@ from langchain.output_parsers.json import SimpleJsonOutputParser
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+from langchain.schema import AIMessage
+from langchain_core.runnables import RunnableLambda 
 
 # --- Конфигурация логирования ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -63,14 +65,34 @@ def initialize_llm(model_key: str, config: Dict[str, Any]) -> ChatOpenAI:
             timeout=config["llm"]["request_timeout"],
             openai_api_key=os.getenv('OPENAI_API_KEY') # Убедитесь, что ключ передается
         )
-        logging.info(f"LLM '{config['llm'][model_key]}' инициализирована с URL: {os.getenv('RAG_BASE_URL')}")
+        logging.info(f"LLM '{os.getenv('''RAG_LLM_MODEL''') or config['''llm'''][model_key]}' инициализирована с URL: {os.getenv('RAG_BASE_URL')}")
         return llm
     except Exception as e:
         logging.error(f"Ошибка инициализации LLM: {e}")
         raise
 
+# --- Функции обработки сообщений ---
+def strip_json_string(ai_message: AIMessage) -> AIMessage:
+    """Удаляет обертку ```json ... ``` или просто ``` ... ``` из содержимого AI-сообщения и возвращает новое AI-сообщение."""
+    stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
+
+    if stripped_content.startswith("```json"):
+        stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
+
+    if stripped_content.startswith("```"):
+        stripped_content = stripped_content[3:].strip() # Убираем обертку в начале (Если первый случай не сработал)
+
+    if stripped_content.endswith("```"):
+        stripped_content = stripped_content[:-3].strip()  # Убираем обертку в конце
+
+    # Проверяем, что содержимое не пустое
+    ai_message.content = stripped_content if stripped_content else "{}"  # Если пустое, возвращаем пустой JSON
+    
+    # Возвращаем новое AI-сообщение с очищенным содержимым
+    return ai_message 
+
 # Основная LLM для извлечения сущностей/связей
-llm_extractor = initialize_llm("chunk_processing_model", CONFIG) | SimpleJsonOutputParser()
+llm_extractor = initialize_llm("chunk_processing_model", CONFIG) | RunnableLambda(strip_json_string) | SimpleJsonOutputParser()
 # LLM для суммаризации (может быть та же модель)
 llm_summarizer = initialize_llm("summarization_model", CONFIG) # Без JSON парсера, т.к. нужен просто текст
 
@@ -129,27 +151,11 @@ async def process_chunk(chunk: Document, llm_chain: Any, config: Dict[str, Any])
             if "entities" in response and "relationships" in response:
                 logging.debug(f"Чанк обработан успешно. Найдено сущностей: {len(response.get('entities', []))}, связей: {len(response.get('relationships', []))}")
                 return response
-            else:
-                logging.warning(f"Ответ LLM для чанка не содержит ключи 'entities' и 'relationships': {response}")
-                return None # Возвращаем None если структура некорректна
-        else:
-             # Если вернулась строка (например, ошибка парсинга JSON внутри SimpleJsonOutputParser)
-             logging.warning(f"Ответ LLM для чанка не является словарем (возможно, ошибка JSON): {response}")
-             # Попытка исправить JSON, если он обрамлен ```json ... ```
-             if isinstance(response, str) and response.strip().startswith("```json"):
-                 clean_response = response.strip()[7:-3].strip() # Убираем обертку
-                 try:
-                     parsed_response = json.loads(clean_response)
-                     if isinstance(parsed_response, dict) and "entities" in parsed_response and "relationships" in parsed_response:
-                         logging.info("Успешно исправлен и распарсен JSON из строки.")
-                         return parsed_response
-                     else:
-                          logging.warning(f"Исправленный JSON не имеет нужной структуры: {parsed_response}")
-                          return None
-                 except json.JSONDecodeError as json_err:
-                     logging.error(f"Ошибка декодирования исправленного JSON: {json_err}. Исходная строка: {clean_response}")
-                     return None
-             return None
+
+            # ELSE:
+            logging.warning(f"Ответ LLM для чанка не содержит ключи 'entities' и 'relationships': {response}")
+        
+        return None # Возвращаем None если структура некорректна
     except Exception as e:
         logging.error(f"Ошибка при обработке чанка LLM: {e}", exc_info=True) # Добавляем traceback
         return None
