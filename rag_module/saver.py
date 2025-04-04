@@ -67,7 +67,7 @@ def init_rag():
         working_dir=WORKING_DIR,
         llm_model_func=llm_model_func,
         # llm_model_func= LLM_MODEL,
-        llm_model_max_token_size=1024,
+        llm_model_max_token_size=4096,
         embedding_func=EmbeddingFunc(
             embedding_dim=384,
             max_token_size=512,
@@ -77,6 +77,7 @@ def init_rag():
                 embed_model=AutoModel.from_pretrained(EMBEDDING_MODEL),
             ),
         ),
+        chunk_token_size=256,
     )
 
 

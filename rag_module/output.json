@@ -1,0 +1,299 @@
+{
+    "entities": [
+        {
+            "name": "Fant\u00f4mas poster",
+            "description": [
+                "A poster of Fant\u00f4mas on the wall.",
+                "Near the Fant\u00f4mas poster is a poster of a bitard."
+            ]
+        },
+        {
+            "name": "Bitard poster",
+            "description": [
+                "A poster of a bitard near the Fant\u00f4mas poster."
+            ]
+        },
+        {
+            "name": "Hammer",
+            "description": [
+                "A hammer lying under Olga Dmitrievna's bed.",
+                "The hammer lies under Olga Dmitrievna's bed, referencing the Banhammer-chan mascot."
+            ]
+        },
+        {
+            "name": "Map",
+            "description": [
+                "A map in each cabin showing its occupants."
+            ]
+        },
+        {
+            "name": "Slavya and Zhenya's Cabin",
+            "description": [
+                "The cabin of Slavya and Zhenya."
+            ]
+        },
+        {
+            "name": "Mitsgol poster",
+            "description": [
+                "A poster of Mitsgol on the left wall of Slavya and Zhenya's cabin.",
+                "A poster of Mitsgol (the basis for Mitsg\u00ebl, which served as the prototype for Zhenya) can be seen on the left wall."
+            ]
+        },
+        {
+            "name": "Famous paintings by Vasnetsov",
+            "description": [
+                "Famous paintings by Vasnetsov hanging on the right wall of Slavya and Zhenya's cabin.",
+                "Famous paintings by Vasnetsov hang on the right wall."
+            ]
+        },
+        {
+            "name": "Books on shelves above Zhenya's bed",
+            "description": [
+                "Shelves above Zhenya's bed filled with books.",
+                "The shelves above Zhenya's bed are filled with books, indicating that she reads all the time, even in her cabin (since she spends the rest of her time in the library)."
+            ]
+        },
+        {
+            "name": "Alya and Ulyana's Cabin",
+            "description": [
+                "The cabin of Alya and Ulyana."
+            ]
+        },
+        {
+            "name": "Detroit Metal City poster",
+            "description": [
+                "A poster from the anime 'Detroit Metal City' above Alya's bed in Alya and Ulyana's cabin.",
+                "A poster from the anime 'Detroit Metal City' hangs above Alya's bed."
+            ]
+        },
+        {
+            "name": "Stalin poster",
+            "description": [
+                "A poster of Stalin above Ulyana's bed in Alya and Ulyana's cabin.",
+                "A poster of Stalin from the game 'Stalin vs. Martians' hangs above Ulyana's bed."
+            ]
+        },
+        {
+            "name": "Kitten named Gav poster",
+            "description": [
+                "A poster of a kitten named Gav next to the Stalin poster in Alya and Ulyana's cabin.",
+                "Next to the Stalin poster is a poster of a kitten named Gav."
+            ]
+        },
+        {
+            "name": "Soviet-era hockey players poster",
+            "description": [
+                "A poster of Soviet-era hockey players on the other side of the Stalin poster in Alya and Ulyana's cabin.",
+                "On the other side of the Stalin poster is a poster of Soviet-era hockey players, likely one of the following: Larionov, Krutov, Fetisov, Makarov, Kasatonov."
+            ]
+        },
+        {
+            "name": "Wallpaper featuring drawings of a sickle and hammer",
+            "description": [
+                "The wallpaper in Alya and Ulyana's cabin featuring drawings of a sickle and hammer.",
+                "The wallpaper in Alya and Ulyana's cabin features drawings of a sickle and hammer."
+            ]
+        },
+        {
+            "name": "Olga Dmitrievna",
+            "description": [
+                "A character whose poster can be seen on the wall.",
+                "Has a poster on the wall.",
+                "Has a poster of a bitard near her poster."
+            ]
+        },
+        {
+            "name": "Semyon",
+            "description": [
+                "A bitard depicted in posters and as the occupant of a cabin.",
+                "Depicted as the same bitard with a bag on his head in the map of counselor and Semyon's cabin."
+            ]
+        },
+        {
+            "name": "Fant\u00f4mas",
+            "description": [
+                "A character whose poster is near Olga Dmitrievna's poster."
+            ]
+        },
+        {
+            "name": "Bitard",
+            "description": [
+                "A character referenced by multiple posters in the cabins."
+            ]
+        },
+        {
+            "name": "Banhammer-chan",
+            "description": [
+                "A mascot whose hammer lies under Olga Dmitrievna's bed."
+            ]
+        },
+        {
+            "name": "Slavya",
+            "description": [
+                "A character with a poster of Mitsgol on her left wall and books on her shelves.",
+                "Has a poster of Mitsgol on her left wall."
+            ]
+        },
+        {
+            "name": "Zhenya",
+            "description": [
+                "A character with posters of Vasnetsov paintings on the right wall and books on her shelves.",
+                "Has posters of Vasnetsov paintings on the right wall."
+            ]
+        },
+        {
+            "name": "Mitsgol",
+            "description": [
+                "The basis for Mitsg\u00ebl, which served as the prototype for Zhenya."
+            ]
+        },
+        {
+            "name": "Vasnetsov",
+            "description": [
+                "An artist whose paintings hang on the right wall of Zhenya's cabin."
+            ]
+        },
+        {
+            "name": "Alya",
+            "description": [
+                "A character with a poster from 'Detroit Metal City' above her bed.",
+                "Has a poster from 'Detroit Metal City' above her bed."
+            ]
+        },
+        {
+            "name": "Ulyana",
+            "description": [
+                "A character with a Stalin poster and various other posters above her bed.",
+                "Has a Stalin poster above her bed.",
+                "Has a kitten named Gav poster near Stalin's poster.",
+                "Has posters of Soviet-era hockey players next to Stalin's poster."
+            ]
+        },
+        {
+            "name": "Stalin",
+            "description": [
+                "A character featured in the game 'Stalin vs. Martians' and in another poster on Ulyana's wall."
+            ]
+        },
+        {
+            "name": "Kitten named Gav",
+            "description": [
+                "A poster of a kitten that is mentioned next to Stalin's poster."
+            ]
+        },
+        {
+            "name": "Soviet-era hockey players",
+            "description": [
+                "Posters of Soviet-era hockey players near Stalin's poster."
+            ]
+        },
+        {
+            "name": "Detroit Metal City",
+            "description": [
+                "An anime from which a poster hangs above Alya's bed."
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "source": "Fant\u00f4mas poster",
+            "description": "Near the Fant\u00f4mas poster is a poster of a bitard.",
+            "target": "Bitard poster"
+        },
+        {
+            "source": "Hammer",
+            "description": "The hammer lies under Olga Dmitrievna's bed, referencing the Banhammer-chan mascot.",
+            "target": "Banhammer-chan mascot"
+        },
+        {
+            "source": "Map in each cabin",
+            "description": "In the counselor and Semyon's cabin, Semyon is depicted as the same bitard with a bag on his head.",
+            "target": "Semyon's Cabin"
+        },
+        {
+            "source": "Mitsgol poster",
+            "description": "A poster of Mitsgol (the basis for Mitsg\u00ebl, which served as the prototype for Zhenya) can be seen on the left wall.",
+            "target": "Slavya and Zhenya's Cabin"
+        },
+        {
+            "source": "Famous paintings by Vasnetsov",
+            "description": "Famous paintings by Vasnetsov hang on the right wall.",
+            "target": "Slavya and Zhenya's Cabin"
+        },
+        {
+            "source": "Books on shelves above Zhenya's bed",
+            "description": "The shelves above Zhenya's bed are filled with books, indicating that she reads all the time, even in her cabin (since she spends the rest of her time in the library).",
+            "target": "Zhenya"
+        },
+        {
+            "source": "Detroit Metal City poster",
+            "description": "A poster from the anime 'Detroit Metal City' hangs above Alya's bed.",
+            "target": "Alya and Ulyana's Cabin"
+        },
+        {
+            "source": "Stalin poster",
+            "description": "A poster of Stalin from the game 'Stalin vs. Martians' hangs above Ulyana's bed.",
+            "target": "Alya and Ulyana's Cabin"
+        },
+        {
+            "source": "Kitten named Gav poster",
+            "description": "Next to the Stalin poster is a poster of a kitten named Gav.",
+            "target": "Alya and Ulyana's Cabin"
+        },
+        {
+            "source": "Soviet-era hockey players poster",
+            "description": "On the other side of the Stalin poster is a poster of Soviet-era hockey players, likely one of the following: Larionov, Krutov, Fetisov, Makarov, Kasatonov.",
+            "target": "Alya and Ulyana's Cabin"
+        },
+        {
+            "source": "Wallpaper featuring drawings of a sickle and hammer",
+            "description": "The wallpaper in Alya and Ulyana's cabin features drawings of a sickle and hammer.",
+            "target": "Alya and Ulyana's Cabin"
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "description": "Has a poster on the wall.",
+            "target": "Fant\u00f4mas"
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "description": "Has a poster of a bitard near her poster.",
+            "target": "Bitard"
+        },
+        {
+            "source": "Semyon",
+            "description": "Depicted as the same bitard with a bag on his head in the map of counselor and Semyon's cabin.",
+            "target": "Bitard"
+        },
+        {
+            "source": "Slavya",
+            "description": "Has a poster of Mitsgol on her left wall.",
+            "target": "Mitsgol"
+        },
+        {
+            "source": "Zhenya",
+            "description": "Has posters of Vasnetsov paintings on the right wall.",
+            "target": "Vasnetsov"
+        },
+        {
+            "source": "Alya",
+            "description": "Has a poster from 'Detroit Metal City' above her bed.",
+            "target": "Detroit Metal City"
+        },
+        {
+            "source": "Ulyana",
+            "description": "Has a Stalin poster above her bed.",
+            "target": "Stalin"
+        },
+        {
+            "source": "Ulyana",
+            "description": "Has a kitten named Gav poster near Stalin's poster.",
+            "target": "Kitten named Gav"
+        },
+        {
+            "source": "Ulyana",
+            "description": "Has posters of Soviet-era hockey players next to Stalin's poster.",
+            "target": "Soviet-era hockey players"
+        }
+    ]
+}

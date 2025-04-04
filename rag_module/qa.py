@@ -16,7 +16,7 @@ def main():
     rag = init_rag()
 
     print(rag.query(
-        "Я видел девочку с красными волосами - кто она?"
+        "Alya?"
     ))
 
 if __name__ == "__main__":

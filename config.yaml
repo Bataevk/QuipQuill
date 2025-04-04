@@ -1,0 +1,56 @@
+# config.yaml
+llm:
+  chunk_processing_model: "ИМЯ_ВАШЕЙ_МОДЕЛИ_ДЛЯ_ОБРАБОТКИ_ЧАНКОВ" # Укажите модель из .env или напрямую
+  summarization_model: "ИМЯ_ВАШЕЙ_МОДЕЛИ_ДЛЯ_СУММАРИЗАЦИИ" # Может быть та же или другая модель
+  temperature: 0.7
+  top_p: 0.9
+  request_timeout: 600 # Таймаут для одного запроса к LLM в секундах
+  max_tokens: null # null означает отсутствие лимита со стороны клиента
+
+prompts:
+  extraction_system_prompt: |
+    You are a professional JSON programmer. Your task is to extract data from the text and represent it as JSON.
+    Output the result ONLY in JSON format.
+    The JSON structure must be EXACTLY like this:
+    {
+      "entities": [
+        {
+          "name": "Entity Name",
+          "description": "Concise description based ONLY on the text"
+        }
+        // ... other entities found
+      ],
+      "relationships": [
+        {
+          "source": "Source Entity Name",
+          "description": "Relationship Description",
+          "target": "Target Entity Name"
+        }
+        // ... other relationships found
+      ]
+    }
+    **Rules:**
+    1.  **entities**: List entities with descriptions from the text. Use concise and informative names.
+    2.  **relationships**: List relationships. Use EXACT names from `entities` you identified in this text chunk.
+    3.  Use ONLY information from the text provided in the current chunk.
+    4.  Your response MUST be ONLY valid JSON, starting with ```json and ending with ```. Nothing else.
+
+  extraction_user_template: "<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\nTEXT TO ANALYZE:\n{prompt}<|im_end|>\n<|im_start|>assistant\n```json" # Добавил ```json в конец для GigaChat и подобных
+
+  summarization_system_prompt: |
+    Process text.
+    Remove duplicate info.
+    Keep all unique facts.
+    Use simple sentences.
+    Make text short.
+    Output only the result.
+
+  summarization_user_template: "<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\nDescriptions to summarize:\n{text_to_summarize}<|im_end|>\n<|im_start|>assistant"
+
+processing:
+  chunk_size: 1000
+  chunk_overlap: 200
+  levenshtein_threshold: 0.8 # Порог схожести (1.0 = точное совпадение, 0.8 = высокая схожесть)
+
+output:
+  json_file: "./output_graph.json" # Имя выходного JSON файла
