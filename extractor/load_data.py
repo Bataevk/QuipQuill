@@ -393,7 +393,4 @@ async def main():
 
 # --- Запуск основного цикла ---
 if __name__ == "__main__":
-    # Установка политики цикла событий для Windows, если необходимо
-    # if os.name == 'nt':
-    #      asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

@@ -53,4 +53,4 @@ processing:
   levenshtein_threshold: 0.8 # Порог схожести (1.0 = точное совпадение, 0.8 = высокая схожесть)
 
 output:
-  json_file: "./output_graph.json" # Имя выходного JSON файла
+  json_file: "./output.json" # Имя выходного JSON файла

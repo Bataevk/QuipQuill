@@ -1,0 +1,812 @@
+{
+    "entities": [
+        {
+            "name": "Endless Summer",
+            "description": "Soviet Games made a text-based adventure game with choices."
+        },
+        {
+            "name": "Semyon",
+            "description": "The player is a male character who avoids relationships. He often plays pranks with Ulyana and Alya. He can see the Pioneer and has a computer. He was previously a secluded person, sometimes compared to machine-gun fire. He found Shurik and his girlfriend after an attack. Other characters include someone pretending to be multiple people, a friend of Alya who might uncover her secrets, and someone sympathetic to Lena."
+        },
+        {
+            "name": "2ch",
+            "description": "Semyon's online community."
+        },
+        {
+            "name": "Bus number 410",
+            "description": "Semyon boards bus number for a trip to hell."
+        },
+        {
+            "name": "Sovyonok",
+            "description": "The game is called Pioneer. Semyon is trapped in a mysterious camp. This camp is also a cyclical purgatory. He meets Slavya there. Yulia guards an item given to the Semyons across cycles. The story takes place in a parallel dimension or a force field within \"Moscow 2.\""
+        },
+        {
+            "name": "Camp",
+            "description": "The game is in an inescapable area. Pioneer girls and Sovyonok live there."
+        },
+        {
+            "name": "District Center",
+            "description": "A location near the camp, accessible within some mods."
+        },
+        {
+            "name": "Moscow 2 Bunker",
+            "description": "The location of the Sovyonok camp, initially as a force field experiment."
+        },
+        {
+            "name": "Volga Camp",
+            "description": "The prototype for Sovyonok, represented by photographs from a game developer."
+        },
+        {
+            "name": "Retrospective Mod Series",
+            "description": "A non-canonical narrative that explores the appearance and world of Sovyonok in detail."
+        },
+        {
+            "name": "Pioneer Girls",
+            "description": "Local girls who can be interacted with in the game."
+        },
+        {
+            "name": "Routes",
+            "description": "Paths in the game connected to specific girls."
+        },
+        {
+            "name": "Girlfriends",
+            "description": "Characters associated with different routes."
+        },
+        {
+            "name": "Heroines",
+            "description": "Female characters within the game."
+        },
+        {
+            "name": "Mini-games",
+            "description": "Interactive elements within the game, including a card tournament."
+        },
+        {
+            "name": "Locations",
+            "description": "Specific areas within the game world, totaling 20 (excluding pre-Sovyonok locations)."
+        },
+        {
+            "name": "Pioneer",
+            "description": "A figure with a hidden face and eyes, like Semyon. \nA suspicious person appeared near Semyon.\nSomeone in the camp might be immortal and without feelings."
+        },
+        {
+            "name": "Yulia",
+            "description": "The cat-girl character is from LHC Inc. She appears with the Pioneer in her ending. She is a mysterious neko-girl guardian of 'Sovyonok' living in catacombs and the main protagonist of the game. She communicated with Shurik in a dark tunnel."
+        },
+        {
+            "name": "Slavya",
+            "description": "The girl is a camp resident. She lives in a cabin. She has a unique story. She is tall, blonde, with blue eyes, and helps keep things organized at the camp."
+        },
+        {
+            "name": "Slavya-chan",
+            "description": "The IIchan mascot was created in 2007 and represents Slavic culture. It became more popular than USSR-chan."
+        },
+        {
+            "name": "Lena",
+            "description": "A character feels sympathy for Semyon and lacks confidence, leading to suicide. This person is a long-time friend of Alya. They are also a modest acquaintance known only to Alya, and a childhood acquaintance. An inscription reads \"Lenka is stupid.\" Ulyana was a primary victim."
+        },
+        {
+            "name": "Unyl-chan",
+            "description": "The mascot that inspired the creation of Lena, created in 2007."
+        },
+        {
+            "name": "Ulyana",
+            "description": "The character is named Lenin. \n\nHe lives in a cabin. \n\nLenin is like Miku. \n\nHe has bright red hair and is adventurous. \n\nAlya’s friend enjoys pranks and adventures, and they are only friends."
+        },
+        {
+            "name": "Lenin",
+            "description": "The namesake of the character Ulyana."
+        },
+        {
+            "name": "Ulyanov",
+            "description": "Lenin's real surname, used as the basis for Ulyana's name."
+        },
+        {
+            "name": "USSR-chan",
+            "description": "An early mascot that influenced the creation of Ulyana."
+        },
+        {
+            "name": "Dvach-chan",
+            "description": "The mascot overshadowed USSR-chan. It inspired Alya’s creation. Krippi-chan is a side character."
+        },
+        {
+            "name": "Alya",
+            "description": "Anya Selenzova is a red-haired girl. She scares campmates because she hits them. Electronic fears and avoids her. Anya is friends with Ulyana and lives in the same cabin."
+        },
+        {
+            "name": "Counselor",
+            "description": "Character with whom Alya frequently gets in trouble."
+        },
+        {
+            "name": "She",
+            "description": "The main character, acquainted with Lena from childhood."
+        },
+        {
+            "name": "Miku",
+            "description": "*   Heroine with a horror route.\n*   Friendly, hyperactive girl who loves to talk.\n*   Founder of a music club; Alya's friend."
+        },
+        {
+            "name": "Krippi-chan",
+            "description": "A character featured in some modifications of the game."
+        },
+        {
+            "name": "That's Our Madhouse",
+            "description": "The musical theme for Krippi-chan."
+        },
+        {
+            "name": "Miku Hatsune",
+            "description": "The Japanese virtual singer that the basis of Miku was based on."
+        },
+        {
+            "name": "Masha",
+            "description": "Miku's real name, an adaptation for the Japanese context."
+        },
+        {
+            "name": "IIchan mascot YuVao-chan",
+            "description": "A mascot character that inspired Yulia's creation."
+        },
+        {
+            "name": "YuVao",
+            "description": "Yulia's ending and a character name."
+        },
+        {
+            "name": "LHC Inc",
+            "description": "A bio-tech company made the cat-girl Yulia."
+        },
+        {
+            "name": "Mystery Girl",
+            "description": "The musical theme of Yulia's character."
+        },
+        {
+            "name": "Olga Dmitrievna",
+            "description": "The character lives in a cabin. She is a counselor for Semyon’s group."
+        },
+        {
+            "name": "Viola",
+            "description": "The nurse is middle-aged with different colored eyes. There is another female staff member at the camp."
+        },
+        {
+            "name": "Banhammer-chan",
+            "description": "A hammer-referencing mascot is a prototype for Olga Dmitrievna, blocking unwanted users."
+        },
+        {
+            "name": "Collider-sama",
+            "description": "2ch mascot prototype for Viola."
+        },
+        {
+            "name": "Eternal Longing",
+            "description": "The character's musical theme."
+        },
+        {
+            "name": "Zhenya",
+            "description": "A person lives in a cabin, testing a Mitsgol prototype. The librarian is grumpy."
+        },
+        {
+            "name": "Mitsgol",
+            "description": "This character appeared on 2ch in 2007. It was the prototype for Zhenya."
+        },
+        {
+            "name": "Electronic",
+            "description": "Shurik's friend is a cyberneticist named Syroyezhkin, like Electronic."
+        },
+        {
+            "name": "Shurik",
+            "description": "A friend makes a robot in the cybernetics club."
+        },
+        {
+            "name": "Tolik",
+            "description": "The cafeteria has a strange character. He has a distorted face and draws crudely."
+        },
+        {
+            "name": "Blurry Character 1",
+            "description": "The character is tired and sits to the right of Tolik. He has a mouth drawn on his forehead."
+        },
+        {
+            "name": "Fantômas",
+            "description": "A figure seen as a poster on the wall."
+        },
+        {
+            "name": "Bitard",
+            "description": "A character depicted in multiple posters within the cabins."
+        },
+        {
+            "name": "Vasnetsov",
+            "description": "Artist whose paintings hang in Slavya and Zhenya's Cabin."
+        },
+        {
+            "name": "Detroit Metal City",
+            "description": "Anime with a poster in Alya’s cabin."
+        },
+        {
+            "name": "Stalin vs. Martians",
+            "description": "Game title with a poster in Ulyana’s cabin"
+        },
+        {
+            "name": "Gav",
+            "description": "Name of a kitten whose poster is next to the Stalin poster"
+        },
+        {
+            "name": "Larionov",
+            "description": "Soviet-era hockey player potentially featured on a poster in Ulyana's cabin"
+        },
+        {
+            "name": "Krutov",
+            "description": "Soviet-era hockey player potentially featured on a poster in Ulyana's cabin"
+        },
+        {
+            "name": "Fetisov",
+            "description": "Soviet-era hockey player potentially featured on a poster in Ulyana's cabin"
+        },
+        {
+            "name": "Makarov",
+            "description": "Soviet-era hockey player potentially featured on a poster in Ulyana's cabin"
+        },
+        {
+            "name": "Kasatonov",
+            "description": "Soviet-era hockey player potentially featured on a poster in Ulyana's cabin"
+        },
+        {
+            "name": "Sickle and Hammer",
+            "description": "Drawings of sickle and hammer featured on the wallpaper"
+        },
+        {
+            "name": "Tsoi",
+            "description": "Singer with a poster hanging in Miku's cabin"
+        },
+        {
+            "name": "Vysotsky",
+            "description": "Singer with a poster hanging in Miku's cabin"
+        },
+        {
+            "name": "Anime Heroine",
+            "description": "Poster of an anime heroine between the posters of Tsoi and Vysotsky"
+        },
+        {
+            "name": "Beatles Postcard",
+            "description": "Postcard with the Beatles on a shelf in Miku's cabin"
+        },
+        {
+            "name": "Japanese Gum",
+            "description": "Pack of Japanese gum indicating Miku lived in Japan"
+        },
+        {
+            "name": "Aftar zzhesh",
+            "description": "Classic internet phrase on the eye chart"
+        },
+        {
+            "name": "Stsukko",
+            "description": "Classic internet phrase on the eye chart"
+        },
+        {
+            "name": "Medical Center",
+            "description": "The location of the artwork."
+        },
+        {
+            "name": "Eye Chart",
+            "description": "Contains classic internet phrases and references."
+        },
+        {
+            "name": "Vegetable Poster",
+            "description": "A reference to the 'I eat vegetables' meme."
+        },
+        {
+            "name": "Alyosha (Kyshtym Dwarf)",
+            "description": "The skeleton on the left poster belongs to him."
+        },
+        {
+            "name": "Ikari Gendo",
+            "description": "The monument to Gende is a reference to this character."
+        },
+        {
+            "name": "Gende (Imageboard User)",
+            "description": "An Easter egg referencing an imageboard user named Gende."
+        },
+        {
+            "name": "Aska",
+            "description": "Distinctive hairstyle of an anime character."
+        },
+        {
+            "name": "Rei",
+            "description": "Distinctive hairstyle of an anime character."
+        },
+        {
+            "name": "Misato",
+            "description": "Distinctive hairstyle of an anime character."
+        },
+        {
+            "name": "Vakaba Sign",
+            "description": "Appears in the artwork and the camp."
+        },
+        {
+            "name": "Vakaba",
+            "description": "Advertising sign featuring Vakaba's logo."
+        },
+        {
+            "name": "Syrno",
+            "description": "Advertising sign featuring Syrno's logo."
+        },
+        {
+            "name": "Winter Tale",
+            "description": "Visual novel advertised on an advertising board."
+        },
+        {
+            "name": "Alya Selenzova",
+            "description": "Possible reference to a character, name and surname contain an Easter egg."
+        },
+        {
+            "name": "Team Fortress 2 (TF2)",
+            "description": "Style of card tournament suits, featuring heroines as classes."
+        },
+        {
+            "name": "Gone with the Wind",
+            "description": "Lena is reading a book."
+        },
+        {
+            "name": "Spirited Away",
+            "description": "An anime may be linked to 'Gone with the Wind'."
+        },
+        {
+            "name": "IIchan",
+            "description": "Software on Semyon's computer."
+        },
+        {
+            "name": "Music Club Board",
+            "description": "A board with text 'Miku is stupid' written on it."
+        },
+        {
+            "name": "Game Creators",
+            "description": "Nicknames of the game's creators, likely located to the right of the music club board."
+        },
+        {
+            "name": "Owls",
+            "description": "Birds found in various locations."
+        },
+        {
+            "name": "Night Lamps",
+            "description": "Lamps where owls are present."
+        },
+        {
+            "name": "Alya and Ulyana's Cabin",
+            "description": "Cabin where an owl is peering out of the window."
+        },
+        {
+            "name": "Gendo",
+            "description": "Character whose mannerisms Shurik mimics."
+        },
+        {
+            "name": "Pedobear",
+            "description": "A teddy bear referenced as a joke about the character's age."
+        }
+    ],
+    "relationships": [
+        {
+            "source": "Semyon",
+            "target": "2ch",
+            "description": "Invited to a meeting with university friends."
+        },
+        {
+            "source": "Semyon",
+            "target": "Bus number 410",
+            "description": "Boarded bus number 410."
+        },
+        {
+            "source": "Semyon",
+            "target": "Bus number 410",
+            "description": "Fell asleep on the bus."
+        },
+        {
+            "source": "Semyon",
+            "target": "Sovyonok",
+            "description": "Woke up in Sovyonok."
+        },
+        {
+            "source": "Semyon",
+            "target": "Sovyonok",
+            "description": "Appear within Sovyonok during each playthrough."
+        },
+        {
+            "source": "District Center",
+            "target": "Sovyonok",
+            "description": "Located near Sovyonok."
+        },
+        {
+            "source": "Sovyonok",
+            "target": "Moscow 2 Bunker",
+            "description": "Initially an experiment within the Moscow 2 bunker."
+        },
+        {
+            "source": "Sovyonok",
+            "target": "Volga Camp",
+            "description": "Based on the prototype of the Volga Camp."
+        },
+        {
+            "source": "Retrospective Mod Series",
+            "target": "Sovyonok",
+            "description": "Explores the narrative and details of Sovyonok."
+        },
+        {
+            "source": "Routes",
+            "target": "Girlfriends",
+            "description": "Lead to relationships with specific girlfriends."
+        },
+        {
+            "source": "Girlfriends",
+            "target": "Heroines",
+            "description": "Require completion of all other routes to achieve certain endings."
+        },
+        {
+            "source": "Semyon",
+            "target": "Sovyonok",
+            "description": "Is the protagonist of the game."
+        },
+        {
+            "source": "Semyon",
+            "target": "Pioneer",
+            "description": "Hidden face due to bangs"
+        },
+        {
+            "source": "Pioneer",
+            "target": "Semyon",
+            "description": "Appears to Semyon when he needs to board the bus."
+        },
+        {
+            "source": "Pioneer",
+            "target": "Semyon",
+            "description": "Calls Semyon into the woods, leading to his death if followed."
+        },
+        {
+            "source": "Pioneer",
+            "target": "Semyon",
+            "description": "Appears in Semyon's route and Yulia's ending."
+        },
+        {
+            "source": "Pioneer",
+            "target": "Semyon",
+            "description": "Is a version of Semyon from another cycle who could not escape \"Sovyonok\"."
+        },
+        {
+            "source": "Pioneer",
+            "target": "Semyon",
+            "description": "Is portrayed as a creation of the maker of \"Sovyonok\" and an alter ego of Semyon."
+        },
+        {
+            "source": "Semyon",
+            "target": "Slavya",
+            "description": "First encountered Slavya at the gate of Sovyonok."
+        },
+        {
+            "source": "Slavya",
+            "target": "Pioneer",
+            "description": "Maintains order in the camp and protects the pioneers from conflicts."
+        },
+        {
+            "source": "Slavya",
+            "target": "Slavya-chan",
+            "description": "Based on the IIchan mascot Slavya-chan."
+        },
+        {
+            "source": "Slavya-chan",
+            "target": "Slavya",
+            "description": "Served as the basis for Slavya's creation."
+        },
+        {
+            "source": "Slavya",
+            "target": "Slavya",
+            "description": "Is a main heroine with her own route."
+        },
+        {
+            "source": "Lena",
+            "target": "Alya",
+            "description": "Is known only to Alya."
+        },
+        {
+            "source": "Lena",
+            "target": "Semyon",
+            "description": "Shows sympathy for"
+        },
+        {
+            "source": "Lena",
+            "target": "Lena",
+            "description": "Commits suicide by slitting her wrists if things do not work out with Semyon"
+        },
+        {
+            "source": "Lena",
+            "target": "Unyl-chan",
+            "description": "Based on the creation of"
+        },
+        {
+            "source": "Ulyana",
+            "target": "Alya",
+            "description": "Is friends with Alya."
+        },
+        {
+            "source": "Ulyana",
+            "target": "Alya",
+            "description": "Lives in the same cabin as Alya."
+        },
+        {
+            "source": "Ulyana",
+            "target": "Semyon",
+            "description": "Participates in pranks with Semyon and Alya."
+        },
+        {
+            "source": "Ulyana",
+            "target": "Lena",
+            "description": "Chases Lena with a bug upon first meeting her."
+        },
+        {
+            "source": "Ulyana",
+            "target": "Semyon",
+            "description": "Teases Semyon after Semyon's arrival at the camp."
+        },
+        {
+            "source": "Alya",
+            "target": "Counselor",
+            "description": "Frequently gets in trouble with the counselor."
+        },
+        {
+            "source": "Alya",
+            "target": "Semyon",
+            "description": "Punches Semyon in the back."
+        },
+        {
+            "source": "Alya",
+            "target": "Ulyana",
+            "description": "Shares enthusiasm for pranks with Ulyana."
+        },
+        {
+            "source": "Alya",
+            "target": "Lena",
+            "description": "Is likely acquainted with Lena from childhood."
+        },
+        {
+            "source": "She",
+            "target": "Lena",
+            "description": "Is acquainted with"
+        },
+        {
+            "source": "She",
+            "target": "Ulyana",
+            "description": "Has a friend who is"
+        },
+        {
+            "source": "Alya",
+            "target": "Miku",
+            "description": "Talks to"
+        },
+        {
+            "source": "Alya",
+            "target": "Dvach-chan",
+            "description": "Inspired by"
+        },
+        {
+            "source": "Miku",
+            "target": "Miku Hatsune",
+            "description": "Based on the Japanese virtual singer Miku Hatsune."
+        },
+        {
+            "source": "Miku",
+            "target": "Ulyana",
+            "description": "Shares similarities with Ulyana in personality."
+        },
+        {
+            "source": "Semyon",
+            "target": "Miku",
+            "description": "Compared Miku's chatter to machine-gun fire."
+        },
+        {
+            "source": "Yulia",
+            "target": "Sovyonok",
+            "description": "Is a guardian of"
+        },
+        {
+            "source": "Yulia",
+            "target": "Semyon",
+            "description": "Helped the Semyons from each cycle"
+        },
+        {
+            "source": "Yulia",
+            "target": "IIchan mascot YuVao-chan",
+            "description": "Created the YuVao character."
+        },
+        {
+            "source": "Yulia",
+            "target": "YuVao",
+            "description": "Has an ending called 'YuVao'."
+        },
+        {
+            "source": "Yulia",
+            "target": "LHC Inc",
+            "description": "Escaped from LHC Inc's secret laboratory."
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Semyon",
+            "description": "Counselor of the detachment Semyon joined."
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Semyon",
+            "description": "Placed Semyon in her own cabin due to lack of beds."
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Semyon",
+            "description": "Had high expectations for Semyon, making him do most of the work."
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Viola",
+            "description": "One of two female staff members at the camp."
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Banhammer-chan",
+            "description": "Prototype was Banhammer-chan."
+        },
+        {
+            "source": "Viola",
+            "target": "LHC Inc",
+            "description": "Worked for LHC Inc."
+        },
+        {
+            "source": "Viola",
+            "target": "Yulia",
+            "description": "Was to leave the camp with Yulia on the 410 bus"
+        },
+        {
+            "source": "Viola",
+            "target": "Collider-sama",
+            "description": "Prototype was Collider-sama"
+        },
+        {
+            "source": "Zhenya",
+            "target": "Electronic",
+            "description": "Is in love with Electronic, unrequitedly."
+        },
+        {
+            "source": "Zhenya",
+            "target": "Slavya",
+            "description": "Lives in the same room as Slavya."
+        },
+        {
+            "source": "Mitsgol",
+            "target": "Zhenya",
+            "description": "Prototype for Zhenya"
+        },
+        {
+            "source": "Electronic",
+            "target": "Shurik",
+            "description": "Creates a robot with Shurik"
+        },
+        {
+            "source": "Electronic",
+            "target": "Alya",
+            "description": "Is afraid of Alya and avoids conflicts with her."
+        },
+        {
+            "source": "Shurik",
+            "target": "Electronic",
+            "description": "is a friend of"
+        },
+        {
+            "source": "Yulia",
+            "target": "Shurik",
+            "description": "tried to communicate with"
+        },
+        {
+            "source": "Semyon",
+            "target": "Shurik",
+            "description": "found"
+        },
+        {
+            "source": "Shurik",
+            "target": "Semyon",
+            "description": "attacked"
+        },
+        {
+            "source": "Tolik",
+            "target": "Blurry Character 1",
+            "description": "Sits at a table"
+        },
+        {
+            "source": "Olga Dmitrievna",
+            "target": "Banhammer-chan",
+            "description": "Has a hammer under her bed."
+        },
+        {
+            "source": "Semyon",
+            "target": "Bitard",
+            "description": "Is depicted as the same bitard with a bag on his head in the map of his cabin."
+        },
+        {
+            "source": "Slavya",
+            "target": "Vasnetsov",
+            "description": "Has paintings by Vasnetsov on her right wall."
+        },
+        {
+            "source": "Zhenya",
+            "target": "Mitsgol",
+            "description": "Has a poster of Mitsgol on the left wall."
+        },
+        {
+            "source": "Alya",
+            "target": "Detroit Metal City",
+            "description": "Has a poster from 'Detroit Metal City' above her bed."
+        },
+        {
+            "source": "Ulyana",
+            "target": "Stalin vs. Martians",
+            "description": "Has a poster of Stalin from 'Stalin vs. Martians' above her bed."
+        },
+        {
+            "source": "Medical Center",
+            "target": "Aftar zzhesh",
+            "description": "Eye chart contains classic internet phrases."
+        },
+        {
+            "source": "Medical Center",
+            "target": "Stsukko",
+            "description": "Eye chart contains classic internet phrases."
+        },
+        {
+            "source": "Eye Chart",
+            "target": "Aftar zzhesh",
+            "description": "Contains internet phrases."
+        },
+        {
+            "source": "Eye Chart",
+            "target": "Stsukko",
+            "description": "Contains internet phrases."
+        },
+        {
+            "source": "Alyosha (Kyshtym Dwarf)",
+            "target": "Eye Chart",
+            "description": "Skeleton on the left poster."
+        },
+        {
+            "source": "Alya Selenzova",
+            "target": "Alya",
+            "description": "Name and surname contains a double Easter egg."
+        },
+        {
+            "source": "Semyon",
+            "target": "Semyon",
+            "description": "Represents cycles of playthroughs."
+        },
+        {
+            "source": "Lena",
+            "target": "Gone with the Wind",
+            "description": "Reading 'Gone with the Wind'."
+        },
+        {
+            "source": "Shurik",
+            "target": "Gendo",
+            "description": "Mimics Gendo's mannerisms"
+        },
+        {
+            "source": "Ulyana",
+            "target": "Pedobear",
+            "description": "Holds a teddy bear in the intro"
+        },
+        {
+            "source": "Owls",
+            "target": "Night Lamps",
+            "description": "Found on night lamps"
+        },
+        {
+            "source": "Owls",
+            "target": "Medical Center",
+            "description": "One is near the medical center, another in Alya and Ulyana's cabin."
+        },
+        {
+            "source": "Lena",
+            "target": "Gone with the Wind",
+            "description": "Reading 'Gone with the Wind'"
+        },
+        {
+            "source": "Gone with the Wind",
+            "target": "Spirited Away",
+            "description": "Potentially references 'Spirited Away'"
+        }
+    ]
+}
