@@ -17,6 +17,18 @@ from langchain.schema import Document, AIMessage
 from langchain_core.runnables import RunnableLambda
 from langchain_core.exceptions import OutputParserException
 
+# --- Импортируем необходимые библиотеки для лемматизации---
+import nltk  
+from nltk.stem import WordNetLemmatizer  
+
+# Инициализируем лемматизатор
+__lemmatizer = WordNetLemmatizer() 
+
+# Скачиваем необходимые ресурсы при первом использовани (для лемматизации на английском) 
+nltk.download('punkt')
+nltk.download('punkt_tab')  
+nltk.download('wordnet')  
+
 # --- Конфигурация логирования ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,6 +47,75 @@ class Relationship:
     source: str
     target: str
     description: str
+
+
+# --- Функции ---
+def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
+    """
+    Удаляет обертку ```json ... ``` или просто ``` ... ``` из содержимого AI-сообщения и возвращает новое AI-сообщение.
+    Также чистит от лишних пробелов и заменяет кавычки на стандартные.
+    """
+    stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
+    
+    stripped_content = stripped_content.replace('“', '"').replace('”', '"')
+    stripped_content = stripped_content.replace('‘', "'").replace('’', "'")
+    
+    if stripped_content.startswith("```json"):
+        stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
+
+    if stripped_content.startswith("```"):
+        stripped_content = stripped_content[3:].strip() # Убираем обертку в начале (Если первый случай не сработал)
+
+    if stripped_content.endswith("```"):
+        stripped_content = stripped_content[:-3].strip()  # Убираем обертку в конце
+
+    # Проверяем, что содержимое не пустое
+    ai_message.content = stripped_content if stripped_content else "{}"  # Если пустое, возвращаем пустой JSON
+    
+    # Возвращаем новое AI-сообщение с очищенным содержимым
+    return ai_message 
+
+
+def __lemmatize_phrase(phrase):  
+    """
+    Лемматизирует фразу, заменяя слова на их начальную форму (лемму).
+    """
+    words = nltk.word_tokenize(phrase)  # Токенизация фразы на отдельные слова  
+    lemmatized_words = [__lemmatizer.lemmatize(word, pos='n') for word in words]  
+    return ' '.join(lemmatized_words)  # Объединяем обратно в строку  
+
+def _preprocess_text(text: str) -> str:
+    """Преобразует текст, убирая лишние пробелы, точки и символы. Затем выполняет лемматизацию"""
+    # замена '-' на пробел
+    text = text.replace('-', ' ')
+    # Убираем лишние пробелы
+    text = re.sub(r'\s+', ' ', text).strip()
+    # Убираем точки в конце текста
+    if text.endswith('.'):
+        text = text[:-1]
+    # Убираем символы, которые не нужны
+    text = re.sub(r'[^\w\s]', '', text)
+
+    # Лемматизируем текст
+    text = __lemmatize_phrase(text.lower())
+
+    return text
+
+def _get_similarity(name1: str, name2: str) -> float:
+    """
+    Возвращает коэффициент схожести между двумя строками по Левенштейну.
+    """
+    if not name1 or not name2:
+        return 0.0
+    
+    # Приводим к нижнему регистру и убираем лишние пробелы
+    # name1 = __lemmatize_phrase(name1.strip().lower())
+    # name2 = __lemmatize_phrase(name2.strip().lower())
+
+    return ratio(name1.lower(), name2.lower())
+
+
+
 
 class GraphExtractor:
     """
@@ -110,7 +191,7 @@ class GraphExtractor:
             logger.info(f"LLM Summarizer '{self.llm_summarizer.model_name}' инициализирована с URL: {self.llm_summarizer.openai_api_base}")
 
             # Создаем цепочку для экстрактора с очисткой и парсингом
-            self.llm_extractor_chain = llm_base | RunnableLambda(self._strip_json_string) | SimpleJsonOutputParser()
+            self.llm_extractor_chain = llm_base | RunnableLambda(_strip_json_string) | SimpleJsonOutputParser()
 
         except KeyError as e:
              logger.error(f"Отсутствует необходимый ключ в конфигурации LLM: {e}")
@@ -120,32 +201,6 @@ class GraphExtractor:
             # Можно перевыбросить специфичное исключение для инициализации
             raise RuntimeError("Не удалось инициализировать LLM модели.") from e
 
-    @staticmethod
-    def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
-        """
-        Удаляет обертку ```json ... ``` или просто ``` ... ``` из содержимого AI-сообщения и возвращает новое AI-сообщение.
-        Также чистит от лишних пробелов и заменяет кавычки на стандартные.
-        """
-        stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
-        
-        stripped_content = stripped_content.replace('“', '"').replace('”', '"')
-        stripped_content = stripped_content.replace('‘', "'").replace('’', "'")
-        
-        if stripped_content.startswith("```json"):
-            stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
-
-        if stripped_content.startswith("```"):
-            stripped_content = stripped_content[3:].strip() # Убираем обертку в начале (Если первый случай не сработал)
-
-        if stripped_content.endswith("```"):
-            stripped_content = stripped_content[:-3].strip()  # Убираем обертку в конце
-
-        # Проверяем, что содержимое не пустое
-        ai_message.content = stripped_content if stripped_content else "{}"  # Если пустое, возвращаем пустой JSON
-        
-        # Возвращаем новое AI-сообщение с очищенным содержимым
-        return ai_message 
-    
     @staticmethod
     def save_to_json(save_json_path: Optional[str] = None, final_result: Optional[Dict[str, Any]] = None):
         """
@@ -300,7 +355,7 @@ class GraphExtractor:
 
             matched = False
             for canonical_name in list(unique_entities.keys()):
-                similarity = ratio(name.lower(), canonical_name.lower())
+                similarity = _get_similarity(name.lower(), canonical_name.lower())
                 if similarity >= threshold:
                     logger.debug(f"Обнаружено слияние: '{name}' -> '{canonical_name}' (Схожесть: {similarity:.2f})")
                     if description:
@@ -408,15 +463,25 @@ class GraphExtractor:
         logger.info(f"Всего извлечено сущностей (до слияния): {len(all_entities_raw)}")
         logger.info(f"Всего извлечено связей (до обновления): {len(all_relationships_raw)}")
 
+        # 3*. Лемматизация названий сущностей (приводим к единственному числу) 
+        # Лемматизируем назавания сущностей в all_entities_raw
+        for entity in all_entities_raw:
+            entity["name"] = _preprocess_text(entity["name"])
+        
+        # Лемматизируем назавания сущностей в all_relationships_raw
+        for relationship in all_relationships_raw:
+            relationship["source"] = _preprocess_text(relationship["source"])
+            relationship["target"] = _preprocess_text(relationship["target"])
+        
         # 4. Слияние дубликатов сущностей
         try:
-             threshold = self.config["processing"]["levenshtein_threshold"]
+            threshold = self.config["processing"]["levenshtein_threshold"]
         except KeyError:
-             logger.warning("Ключ 'levenshtein_threshold' не найден в config['processing']. Используется значение 0.85.")
-             threshold = 0.85
+            logger.warning("Ключ 'levenshtein_threshold' не найден в config['processing']. Используется значение 0.85.")
+            threshold = 0.85
         except TypeError:
-             logger.warning("Раздел 'processing' в конфигурации имеет неверный формат. Используется threshold 0.85.")
-             threshold = 0.85
+            logger.warning("Раздел 'processing' в конфигурации имеет неверный формат. Используется threshold 0.85.")
+            threshold = 0.85
 
         unique_entities_map, name_mapping = self._merge_entities(all_entities_raw, threshold)
         if not unique_entities_map:
@@ -442,13 +507,11 @@ class GraphExtractor:
             })
         final_entity_names_set: Set[str] = set(entity_names_in_order)
 
-
-
-
-        # 6. Обновление и фильтрация связей
-        logger.info("Обновление и фильтрация связей...")
+        # 6. Обновление и фильтрация связей (с добавлением недостающих сущностей)
+        logger.info("Обновление, фильтрация связей и добавление недостающих сущностей...")
         final_relationships_list: List[Dict[str, Any]] = []
         seen_relationships: Set[Tuple[str, str, str]] = set()
+        added_entities_names: Set[str] = set() # Отслеживаем имена добавленных сущностей
 
         for rel_data in all_relationships_raw:
             original_source = rel_data.get("source", "").strip()
@@ -459,9 +522,23 @@ class GraphExtractor:
                 logger.warning(f"Пропуск связи с некорректным source или target: {rel_data}")
                 continue
 
+            # Получаем канонические имена, используя исходное имя как fallback, если его нет в карте
             final_source = name_mapping.get(original_source, original_source)
             final_target = name_mapping.get(original_target, original_target)
 
+            # Пытаемся добавить сущности, если их нет в финальном списке
+            entities_to_check = [final_source, final_target]
+            for entity_name in entities_to_check:
+                if entity_name not in final_entity_names_set and entity_name not in added_entities_names:
+                    logger.info(f"Сущность '{entity_name}', упомянутая в связи, отсутствует. Добавление новой сущности с пустым описанием.")
+                    final_entities_list.append({
+                        "name": entity_name,
+                        "description": ""
+                    })
+                    final_entity_names_set.add(entity_name)
+                    added_entities_names.add(entity_name)
+
+            # Проверяем, существуют ли финальные source и target в множестве финальных сущностей
             if final_source in final_entity_names_set and final_target in final_entity_names_set:
                 rel_tuple = (final_source, final_target, description)
                 if rel_tuple not in seen_relationships:
@@ -474,11 +551,18 @@ class GraphExtractor:
                 else:
                     logger.debug(f"Пропуск дублирующей связи: {rel_tuple}")
             else:
+                # Логируем только если имя было в name_mapping, но не попало в final_entity_names_set (что странно)
+                # или если исходного имени нет в final_entity_names_set
                 if (original_source in name_mapping and final_source not in final_entity_names_set) or \
                 (original_target in name_mapping and final_target not in final_entity_names_set) or \
                 (original_source not in name_mapping and final_source not in final_entity_names_set) or \
                 (original_target not in name_mapping and final_target not in final_entity_names_set):
                     logger.warning(f"Пропуск связи из-за отсутствия source ('{final_source}' из '{original_source}') или target ('{final_target}' из '{original_target}') в финальном списке сущностей. Исходная связь: {rel_data}")
+
+        initial_entity_names_set = set(entity_names_in_order)
+        total_added_count = len(final_entity_names_set - initial_entity_names_set)
+        if total_added_count > 0:
+            logger.info(f"Всего добавлено {total_added_count} недостающих сущностей из связей.")
 
         logger.info(f"Финальное количество сущностей: {len(final_entities_list)}")
         logger.info(f"Финальное количество связей: {len(final_relationships_list)}")
