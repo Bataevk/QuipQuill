@@ -27,16 +27,16 @@ class KnowledgeBaseModule:
     DEFAULT_GRAPH_QUERY_RESULTS = 3
 
     def __init__(self,
-                 # Параметры для VectorDB
-                 chroma_persist_path: str = VectorDBModule.DEFAULT_PERSIST_PATH,
-                 embedding_model_name: str = VectorDBModule.DEFAULT_EMBEDDING_MODEL,
-                 # Параметры для GraphDB (из .env или передать явно)
-                 neo4j_uri: Optional[str] = None,
-                 neo4j_user: Optional[str] = None,
-                 neo4j_password: Optional[str] = None,
-                 # Параметры поиска
-                 n_results_graph_query: int = DEFAULT_GRAPH_QUERY_RESULTS
-                 ):
+            # Параметры для VectorDB
+            chroma_persist_path: str = VectorDBModule.DEFAULT_PERSIST_PATH,
+            embedding_model_name: str = VectorDBModule.DEFAULT_EMBEDDING_MODEL,
+            # Параметры для GraphDB (из .env или передать явно)
+            neo4j_uri: Optional[str] = None,
+            neo4j_user: Optional[str] = None,
+            neo4j_password: Optional[str] = None,
+            # Параметры поиска
+            n_results_graph_query: int = DEFAULT_GRAPH_QUERY_RESULTS
+            ):
         """
         Инициализирует KnowledgeBaseModule.
 

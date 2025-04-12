@@ -2,17 +2,19 @@ import chromadb
 from chromadb.utils import embedding_functions
 import logging
 from typing import List, Dict, Optional, Any
+from utils import preprocess_text
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# --- Модуль для работы с ChromaDB и векторизацией текста ---
 class VectorDBModule:
     """
     Модуль для взаимодействия с ChromaDB, управляющий коллекциями
     для имен и описаний сущностей.
     """
-    DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2" # Популярная модель для эмбеддингов
-    DEFAULT_PERSIST_PATH = "./chroma_db"
+    DEFAULT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+    DEFAULT_PERSIST_PATH = "./.chroma_db"
     COLLECTION_NAMES = "entity_names"
     COLLECTION_DESCRIPTIONS = "entity_descriptions"
 
@@ -80,7 +82,7 @@ class VectorDBModule:
 
             # Подготавливаем текст для коллекции описаний
             # Встраиваем имя в описание для потенциально лучшего поиска
-            description_text_for_embedding = f"Сущность: {name}. Описание: {description}"
+            description_text_for_embedding = f"Сущность: {name}. Описание: {preprocess_text(description)}"
 
             # Добавляем/обновляем описание
             self.descriptions_collection.upsert(
@@ -128,7 +130,7 @@ class VectorDBModule:
             names_metadatas.append({"entity_name": name})
 
             # Данные для коллекции описаний
-            description_text_for_embedding = f"Сущность: {name}. Описание: {description}"
+            description_text_for_embedding = f"Сущность: {name}. Описание: {preprocess_text(description)}"
             desc_ids.append(name)
             desc_docs.append(description_text_for_embedding)
             desc_metadatas.append({"entity_name": name, "original_description": description})
@@ -174,6 +176,8 @@ class VectorDBModule:
         if not query_text:
             return None
         try:
+            query_text = preprocess_text(query_text) # Предобработка текста
+            # Выполняем поиск
             results = self.names_collection.query(
                 query_texts=[query_text],
                 n_results=n_results,
@@ -200,6 +204,8 @@ class VectorDBModule:
         if not query_text:
             return None
         try:
+            description = preprocess_text(query_text) # Предобработка текста
+            # Выполняем поиск
             results = self.descriptions_collection.query(
                 query_texts=[query_text],
                 n_results=n_results,
@@ -228,7 +234,7 @@ class VectorDBModule:
             # ChromaDB может выдать ошибку, если ID не найден, обрабатываем это
             logger.warning(f"Ошибка или сущность не найдена при удалении '{name}': {e}")
 
-    def get_entity_count(self) -> Tuple[int, int]:
+    def get_entity_count(self) -> tuple[int, int]:
         """Возвращает количество сущностей в каждой коллекции."""
         try:
             names_count = self.names_collection.count()
@@ -243,37 +249,33 @@ if __name__ == '__main__':
     print("Запуск примера VectorDBModule...")
 
     # Инициализация
-    vector_db = VectorDBModule(persist_path="./test_chroma_db") # Используем тестовую директорию
+    vector_db = VectorDBModule(persist_path="./.test_chroma_db") # Используем тестовую директорию
 
-    # Добавление сущностей
-    vector_db.add_entity("Меч", "Обычный стальной меч, немного зазубренный.")
-    vector_db.add_entity("Щит", "Круглый деревянный щит с железным умбоном.")
-    vector_db.add_entities_batch([
-        {"name": "Джон Кузнец", "description": "Местный кузнец, живет у горна."},
-        {"name": "Таверна 'Пьяный Гоблин'", "description": "Популярное место для отдыха и слухов."},
-        {"name": "Лес", "description": "Темный и опасный лес к северу от деревни."}
-    ])
+    # from json import loads
+    # with open("./output.json", "r", encoding="utf-8") as f:
+    #     entities = loads(f.read())['entities']
+    # 
+    # # Добавление сущностей
+    # print("\n--- Добавление сущностей ---")
+    # vector_db.add_entities_batch(entities=entities)
+
 
     print(f"Количество сущностей (имена/описания): {vector_db.get_entity_count()}")
 
     # Поиск по именам
-    print("\n--- Поиск по именам ('Кузнец') ---")
-    name_results = vector_db.query_names("Кузнец", n_results=2)
+    print("\n--- Поиск по именам ('hotland') ---")
+    name_results = vector_db.query_names("hotland", n_results=3)
     if name_results:
         print(f"IDs: {name_results.get('ids')}")
         print(f"Distances: {name_results.get('distances')}")
         print(f"Metadatas: {name_results.get('metadatas')}")
 
     # Поиск по описаниям
-    print("\n--- Поиск по описаниям ('опасное место рядом с деревней') ---")
-    desc_results = vector_db.query_descriptions("опасное место рядом с деревней", n_results=2)
+    print("\n--- Поиск по описаниям ('Location with the nucleus') ---")
+    desc_results = vector_db.query_descriptions("Location with the nucleus", n_results=3)
     if desc_results:
         print(f"IDs: {desc_results.get('ids')}")
         print(f"Distances: {desc_results.get('distances')}")
         print(f"Metadatas: {desc_results.get('metadatas')}") # Здесь будет entity_name и original_description
-
-    # Удаление сущности
-    # vector_db.delete_entity("Меч")
-    # print(f"\nКоличество сущностей после удаления 'Меч': {vector_db.get_entity_count()}")
 
     print("\nПример VectorDBModule завершен.")

@@ -31,10 +31,10 @@ if __name__ == "__main__":
     
     # Инициализация GraphExtractor
     extractor = GraphExtractor(config_path="./config.yaml")
-    graph_data = extractor.update()  # Получение данных в формате JSON
+    # graph_data = extractor.update()  # Получение данных в формате JSON
 
-    # Загрузка данных в Neo4j (для статического графа)
-    graph_module.load_from_json(graph_data)
+    # # Загрузка данных в Neo4j (для статического графа)
+    # graph_module.load_from_json(graph_data)
 
     # # Пример добавления узла (для динамического графа)
     # new_entity = {"name": "Игрок", "description": "Главный герой"}
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     # graph_module.add_relationship("Игрок", "Меч", "Имеет")
 
     # Пример получения узла и связей
-    node_with_rels = graph_module.get_node_with_relationships("Игрок")
+    node_with_rels = graph_module.get_node_with_relationships("human")
     print(node_with_rels)
 
     # Закрытие соединения
