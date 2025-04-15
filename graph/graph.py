@@ -44,6 +44,13 @@ class GraphDB:
             record = result.single()
             return record["e"] if record else None
 
+    def get_node_description(self, node_id):
+        """Получение описания узла по ID (name)."""
+        node = self.get_node_by_id(node_id)
+        if node:
+            return node.get("description", "")
+        return None
+
     def add_node(self, entity):
         """Добавление нового узла."""
         with self.driver.session() as session:
@@ -95,22 +102,130 @@ class GraphDB:
                 source=source_id, target=target_id
             )
 
-    def get_node_with_relationships(self, node_id):
-        """Получение узла и связанных с ним узлов вместе со связями."""
+    def _format_entity_relationships(self, data):
+        """
+        Форматирует результат из get_node_with_relationships по следующей структуре:
+        
+        # MC
+        {имя главной сущности} - {описание главной сущности}
+        
+        # Others
+        - {имя связанной сущности} - {описание, если есть}
+        - ...
+        
+        # Relationships
+        - {источник} {описание связи} {цель}
+        - ...
+        """
+        if not data:
+            return "Узел не найден"
+
+        main_node = data["node"]
+        main_name = main_node.get("name", "")
+        main_desc = main_node.get("description", self.get_node_description(main_name)).strip() if main_name else "unknown name"
+
+        # Формируем строку для главной сущности
+        output = "# MC\n"
+        output += f"{main_name} - {main_desc}\n\n"
+
+        # Собираем связанные сущности и связи
+        others = {}
+        rels = []
+
+        for item in data["relationships"]:
+            if not item:
+                continue
+            rel = item.get("relationship", {})
+            related = item.get("related", {})
+            relation_desc = rel.get("description", "").strip() if rel else "linked"
+            related_name = related.get("name", "") if related else None
+            related_desc = related.get("description", "").strip() if related else None
+            # Запоминаем информацию о связанных сущностях (если сущность повторяется, оставляем одно описание)
+            if related_desc and related_name:
+                others[related_name] = related_desc
+            # Формируем строку для связи
+            rels.append(f"{main_name} {relation_desc} {related_name}")
+
+        # Формируем раздел связанных сущностей
+        output += "# Others\n"
+        for name, desc in others.items():
+            line = f"- {name}"
+            if desc:
+                line += f" - {desc}"
+            output += line + "\n"
+
+        # Формируем раздел связей
+        output += "\n# Relationships\n"
+        for r in rels:
+            output += f"- {r}\n"
+
+        return output
+    
+    def _format_relationships_only(self, data):
+        """
+        Форматирует результат запроса, возвращая только список связей в следующем виде:
+        - {источник} {описание связи} {цель}
+        """
+        if not data:
+            return "Узел не найден"
+        main_node = data["node"]
+        main_name = main_node.get("name", "")
+        rels = []
+        for item in data["relationships"]:
+            if not item:
+                continue
+            rel = item.get("relationship", {})
+            related = item.get("related", {})
+            relation_desc = rel.get("description", "").strip() if rel else "linked"
+            related_name = related.get("name", "") if related else ""
+            rels.append(f"- {main_name} {relation_desc} {related_name}")
+        return "\n".join(rels)
+    
+    def _get_relationships(self, node_id):
+        """Получение всех связей узла."""
         with self.driver.session() as session:
-            result = session.run(
-                "MATCH (e:Entity {name: $name}) "
-                "OPTIONAL MATCH (e)-[r]->(related:Entity) "
-                "RETURN e, collect({relationship: r, related: related}) as relationships",
-                name=node_id
-            )
+            # Односторонний поиск
+            # result = session.run(
+            #     "MATCH (e:Entity {name: $name}) "
+            #     "OPTIONAL MATCH (e)-[r]->(related:Entity) "
+            #     "RETURN e, collect({relationship: r, related: related}) as relationships",
+            #     name=node_id
+            # )
+            # Двусторонний поиск
+            result = session.run(  
+                "MATCH (e:Entity {name: $name}) "  
+                "OPTIONAL MATCH (e)-[r]->(related:Entity) "  
+                "OPTIONAL MATCH (e)<-[r2]-(related_from:Entity) "  
+                "RETURN e, "  
+                "collect({relationship: r, related: related}) as relationships_to, "  
+                "collect({relationship: r2, related: related_from}) as relationships_from",  
+                name=node_id  
+            )  
             record = result.single()
             if record:
                 node = record["e"]
-                relationships = record["relationships"]
+                relationships = record["relationships_to"] + record["relationships_from"]
                 return {"node": node, "relationships": relationships}
             return None
+
+    def get_node_with_relationships(self, node_id, to_str=True):
+        """Получение узла и связанных с ним узлов вместе со связями."""
+        data = self._get_relationships(node_id)
+        if not data:
+            return "Узел не найден" if to_str else None
+        if to_str:
+            return self._format_entity_relationships(data)
+        return data
         
+    def get_relationships_only(self, node_id, to_str=True):
+        """Получение только связей узла."""
+        data = self._get_relationships(node_id)
+        if not data:
+            return "Узел не найден" if to_str else None
+        if to_str:
+            return self._format_relationships_only(data)
+        return data
+
     def ping(self):
         """Проверка соединения с базой данных."""
         with self.driver.session() as session:

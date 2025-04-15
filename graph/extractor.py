@@ -5,6 +5,7 @@ import logging
 import re
 from typing import List, Dict, Any, Tuple, Optional, Set, Union
 from dataclasses import dataclass, field
+from utils import remove_tokens, preprocess_text
 
 import yaml
 from dotenv import load_dotenv
@@ -467,6 +468,7 @@ class GraphExtractor:
         # Лемматизируем назавания сущностей в all_entities_raw
         for entity in all_entities_raw:
             entity["name"] = _preprocess_text(entity["name"])
+            entity["description"] = remove_tokens(entity["description"]) if entity.get("description") else ""
         
         # Лемматизируем назавания сущностей в all_relationships_raw
         for relationship in all_relationships_raw:

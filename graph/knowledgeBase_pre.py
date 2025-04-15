@@ -1,23 +1,18 @@
-try:
-    from graph import GraphDB 
-except ImportError:
-    print("ОШИБКА: Не удалось импортировать GraphDB из graph_db_module.")
-    print("Пожалуйста, убедитесь, что файл graph_db_module.py существует и содержит класс GraphDB.")
-    # Создаем заглушку, чтобы код ниже не падал при импорте, но функциональность будет отсутствовать
-    class GraphDB:
-        def __init__(self, *args, **kwargs): logger.error("GraphDB заглушка активна!")
-        def get_node_with_relationships(self, *args, **kwargs): logger.error("GraphDB заглушка: get_node_with_relationships"); return None
-        # Добавьте заглушки для других методов, если они вызываются
-        def ping(self): logger.error("GraphDB заглушка: ping"); return False
-        def close(self): pass
-
+from graph import GraphDB 
 from vdb_pre import VectorDBModule
+from extractor import GraphExtractor
 import logging
 import os
+import json
 from typing import List, Dict, Optional, Any
+
+
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger("urllib3").setLevel(logging.ERROR)  
+logging.getLogger("urllib3").disabled = True  # Отключаем urllib3, если он используется в других модулях
 
 class KnowledgeBaseModule:
     """
@@ -109,6 +104,16 @@ class KnowledgeBaseModule:
         # Фильтруем None или пустые строки, если они как-то попали
         return [name for name in names if name]
 
+    def load(self):
+        '''Загрузка данных в KnowledgeBaseModule из директории, генерация эмбеддингов и графа.'''
+        # Загрузка данных в VectorDB
+        json_data = GraphExtractor(config_path="./config.yaml").update()
+        self.vector_db.add_entities_batch(json_data['entities'])
+        # Загрузка данных в GraphDB
+        if self.graph_db:
+            self.graph_db.load_from_json(json_data)
+        else:
+            logger.warning("GraphDB не инициализирован, загрузка данных в граф невозможна.")
 
     def search_classic(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -158,7 +163,6 @@ class KnowledgeBaseModule:
         logger.debug(f"Запрос к графовой БД для имен: {top_names}")
         for name in top_names:
             try:
-                # Предполагаем, что этот метод возвращает полную информацию
                 node_data = self.graph_db.get_node_with_relationships(name)
                 graph_results.append(node_data) # Может быть None, если узел не найден
             except Exception as e:
@@ -166,10 +170,11 @@ class KnowledgeBaseModule:
                 graph_results.append(None) # Добавляем None в случае ошибки
 
         return graph_results
-
-    def search_fast(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
+    
+    # Краткий поиск
+    def search_lite(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
         """
-        Быстрый поиск: поиск по именам -> запрос частичной информации из графа для топ-N
+        Краткий поиск: поиск по именам -> запрос частичной информации из графа для топ-N
                      (без описаний соседних узлов).
 
         Args:
@@ -195,25 +200,8 @@ class KnowledgeBaseModule:
         logger.debug(f"Запрос к графовой БД для имен (быстрый поиск): {top_names}")
         for name in top_names:
             try:
-                # ВАЖНО: Здесь предполагается, что GraphDB имеет метод, возвращающий
-                # данные БЕЗ описаний соседей, или мы фильтруем результат здесь.
-                # Вариант 1: Фильтрация результата полного метода
-                full_node_data = self.graph_db.get_node_with_relationships(name)
-                if full_node_data:
-                    # Создаем копию и удаляем описания соседей (примерная структура)
-                    fast_node_data = full_node_data.copy() # Или deepcopy, если нужно
-                    if 'relationships' in fast_node_data and isinstance(fast_node_data['relationships'], list):
-                         for rel_info in fast_node_data['relationships']:
-                              if isinstance(rel_info, dict) and 'target_node' in rel_info and isinstance(rel_info['target_node'], dict):
-                                   rel_info['target_node'].pop('description', None) # Удаляем описание соседа
-                    graph_results.append(fast_node_data)
-                else:
-                     graph_results.append(None) # Узел не найден
-
-                # Вариант 2: Использовать специальный метод GraphDB (если он есть)
-                # node_data = self.graph_db.get_node_with_relationships_fast(name)
-                # graph_results.append(node_data)
-
+                node_data = self.graph_db.get_relationships_only(name)
+                graph_results.append(node_data)
             except AttributeError:
                  logger.error(f"Метод get_node_with_relationships не найден в GraphDB или вернул некорректный тип.")
                  graph_results.append(None)
@@ -277,29 +265,28 @@ if __name__ == '__main__':
     # и GraphDB содержит соответствующие узлы и связи.
 
     # Инициализация KB
-    kb = KnowledgeBaseModule(
-        chroma_persist_path="./test_chroma_db", # Используем ту же тестовую БД
-        n_results_graph_query=2 # Для примера будем запрашивать 2 узла из графа
-    )
+    kb = KnowledgeBaseModule()
+    # kb.load()  # Загрузка данных в VectorDB и GraphDB
 
     # Проверка подключения к графу
     if not kb.graph_db:
         print("\nWARNING: GraphDB не инициализирован, графовые поиски не будут работать.")
     else:
-        print("\n--- Поиск Classic ('место для отдыха') ---")
-        classic_res = kb.search_classic("место для отдыха", n_results=1)
+        query = 'pedobear'
+        print(f"\n--- Поиск Classic ({query}) ---")
+        classic_res = kb.search_classic(query, n_results=2)
         print(json.dumps(classic_res, indent=2, ensure_ascii=False))
 
-        print("\n--- Поиск Extended ('гоблин') ---")
-        extended_res = kb.search_extended("гоблин", n_vector_results=5)
+        print(f"\n--- Поиск Extended ({query}) ---")
+        extended_res = kb.search_extended(query, n_vector_results=2)
         print(json.dumps(extended_res, indent=2, ensure_ascii=False)) # Печатаем результат из графа
 
-        print("\n--- Поиск Fast ('гоблин') ---")
-        fast_res = kb.search_fast("гоблин", n_vector_results=5)
+        print(f"\n--- Поиск Lite ({query}) ---")
+        fast_res = kb.search_lite(query, n_vector_results=2)
         print(json.dumps(fast_res, indent=2, ensure_ascii=False)) # Результат из графа без описаний соседей
 
-        print("\n--- Поиск Deep ('кует оружие') ---")
-        deep_res = kb.search_deep("кует оружие", n_vector_results=5)
+        print(f"\n--- Поиск Deep ({query}) ---")
+        deep_res = kb.search_deep(query, n_vector_results=2)
         print(json.dumps(deep_res, indent=2, ensure_ascii=False)) # Результат из графа
 
         # Закрытие соединения с графом
