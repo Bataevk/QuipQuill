@@ -26,43 +26,50 @@ graph TD
 
 ## 2. Диаграмма классов (Class Diagram)
 ```mermaid
-classDiagram
-    class KnowledgeBaseModule {
-        -VectorDBModule vector_db
-        -GraphDB graph_db
-        +search_classic(query: str) List[Dict]
-        +search_extended(query: str) List[Dict]
-        +search_fast(query: str) List[Dict]
-        +search_deep(query: str) List[Dict]
-        +update_dynamic_graph(action: Action) bool
-        +query_static_graph(entity: str) Dict
-    }
-    class VectorDBModule {
-        +query_names(query: str) Dict
-        +query_descriptions(query: str) Dict
-    }
-    class GraphDB {
-        +get_node_with_relationships(name: str) Dict
-        +update_dynamic_node(entity: str, relations: Dict) bool
-        +get_static_node(entity: str) Dict
-        +ping() bool
-    }
-    class LLM {
-        +analyze_intent(text: str) Intent
-        +select_action(intent: Intent) Action
-    }
-    class ResponseGenerator {
-        +generate_response(dynamic_data: Dict, static_data: Dict, logs: List) str
-    }
-    LLM --> KnowledgeBaseModule : использует
-    VectorDBModule --> KnowledgeBaseModule : содержит
-    GraphDB --> KnowledgeBaseModule : содержит
-    KnowledgeBaseModule --> ResponseGenerator : передает данные
+classDiagram  
+    class KnowledgeBaseModule {  
+        -VectorDBModule vector_db  
+        -GraphDB graph_db  
+        +search_classic(query: str) List[Dict]  
+        +search_extended(query: str) List[Dict]  
+        +search_fast(query: str) List[Dict]  
+        +search_deep(query: str) List[Dict]  
+        +update_dynamic_graph(action: Action) bool  
+        +query_static_graph(entity: str) Dict  
+    }  
+    class VectorDBModule {  
+        +query_names(query: str) Dict  
+        +query_descriptions(query: str) Dict  
+    }  
+    class GraphDB {  
+        +get_node_with_relationships(name: str) Dict  
+        +update_dynamic_node(entity: str, relations: Dict) bool  
+        +get_static_node(entity: str) Dict  
+        +ping() bool  
+    }  
+    class LLM {  
+        +analyze_intent(text: str) Intent  
+        +select_action(intent: Intent) Action  
+    }  
+    class Manager {  
+        -GraphDB dynamic_graph  
+        -GraphDB static_graph  
+        +process_query(query: str) Dict  
+        +generate_response(dynamic_data: Dict, static_data: Dict, logs: List) str  
+    }  
+    LLM --> Manager : использует  
+    Manager --> KnowledgeBaseModule : управляет  
+    VectorDBModule --> KnowledgeBaseModule : содержит  
+    GraphDB --> KnowledgeBaseModule : содержит  
 ```
 **Описание:**  
-- **KnowledgeBaseModule** интегрирует векторную БД (ChromaDB), графовую БД (Neo4j) и логи.
-- **GraphDB** поддерживает методы для работы с **статическим** (справочные данные) и **динамическим** графом (изменяемые состояния).
-- **ResponseGenerator** формирует ответы на основе данных из всех источников.
+- **KnowledgeBaseModule**:
+Отвечает за поиск информации в различных источниках знаний: векторной БД и графовых БД.
+Содержит методы для различных стратегий поиска: search_classic, search_extended, search_fast, search_deep.
+Позволяет обновлять динамический граф (update_dynamic_graph) и запрашивать информацию из статического графа (query_static_graph).
+- **Manager**:
+Отвечает за координацию работы модулей, включая KnowledgeBaseModule.
+Содержит метод generate_response, который формирует ответ на основе данных, полученных из KnowledgeBaseModule.
 
 ---
 
@@ -96,15 +103,17 @@ graph LR
 sequenceDiagram
     participant U as Пользователь
     participant I as Интерфейс ввода
+    participant M as Manager
+    participant L as LLM
     participant K as KnowledgeBaseModule
     participant V as VectorDB
     participant G as GraphDB
     participant S as Статический граф
     participant D as Динамический граф
-    participant L as Логи
-    participant R as Модуль генерации ответа
     U->>I: Ввод "Где меч?"
-    I->>K: Вызов search_deep("местоположение меча")
+    I->>L: analyze_intent("Где меч?")
+    L->>M: process_query("Где меч?")
+    M->>K: search_deep("местоположение меча")
     K->>V: query_descriptions("местоположение меча")
     V-->>K: Результаты (например, "Меч в кузнице")
     K->>G: get_node_with_relationships("Меч")
@@ -113,16 +122,23 @@ sequenceDiagram
     G-->>K: Данные: {статус: "у игрока"}
     K->>S: get_static_node("Меч") 
     S-->>K: Описание: "Меч — оружие кузнеца Джона"
-    K->>R: Передача данных (статика + динамика)
-    R->>U: Ответ: "Меч сейчас у вас. Это оружие кузнеца Джона."
+    K-->>M: Данные (статика, динамика)
+    M->>M: generate_response(статика, динамика)
+    M-->>L: Ответ: "Меч сейчас у вас. Это оружие кузнеца Джона."
+    L-->>U: Ответ: "Меч сейчас у вас. Это оружие кузнеца Джона."
 ```
-**Описание:**  
-- Поиск информации о местоположении меча:
-  - **Векторная БД** находит описание "Меч в кузнице".
-  - **Динамический граф** показывает, что меч сейчас у игрока.
-  - **Статический граф** предоставляет описание меча.
-  - Ответ объединяет актуальное состояние и справочные данные.
 
+**Описание:**
+
+*   Поиск информации о местоположении меча:
+    *   `LLM` анализирует запрос пользователя.
+    *   `Manager` координирует поиск информации в модулях знаний.
+    *   `Векторная БД` находит описание "Меч в кузнице".
+    *   `Динамический граф` показывает, что меч сейчас у игрока.
+    *   `Статический граф` предоставляет описание меча.
+    *   `Manager` генерирует ответ, объединяя актуальное состояние и справочные данные.
+    *   `Manager` передает сгенерированный ответ `LLM`.
+    *   `LLM` выдает проанализированный ответ пользователю.
 ---
 
 ## Итог
