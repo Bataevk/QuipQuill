@@ -171,7 +171,6 @@ class KnowledgeBaseModule:
 
         return graph_results
     
-    # Краткий поиск
     def search_lite(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
         """
         Краткий поиск: поиск по именам -> запрос частичной информации из графа для топ-N
@@ -272,7 +271,7 @@ if __name__ == '__main__':
     if not kb.graph_db:
         print("\nWARNING: GraphDB не инициализирован, графовые поиски не будут работать.")
     else:
-        query = 'pedobear'
+        query = 'bus'
         print(f"\n--- Поиск Classic ({query}) ---")
         classic_res = kb.search_classic(query, n_results=2)
         print(json.dumps(classic_res, indent=2, ensure_ascii=False))
