@@ -30,11 +30,11 @@ if __name__ == "__main__":
 
     
     # Инициализация GraphExtractor
-    # extractor = GraphExtractor(config_path="./config.yaml")s
-    # graph_data = extractor.update()  # Получение данных в формате JSON
+    extractor = GraphExtractor(config_path="./config.yaml")
+    graph_data = extractor.update()  # Получение данных в формате JSON
 
-    # # Загрузка данных в Neo4j (для статического графа)
-    # graph_module.load_from_json(graph_data)
+    # Загрузка данных в Neo4j (для статического графа)
+    graph_module.load_from_json(graph_data)
 
     # # Пример добавления узла (для динамического графа)
     # new_entity = {"name": "Игрок", "description": "Главный герой"}
