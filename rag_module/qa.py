@@ -16,7 +16,7 @@ def main():
     rag = init_rag()
 
     print(rag.query(
-        "Alya?"
+        "Start Location?"
     ))
 
 if __name__ == "__main__":

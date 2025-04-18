@@ -265,13 +265,16 @@ if __name__ == '__main__':
 
     # Инициализация KB
     kb = KnowledgeBaseModule()
-    # kb.load()  # Загрузка данных в VectorDB и GraphDB
+    kb.load()  # Загрузка данных в VectorDB и GraphDB
 
     # Проверка подключения к графу
     if not kb.graph_db:
         print("\nWARNING: GraphDB не инициализирован, графовые поиски не будут работать.")
     else:
-        query = 'bus'
+        query = input("Введите запрос для поиска в KnowledgeBase (или 'exit' для выхода): ")
+        if query.lower() == 'exit':
+            print("Выход из примера KnowledgeBaseModule.")
+            exit(0)
         print(f"\n--- Поиск Classic ({query}) ---")
         classic_res = kb.search_classic(query, n_results=2)
         print(json.dumps(classic_res, indent=2, ensure_ascii=False))

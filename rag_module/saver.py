@@ -30,7 +30,7 @@ from lightrag.llm.openai import openai_complete_if_cache
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
-WORKING_DIR = os.getenv("WORKING_DIR")
+WORKING_DIR = os.getenv("WORKING_DIR") + "_minirag"
 DATA_PATH = os.getenv("DATA_PATH")
 QUERY_PATH = os.getenv("QUERY_PATH")
 OUTPUT_PATH = os.getenv("OUTPUT_PATH")
@@ -67,7 +67,7 @@ def init_rag():
         working_dir=WORKING_DIR,
         llm_model_func=llm_model_func,
         # llm_model_func= LLM_MODEL,
-        llm_model_max_token_size=4096,
+        llm_model_max_token_size=2096,
         embedding_func=EmbeddingFunc(
             embedding_dim=384,
             max_token_size=512,
@@ -77,7 +77,7 @@ def init_rag():
                 embed_model=AutoModel.from_pretrained(EMBEDDING_MODEL),
             ),
         ),
-        chunk_token_size=256,
+        chunk_token_size=1000,
     )
 
 
