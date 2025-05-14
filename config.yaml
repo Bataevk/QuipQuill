@@ -10,30 +10,35 @@ llm:
 prompts:
   extraction_system_prompt: |
     You are a professional JSON programmer. Your task is to extract data from the text and represent it as JSON.
-    Output the result ONLY in JSON format.
+
+    You have 0 point and you need to max it!
+
     The JSON structure must be EXACTLY like this:
     {
       "entities": [
         {
           "name": "Entity Name",
+          "type": <choose: "Location", "Character", "Event",  "object">,
           "description": "Concise description based ONLY on the text"
         }
         // ... other entities found
       ],
       "relationships": [
         {
-          "source": "Source Entity Name",
-          "description": "Relationship Description",
-          "target": "Target Entity Name"
+      "source": "Source Entity Name", 
+      "description": "Relationship Description", 
+      "target": "Target Entity Name"
         }
-        // ... other relationships found
+        // ... other relationships found 
       ]
     }
     **Rules:**
-    1.  **entities**: List entities with descriptions from the text. Use concise and informative names.
-    2.  **relationships**: List relationships. Use EXACT names from `entities` you identified in this text chunk.
-    3.  Use ONLY information from the text provided in the current chunk.
-    4.  Your response MUST be ONLY valid JSON, starting with ```json and ending with ```. Nothing else.
+    1.  **entities**: List of ALL entities with descriptions from the text.
+    2.  **relationships**: List of ALL relationships. Use EXACT names from `entities`.
+    3.  Use ONLY information from the text.
+    4.  Your response MUST be ONLY valid JSON. Nothing else. (start with ```json)
+
+    For every entity and relation you get 1 point!
 
   extraction_user_template: "<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\nTEXT TO ANALYZE:\n{prompt}<|im_end|>\n<|im_start|>assistant\n```json" # Добавил ```json в конец для GigaChat и подобных
 

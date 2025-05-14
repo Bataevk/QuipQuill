@@ -17,7 +17,7 @@ from langchain.schema import AIMessage
 from langchain_core.runnables import RunnableLambda 
 
 # --- Конфигурация логирования ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Загрузка конфигурации и переменных окружения ---
 load_dotenv()
@@ -42,6 +42,7 @@ CONFIG = load_config()
 @dataclass
 class Entity:
     name: str
+    type: str
     descriptions: List[str] = field(default_factory=list)
     # Можно добавить другие атрибуты сущности, если нужно (например, type)
 
@@ -184,6 +185,7 @@ def merge_entities(
             logging.warning(f"Пропуск некорректных данных сущности: {entity_data}")
             continue
         name = entity_data.get("name")
+        e_type = entity_data.get("type", "object")
         description = entity_data.get("description")
 
         if not name or not isinstance(name, str) or not name.strip():
@@ -214,7 +216,10 @@ def merge_entities(
         # Если совпадений не найдено, добавляем как новую уникальную сущность
         if not matched:
             logging.debug(f"Добавлена новая уникальная сущность: '{name}'")
-            unique_entities[name] = Entity(name=name, descriptions=[desc for desc in [description] if desc]) # Сохраняем описание в списке
+
+            # ВРЕМЕННО НЕ ПРОВЕРЯЕМ ОБЩИЕ ТИПЫ
+
+            unique_entities[name] = Entity(name=name, type=e_type, descriptions=[desc for desc in [description] if desc]) # Сохраняем описание в списке 
             name_mapping[name] = name # Сама на себя для консистентности карты
 
     logging.info(f"Слияние сущностей завершено. Уникальных сущностей: {len(unique_entities)}. Обнаружено слияний: {len(name_mapping) - len(unique_entities)}.")
@@ -306,13 +311,14 @@ async def main():
     logging.info("Начало суммирования описаний для сущностей...")
     summarization_tasks = []
     for name, entity_obj in unique_entities_map.items():
+        logging.debug(entity_obj.type)
         if len(entity_obj.descriptions) > 1:
             summarization_tasks.append(
                 summarize_description(name, entity_obj.descriptions, llm_summarizer, CONFIG)
             )
         elif len(entity_obj.descriptions) == 1:
             # Если описание одно, просто "распаковываем" его из списка
-             summarization_tasks.append(asyncio.sleep(0, result=entity_obj.descriptions[0])) # Возвращаем как результат "сна"
+            summarization_tasks.append(asyncio.sleep(0, result=entity_obj.descriptions[0])) # Возвращаем как результат "сна"
         else:
             # Если описаний нет
             summarization_tasks.append(asyncio.sleep(0, result="")) # Возвращаем пустую строку
@@ -326,8 +332,8 @@ async def main():
     for i, name in enumerate(entity_names):
         final_entities_list.append({
             "name": name,
+            "type": unique_entities_map[name].type,
             "description": summarized_descriptions[i]
-            # Добавьте сюда другие поля сущности, если они есть
         })
 
     # Проверка существования финальных имен сущностей для связей

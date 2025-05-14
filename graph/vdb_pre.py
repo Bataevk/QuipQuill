@@ -4,9 +4,6 @@ import logging
 from typing import List, Dict, Optional, Any
 from utils import preprocess_text
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # --- Модуль для работы с ChromaDB и векторизацией текста ---
 class VectorDBModule:
     """
@@ -30,13 +27,13 @@ class VectorDBModule:
         """
         try:
             self.client = chromadb.PersistentClient(path=persist_path)
-            logger.info(f"ChromaDB PersistentClient инициализирован по пути: {persist_path}")
+            logging.info(f"ChromaDB PersistentClient инициализирован по пути: {persist_path}")
 
             # Используем SentenceTransformer для эмбеддингов
             self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
                 model_name=embedding_model_name
             )
-            logger.info(f"Функция эмбеддингов инициализирована с моделью: {embedding_model_name}")
+            logging.info(f"Функция эмбеддингов инициализирована с моделью: {embedding_model_name}")
 
             # Получаем или создаем коллекции
             self.names_collection = self.client.get_or_create_collection(
@@ -44,17 +41,17 @@ class VectorDBModule:
                 embedding_function=self.embedding_function,
                 metadata={"hnsw:space": "cosine"} # Используем косинусное расстояние
             )
-            logger.info(f"Коллекция '{self.COLLECTION_NAMES}' загружена/создана.")
+            logging.info(f"Коллекция '{self.COLLECTION_NAMES}' загружена/создана.")
 
             self.descriptions_collection = self.client.get_or_create_collection(
                 name=self.COLLECTION_DESCRIPTIONS,
                 embedding_function=self.embedding_function,
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"Коллекция '{self.COLLECTION_DESCRIPTIONS}' загружена/создана.")
+            logging.info(f"Коллекция '{self.COLLECTION_DESCRIPTIONS}' загружена/создана.")
 
         except Exception as e:
-            logger.error(f"Ошибка инициализации VectorDBModule: {e}", exc_info=True)
+            logging.error(f"Ошибка инициализации VectorDBModule: {e}", exc_info=True)
             raise RuntimeError("Не удалось инициализировать VectorDBModule") from e
 
     def add_entity(self, name: str, description: str):
@@ -66,7 +63,7 @@ class VectorDBModule:
             description: Описание сущности.
         """
         if not name or not isinstance(name, str):
-            logger.warning(f"Пропуск добавления сущности с некорректным именем: {name}")
+            logging.warning(f"Пропуск добавления сущности с некорректным именем: {name}")
             return
 
         description = description or "" # Гарантируем, что описание - строка
@@ -78,7 +75,7 @@ class VectorDBModule:
                 documents=[name], # Векторизуем само имя
                 metadatas=[{"entity_name": name}],
             )
-            logger.debug(f"Имя сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_NAMES}'.")
+            logging.debug(f"Имя сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_NAMES}'.")
 
             # Подготавливаем текст для коллекции описаний
             # Встраиваем имя в описание для потенциально лучшего поиска
@@ -90,10 +87,10 @@ class VectorDBModule:
                 documents=[description_text_for_embedding],
                 metadatas=[{"entity_name": name, "original_description": description}], # Сохраняем исходные данные
             )
-            logger.debug(f"Описание сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_DESCRIPTIONS}'.")
+            logging.debug(f"Описание сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_DESCRIPTIONS}'.")
 
         except Exception as e:
-            logger.error(f"Ошибка при добавлении/обновлении сущности '{name}': {e}", exc_info=True)
+            logging.error(f"Ошибка при добавлении/обновлении сущности '{name}': {e}", exc_info=True)
 
     def add_entities_batch(self, entities: List[Dict[str, str]]):
         """
@@ -118,7 +115,7 @@ class VectorDBModule:
             description = entity.get("description", "")
 
             if not name or not isinstance(name, str):
-                logger.warning(f"Пропуск сущности с некорректным именем в батче: {name}")
+                logging.warning(f"Пропуск сущности с некорректным именем в батче: {name}")
                 continue
 
             description = description or ""
@@ -136,7 +133,7 @@ class VectorDBModule:
             desc_metadatas.append({"entity_name": name, "original_description": description})
 
         if not valid_entity_count:
-             logger.warning("В батче не найдено валидных сущностей для добавления.")
+             logging.warning("В батче не найдено валидных сущностей для добавления.")
              return
 
         try:
@@ -146,7 +143,7 @@ class VectorDBModule:
                     documents=names_docs,
                     metadatas=names_metadatas,
                 )
-                logger.debug(f"Добавлено/обновлено {len(names_ids)} имен в '{self.COLLECTION_NAMES}'.")
+                logging.debug(f"Добавлено/обновлено {len(names_ids)} имен в '{self.COLLECTION_NAMES}'.")
 
             if desc_ids:
                 self.descriptions_collection.upsert(
@@ -154,12 +151,12 @@ class VectorDBModule:
                     documents=desc_docs,
                     metadatas=desc_metadatas,
                 )
-                logger.debug(f"Добавлено/обновлено {len(desc_ids)} описаний в '{self.COLLECTION_DESCRIPTIONS}'.")
+                logging.debug(f"Добавлено/обновлено {len(desc_ids)} описаний в '{self.COLLECTION_DESCRIPTIONS}'.")
 
-            logger.info(f"Батч из {valid_entity_count} сущностей обработан.")
+            logging.info(f"Батч из {valid_entity_count} сущностей обработан.")
 
         except Exception as e:
-            logger.error(f"Ошибка при батчевом добавлении/обновлении сущностей: {e}", exc_info=True)
+            logging.error(f"Ошибка при батчевом добавлении/обновлении сущностей: {e}", exc_info=True)
 
     def query_names(self, query_text: str, n_results: int = 5) -> Optional[Dict[str, Any]]:
         """
@@ -183,10 +180,10 @@ class VectorDBModule:
                 n_results=n_results,
                 include=['metadatas', 'distances'] # Включаем метаданные (там имя) и расстояния
             )
-            logger.debug(f"Поиск по именам для '{query_text}' вернул {len(results.get('ids', [[]])[0])} результатов.")
+            logging.debug(f"Поиск по именам для '{query_text}' вернул {len(results.get('ids', [[]])[0])} результатов.")
             return results
         except Exception as e:
-            logger.error(f"Ошибка при поиске по именам ('{query_text}'): {e}", exc_info=True)
+            logging.error(f"Ошибка при поиске по именам ('{query_text}'): {e}", exc_info=True)
             return None
 
     def query_descriptions(self, query_text: str, n_results: int = 5) -> Optional[Dict[str, Any]]:
@@ -211,10 +208,10 @@ class VectorDBModule:
                 n_results=n_results,
                 include=['metadatas', 'distances'] # Включаем метаданные (имя, описание) и расстояния
             )
-            logger.debug(f"Поиск по описаниям для '{query_text}' вернул {len(results.get('ids', [[]])[0])} результатов.")
+            logging.debug(f"Поиск по описаниям для '{query_text}' вернул {len(results.get('ids', [[]])[0])} результатов.")
             return results
         except Exception as e:
-            logger.error(f"Ошибка при поиске по описаниям ('{query_text}'): {e}", exc_info=True)
+            logging.error(f"Ошибка при поиске по описаниям ('{query_text}'): {e}", exc_info=True)
             return None
 
     def delete_entity(self, name: str):
@@ -229,10 +226,10 @@ class VectorDBModule:
         try:
             self.names_collection.delete(ids=[name])
             self.descriptions_collection.delete(ids=[name])
-            logger.info(f"Сущность '{name}' удалена из коллекций.")
+            logging.info(f"Сущность '{name}' удалена из коллекций.")
         except Exception as e:
             # ChromaDB может выдать ошибку, если ID не найден, обрабатываем это
-            logger.warning(f"Ошибка или сущность не найдена при удалении '{name}': {e}")
+            logging.warning(f"Ошибка или сущность не найдена при удалении '{name}': {e}")
 
     def get_entity_count(self) -> tuple[int, int]:
         """Возвращает количество сущностей в каждой коллекции."""
@@ -241,11 +238,12 @@ class VectorDBModule:
             descriptions_count = self.descriptions_collection.count()
             return names_count, descriptions_count
         except Exception as e:
-            logger.error(f"Ошибка при получении количества сущностей: {e}", exc_info=True)
+            logging.error(f"Ошибка при получении количества сущностей: {e}", exc_info=True)
             return -1, -1
 
 # --- Пример использования ---
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     print("Запуск примера VectorDBModule...")
 
     # Инициализация

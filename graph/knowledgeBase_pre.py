@@ -7,13 +7,6 @@ import json
 from typing import List, Dict, Optional, Any
 
 
-
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.getLogger("urllib3").setLevel(logging.ERROR)  
-logging.getLogger("urllib3").disabled = True  # Отключаем urllib3, если он используется в других модулях
-
 class KnowledgeBaseModule:
     """
     Общий модуль базы знаний, объединяющий векторный поиск (ChromaDB)
@@ -44,7 +37,7 @@ class KnowledgeBaseModule:
             n_results_graph_query: Количество топ-результатов векторного поиска,
                                     для которых выполняется запрос к графовой БД.
         """
-        logger.info("Инициализация KnowledgeBaseModule...")
+        logging.info("Инициализация KnowledgeBaseModule...")
 
         # Инициализация VectorDB
         try:
@@ -53,7 +46,7 @@ class KnowledgeBaseModule:
                 embedding_model_name=embedding_model_name
             )
         except Exception as e:
-            logger.error(f"Ошибка инициализации VectorDBModule внутри KnowledgeBase: {e}", exc_info=True)
+            logging.error(f"Ошибка инициализации VectorDBModule внутри KnowledgeBase: {e}", exc_info=True)
             # Решаем, что делать - падать или работать без векторной части? Пока падаем.
             raise RuntimeError("Не удалось инициализировать VectorDBModule") from e
 
@@ -63,24 +56,24 @@ class KnowledgeBaseModule:
         password = neo4j_password or os.getenv("NEO4J_PASSWORD")
 
         if not uri or not user:
-            logger.warning("Параметры подключения к Neo4j (URI, USER) не найдены. GraphDB не будет инициализирован.")
+            logging.warning("Параметры подключения к Neo4j (URI, USER) не найдены. GraphDB не будет инициализирован.")
             self.graph_db = None # Или можно создать заглушку
         else:
             try:
                 self.graph_db = GraphDB(uri=uri, user=user, password=password)
                 if not self.graph_db.ping():
-                     logger.error("Не удалось подключиться к Neo4j. Проверьте параметры и доступность БД.")
+                     logging.error("Не удалось подключиться к Neo4j. Проверьте параметры и доступность БД.")
                      # Можно установить self.graph_db = None или выбросить исключение
                      # raise ConnectionError("Не удалось подключиться к Neo4j")
                      self.graph_db = None # Работаем без графа, если не удалось подключиться
                 else:
-                     logger.info("GraphDB успешно инициализирован и подключен.")
+                     logging.info("GraphDB успешно инициализирован и подключен.")
             except Exception as e:
-                logger.error(f"Ошибка инициализации GraphDB: {e}", exc_info=True)
+                logging.error(f"Ошибка инициализации GraphDB: {e}", exc_info=True)
                 self.graph_db = None # Работаем без графа
 
         self.n_results_graph_query = n_results_graph_query
-        logger.info(f"KnowledgeBaseModule инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
+        logging.info(f"KnowledgeBaseModule инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
 
     def _get_top_entity_names(self, vector_results: Optional[Dict[str, Any]], n_top: Optional[int] = None) -> List[str]:
         """Вспомогательная функция для извлечения имен сущностей из результатов векторного поиска."""
@@ -113,7 +106,7 @@ class KnowledgeBaseModule:
         if self.graph_db:
             self.graph_db.load_from_json(json_data)
         else:
-            logger.warning("GraphDB не инициализирован, загрузка данных в граф невозможна.")
+            logging.warning("GraphDB не инициализирован, загрузка данных в граф невозможна.")
 
     def search_classic(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -126,13 +119,13 @@ class KnowledgeBaseModule:
         Returns:
             Список словарей с метаданными найденных сущностей (включая имя и описание).
         """
-        logger.info(f"Выполнение классического поиска: '{query_text}' (n_results={n_results})")
+        logging.info(f"Выполнение классического поиска: '{query_text}' (n_results={n_results})")
         results = self.vector_db.query_descriptions(query_text, n_results=n_results)
         if results and results.get('metadatas') and results['metadatas'][0]:
             # Возвращаем список словарей метаданных
             return results['metadatas'][0]
         else:
-            logger.warning("Классический поиск не дал результатов или произошла ошибка.")
+            logging.warning("Классический поиск не дал результатов или произошла ошибка.")
             return []
 
     def search_extended(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
@@ -147,26 +140,26 @@ class KnowledgeBaseModule:
             Список словарей, где каждый словарь представляет полную информацию
             об узле и его связях из графовой БД, или None, если узел не найден в графе.
         """
-        logger.info(f"Выполнение расширенного поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
+        logging.info(f"Выполнение расширенного поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
         if not self.graph_db:
-             logger.error("Расширенный поиск невозможен: GraphDB не инициализирован.")
+             logging.error("Расширенный поиск невозможен: GraphDB не инициализирован.")
              return []
 
         vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
         top_names = self._get_top_entity_names(vector_results) # Использует self.n_results_graph_query
 
         if not top_names:
-            logger.warning("Расширенный поиск: не найдено релевантных имен в векторной БД.")
+            logging.warning("Расширенный поиск: не найдено релевантных имен в векторной БД.")
             return []
 
         graph_results = []
-        logger.debug(f"Запрос к графовой БД для имен: {top_names}")
+        logging.debug(f"Запрос к графовой БД для имен: {top_names}")
         for name in top_names:
             try:
                 node_data = self.graph_db.get_node_with_relationships(name)
                 graph_results.append(node_data) # Может быть None, если узел не найден
             except Exception as e:
-                logger.error(f"Ошибка при запросе узла '{name}' из графовой БД: {e}", exc_info=True)
+                logging.error(f"Ошибка при запросе узла '{name}' из графовой БД: {e}", exc_info=True)
                 graph_results.append(None) # Добавляем None в случае ошибки
 
         return graph_results
@@ -183,29 +176,29 @@ class KnowledgeBaseModule:
         Returns:
             Список словарей с частичной информацией об узле и его связях.
         """
-        logger.info(f"Выполнение быстрого поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
+        logging.info(f"Выполнение быстрого поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
         if not self.graph_db:
-            logger.error("Быстрый поиск невозможен: GraphDB не инициализирован.")
+            logging.error("Быстрый поиск невозможен: GraphDB не инициализирован.")
             return []
 
         vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
         top_names = self._get_top_entity_names(vector_results)
 
         if not top_names:
-            logger.warning("Быстрый поиск: не найдено релевантных имен в векторной БД.")
+            logging.warning("Быстрый поиск: не найдено релевантных имен в векторной БД.")
             return []
 
         graph_results = []
-        logger.debug(f"Запрос к графовой БД для имен (быстрый поиск): {top_names}")
+        logging.debug(f"Запрос к графовой БД для имен (быстрый поиск): {top_names}")
         for name in top_names:
             try:
                 node_data = self.graph_db.get_relationships_only(name)
                 graph_results.append(node_data)
             except AttributeError:
-                 logger.error(f"Метод get_node_with_relationships не найден в GraphDB или вернул некорректный тип.")
+                 logging.error(f"Метод get_node_with_relationships не найден в GraphDB или вернул некорректный тип.")
                  graph_results.append(None)
             except Exception as e:
-                logger.error(f"Ошибка при запросе узла '{name}' из графовой БД (быстрый поиск): {e}", exc_info=True)
+                logging.error(f"Ошибка при запросе узла '{name}' из графовой БД (быстрый поиск): {e}", exc_info=True)
                 graph_results.append(None)
 
         return graph_results
@@ -221,9 +214,9 @@ class KnowledgeBaseModule:
         Returns:
             Список словарей с полной информацией об узле и его связях.
         """
-        logger.info(f"Выполнение глубокого поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
+        logging.info(f"Выполнение глубокого поиска: '{query_text}' (n_vector={n_vector_results}, n_graph={self.n_results_graph_query})")
         if not self.graph_db:
-            logger.error("Глубокий поиск невозможен: GraphDB не инициализирован.")
+            logging.error("Глубокий поиск невозможен: GraphDB не инициализирован.")
             return []
 
         vector_results = self.vector_db.query_descriptions(query_text, n_results=n_vector_results)
@@ -231,17 +224,17 @@ class KnowledgeBaseModule:
         top_names = self._get_top_entity_names(vector_results) # Использует self.n_results_graph_query
 
         if not top_names:
-            logger.warning("Глубокий поиск: не найдено релевантных описаний/имен в векторной БД.")
+            logging.warning("Глубокий поиск: не найдено релевантных описаний/имен в векторной БД.")
             return []
 
         graph_results = []
-        logger.debug(f"Запрос к графовой БД для имен (глубокий поиск): {top_names}")
+        logging.debug(f"Запрос к графовой БД для имен (глубокий поиск): {top_names}")
         for name in top_names:
             try:
                 node_data = self.graph_db.get_node_with_relationships(name)
                 graph_results.append(node_data)
             except Exception as e:
-                logger.error(f"Ошибка при запросе узла '{name}' из графовой БД (глубокий поиск): {e}", exc_info=True)
+                logging.error(f"Ошибка при запросе узла '{name}' из графовой БД (глубокий поиск): {e}", exc_info=True)
                 graph_results.append(None)
 
         return graph_results
@@ -251,13 +244,25 @@ class KnowledgeBaseModule:
         if self.graph_db and hasattr(self.graph_db, 'close'):
             try:
                 self.graph_db.close()
-                logger.info("Соединение с GraphDB закрыто.")
+                logging.info("Соединение с GraphDB закрыто.")
             except Exception as e:
-                 logger.error(f"Ошибка при закрытии соединения с GraphDB: {e}", exc_info=True)
+                 logging.error(f"Ошибка при закрытии соединения с GraphDB: {e}", exc_info=True)
 
 
 # --- Пример использования ---
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG, 
+        format='%(asctime)s - %(levelname)s - %(message)s', 
+        filename='logs.log',
+        encoding='utf-8'
+        )
+
+    # logging.getlogging("urllib3").setLevel(logging.ERROR)  
+    # logging.getlogging("urllib3").disabled = True  # Отключаем urllib3, если он используется в других модулях
+
+    logging.debug("DEBAG MODE")
+
     print("Запуск примера KnowledgeBaseModule...")
 
     # Предполагается, что VectorDB уже содержит данные из примера vector_db_module.py
@@ -265,7 +270,7 @@ if __name__ == '__main__':
 
     # Инициализация KB
     kb = KnowledgeBaseModule()
-    kb.load()  # Загрузка данных в VectorDB и GraphDB
+    # kb.load()  # Загрузка данных в VectorDB и GraphDB
 
     # Проверка подключения к графу
     if not kb.graph_db:

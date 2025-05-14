@@ -30,10 +30,6 @@ nltk.download('punkt')
 nltk.download('punkt_tab')  
 nltk.download('wordnet')  
 
-# --- Конфигурация логирования ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 # --- Загрузка переменных окружения ---
 load_dotenv()
 
@@ -41,6 +37,7 @@ load_dotenv()
 @dataclass
 class Entity:
     name: str
+    type: str
     descriptions: List[str] = field(default_factory=list)
 
 @dataclass
@@ -144,23 +141,23 @@ class GraphExtractor:
     @staticmethod
     def _load_config(config_path: str) -> Dict[str, Any]:
         """Загружает конфигурацию из YAML файла."""
-        logger.info(f"Загрузка конфигурации из файла: {config_path}")
+        logging.info(f"Загрузка конфигурации из файла: {config_path}")
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
             if not isinstance(config, dict):
                  raise ValueError(f"Файл конфигурации {config_path} не содержит валидный YAML словарь.")
-            logger.info(f"Конфигурация успешно загружена.")
+            logging.info(f"Конфигурация успешно загружена.")
             # TODO: Добавить валидацию наличия необходимых ключей в config (например, llm, prompts и т.д.)
             return config
         except FileNotFoundError:
-            logger.error(f"Файл конфигурации не найден: {config_path}")
+            logging.error(f"Файл конфигурации не найден: {config_path}")
             raise # Передаем исключение выше
         except yaml.YAMLError as e:
-            logger.error(f"Ошибка парсинга YAML файла {config_path}: {e}")
+            logging.error(f"Ошибка парсинга YAML файла {config_path}: {e}")
             raise ValueError(f"Некорректный формат YAML в файле {config_path}") from e
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при загрузке config файла {config_path}: {e}", exc_info=True)
+            logging.error(f"Неожиданная ошибка при загрузке config файла {config_path}: {e}", exc_info=True)
             raise ValueError(f"Ошибка при чтении файла конфигурации {config_path}") from e
 
 
@@ -177,7 +174,7 @@ class GraphExtractor:
                 timeout=self.config["llm"].get("request_timeout", 600),
                 openai_api_key=os.getenv('OPENAI_API_KEY')
             )
-            logger.info(f"LLM Extractor '{llm_base.model_name}' инициализирована с URL: {llm_base.openai_api_base}")
+            logging.info(f"LLM Extractor '{llm_base.model_name}' инициализирована с URL: {llm_base.openai_api_base}")
 
             # LLM для суммаризации
             self.llm_summarizer = ChatOpenAI(
@@ -189,16 +186,16 @@ class GraphExtractor:
                  timeout=self.config["llm"].get("request_timeout", 600),
                  openai_api_key=os.getenv('OPENAI_API_KEY')
             )
-            logger.info(f"LLM Summarizer '{self.llm_summarizer.model_name}' инициализирована с URL: {self.llm_summarizer.openai_api_base}")
+            logging.info(f"LLM Summarizer '{self.llm_summarizer.model_name}' инициализирована с URL: {self.llm_summarizer.openai_api_base}")
 
             # Создаем цепочку для экстрактора с очисткой и парсингом
             self.llm_extractor_chain = llm_base | RunnableLambda(_strip_json_string) | SimpleJsonOutputParser()
 
         except KeyError as e:
-             logger.error(f"Отсутствует необходимый ключ в конфигурации LLM: {e}")
+             logging.error(f"Отсутствует необходимый ключ в конфигурации LLM: {e}")
              raise ValueError(f"Ошибка конфигурации LLM: отсутствует ключ {e}") from e
         except Exception as e:
-            logger.error(f"Ошибка инициализации LLM: {e}", exc_info=True)
+            logging.error(f"Ошибка инициализации LLM: {e}", exc_info=True)
             # Можно перевыбросить специфичное исключение для инициализации
             raise RuntimeError("Не удалось инициализировать LLM модели.") from e
 
@@ -215,12 +212,12 @@ class GraphExtractor:
                      os.makedirs(output_dir, exist_ok=True)
                 with open(save_json_path, "w", encoding='utf-8') as f:
                     json.dump(final_result, f, indent=4, ensure_ascii=False)
-                logger.info(f"Результаты сохранены в файл: {save_json_path}")
+                logging.info(f"Результаты сохранены в файл: {save_json_path}")
             except IOError as e:
-                logger.error(f"Не удалось сохранить результаты в файл {save_json_path}: {e}")
+                logging.error(f"Не удалось сохранить результаты в файл {save_json_path}: {e}")
                 return False
             except Exception as e:
-                logger.error(f"Неожиданная ошибка при сохранении JSON в {save_json_path}: {e}", exc_info=True)
+                logging.error(f"Неожиданная ошибка при сохранении JSON в {save_json_path}: {e}", exc_info=True)
                 return False
             return True
         return False # Если путь не указан, ничего не сохраняем
@@ -229,9 +226,9 @@ class GraphExtractor:
     def _load_documents(files_dir: str) -> List[Document]:
         """Загружает документы из указанной директории."""
         loaded_docs = []
-        logger.info(f"Загрузка документов из директории: {files_dir}")
+        logging.info(f"Загрузка документов из директории: {files_dir}")
         if not os.path.isdir(files_dir):
-            logger.error(f"Директория не найдена: {files_dir}")
+            logging.error(f"Директория не найдена: {files_dir}")
             return []
         try:
             for filename in os.listdir(files_dir):
@@ -246,13 +243,13 @@ class GraphExtractor:
 
                 if loader:
                     try:
-                        logger.debug(f"Загрузка файла: {filename}")
+                        logging.debug(f"Загрузка файла: {filename}")
                         loaded_docs.extend(loader.load())
                     except Exception as load_err:
-                         logger.error(f"Ошибка загрузки файла {filename}: {load_err}", exc_info=True)
-            logger.info(f"Загружено {len(loaded_docs)} документов.")
+                         logging.error(f"Ошибка загрузки файла {filename}: {load_err}", exc_info=True)
+            logging.info(f"Загружено {len(loaded_docs)} документов.")
         except Exception as e:
-            logger.error(f"Ошибка при доступе к директории {files_dir}: {e}", exc_info=True)
+            logging.error(f"Ошибка при доступе к директории {files_dir}: {e}", exc_info=True)
         return loaded_docs
 
 
@@ -260,18 +257,18 @@ class GraphExtractor:
         """Разбивает документы на чанки согласно конфигурации."""
         # (Код метода без изменений, использует self.config)
         if not documents:
-            logger.warning("Нет документов для разбиения на чанки.")
+            logging.warning("Нет документов для разбиения на чанки.")
             return []
         try:
              # Проверка наличия ключей в конфиге
              chunk_size = self.config["processing"]["chunk_size"]
              chunk_overlap = self.config["processing"]["chunk_overlap"]
         except KeyError as e:
-             logger.error(f"Отсутствует ключ в конфигурации processing: {e}. Используются значения по умолчанию (1000, 200).")
+             logging.error(f"Отсутствует ключ в конфигурации processing: {e}. Используются значения по умолчанию (1000, 200).")
              chunk_size = 1000
              chunk_overlap = 200
         except TypeError:
-             logger.error("Раздел 'processing' в конфигурации имеет неверный формат. Используются значения по умолчанию (1000, 200).")
+             logging.error("Раздел 'processing' в конфигурации имеет неверный формат. Используются значения по умолчанию (1000, 200).")
              chunk_size = 1000
              chunk_overlap = 200
 
@@ -281,7 +278,7 @@ class GraphExtractor:
             chunk_overlap=chunk_overlap
         )
         chunks = text_splitter.split_documents(documents)
-        logger.info(f"Документы разбиты на {len(chunks)} чанков.")
+        logging.info(f"Документы разбиты на {len(chunks)} чанков.")
         return chunks
 
     async def _process_chunk(self, chunk: Document) -> Optional[Dict[str, Any]]:
@@ -290,10 +287,10 @@ class GraphExtractor:
             system_prompt = self.config["prompts"]["extraction_system_prompt"]
             user_template = self.config["prompts"]["extraction_user_template"]
         except KeyError as e:
-             logger.error(f"Отсутствует ключ промпта в конфигурации: {e}")
+             logging.error(f"Отсутствует ключ промпта в конфигурации: {e}")
              return None # Не можем продолжить без промпта
         except TypeError:
-             logger.error("Раздел 'prompts' в конфигурации имеет неверный формат.")
+             logging.error("Раздел 'prompts' в конфигурации имеет неверный формат.")
              return None
 
 
@@ -314,7 +311,7 @@ class GraphExtractor:
             return None # Возвращаем None если структура некорректна
 
         except OutputParserException as json_parse_error:
-            logger.error(f"Ошибка парсинга JSON ответа LLM: {json_parse_error}", exc_info=False)
+            logging.error(f"Ошибка парсинга JSON ответа LLM: {json_parse_error}", exc_info=False)
             return None
         
         except Exception as e:
@@ -336,16 +333,17 @@ class GraphExtractor:
         unique_entities: Dict[str, Entity] = {}
         name_mapping: Dict[str, str] = {} # Карта для обновления связей {old_name: new_name}
 
-        logger.info(f"Начало слияния {len(all_entities)} извлеченных сущностей...")
+        logging.info(f"Начало слияния {len(all_entities)} извлеченных сущностей...")
         for entity_data in all_entities:
             if not isinstance(entity_data, dict):
-                logger.warning(f"Пропуск некорректных данных сущности: {entity_data}")
+                logging.warning(f"Пропуск некорректных данных сущности: {entity_data}")
                 continue
             name = entity_data.get("name")
+            e_type = entity_data.get("type", "object")
             description = entity_data.get("description")
 
             if not name or not isinstance(name, str) or not name.strip():
-                logger.warning(f"Пропуск сущности без имени или с некорректным именем: {entity_data}")
+                logging.warning(f"Пропуск сущности без имени или с некорректным именем: {entity_data}")
                 continue
             name = name.strip()
 
@@ -358,7 +356,7 @@ class GraphExtractor:
             for canonical_name in list(unique_entities.keys()):
                 similarity = _get_similarity(name.lower(), canonical_name.lower())
                 if similarity >= threshold:
-                    logger.debug(f"Обнаружено слияние: '{name}' -> '{canonical_name}' (Схожесть: {similarity:.2f})")
+                    logging.debug(f"Обнаружено слияние: '{name}' -> '{canonical_name}' (Схожесть: {similarity:.2f})")
                     if description:
                         unique_entities[canonical_name].descriptions.append(description)
                     if name != canonical_name:
@@ -367,11 +365,11 @@ class GraphExtractor:
                     break
 
             if not matched:
-                logger.debug(f"Добавлена новая уникальная сущность: '{name}'")
-                unique_entities[name] = Entity(name=name, descriptions=[desc for desc in [description] if desc])
+                logging.debug(f"Добавлена новая уникальная сущность: '{name}'")
+                unique_entities[name] = Entity(name=name, type=e_type, descriptions=[desc for desc in [description] if desc])
 
         merged_count = sum(1 for old, new in name_mapping.items() if old != new)
-        logger.info(f"Слияние сущностей завершено. Уникальных сущностей: {len(unique_entities)}. Обнаружено слияний: {merged_count}.")
+        logging.info(f"Слияние сущностей завершено. Уникальных сущностей: {len(unique_entities)}. Обнаружено слияний: {merged_count}.")
         return unique_entities, name_mapping
 
 
@@ -385,15 +383,15 @@ class GraphExtractor:
         if len(unique_descriptions) == 1:
             return unique_descriptions[0]
 
-        logger.debug(f"Суммаризация {len(unique_descriptions)} описаний для '{entity_name}'...")
+        logging.debug(f"Суммаризация {len(unique_descriptions)} описаний для '{entity_name}'...")
         try:
              system_prompt = self.config["prompts"]["summarization_system_prompt"]
              user_template = self.config["prompts"]["summarization_user_template"]
         except KeyError as e:
-             logger.error(f"Отсутствует ключ промпта суммаризации в конфигурации: {e}")
+             logging.error(f"Отсутствует ключ промпта суммаризации в конфигурации: {e}")
              return ". ".join(unique_descriptions) # Fallback
         except TypeError:
-             logger.error("Раздел 'prompts' в конфигурации имеет неверный формат.")
+             logging.error("Раздел 'prompts' в конфигурации имеет неверный формат.")
              return ". ".join(unique_descriptions) # Fallback
 
 
@@ -407,13 +405,13 @@ class GraphExtractor:
             elif isinstance(summary_response, str):
                 summary = summary_response.strip()
             else:
-                logger.warning(f"Неожиданный тип ответа от LLM-суммаризатора для '{entity_name}': {type(summary_response)}")
+                logging.warning(f"Неожиданный тип ответа от LLM-суммаризатора для '{entity_name}': {type(summary_response)}")
                 summary = ". ".join(unique_descriptions) # Fallback
 
-            logger.debug(f"Описание для '{entity_name}' суммировано.")
+            logging.debug(f"Описание для '{entity_name}' суммировано.")
             return summary or ". ".join(unique_descriptions)
         except Exception as e:
-            logger.error(f"Ошибка при суммировании описания для '{entity_name}': {e}", exc_info=True)
+            logging.error(f"Ошибка при суммировании описания для '{entity_name}': {e}", exc_info=True)
             return ". ".join(unique_descriptions)
 
 
@@ -429,24 +427,24 @@ class GraphExtractor:
             Словарь с ключами "entities" и "relationships".
         """
         if not data_path:
-            logger.error("Не указан путь к данным (data_path).")
+            logging.error("Не указан путь к данным (data_path).")
             return {"entities": [], "relationships": []}
 
         # 1. Загрузка и разбиение документов
         documents = self._load_documents(data_path)
         chunks = self._split_documents(documents)
         if not chunks:
-            logger.warning("Нет чанков для обработки.")
+            logging.warning("Нет чанков для обработки.")
             return {"entities": [], "relationships": []}
 
         # 2. Асинхронная обработка чанков
-        logger.info(f"Начало асинхронной обработки {len(chunks)} чанков...")
+        logging.info(f"Начало асинхронной обработки {len(chunks)} чанков...")
         tasks = [self._process_chunk(chunk) for chunk in chunks]
         llm_results = await asyncio.gather(*tasks)
-        logger.info("Обработка чанков завершена.")
+        logging.info("Обработка чанков завершена.")
 
         valid_results = [res for res in llm_results if res is not None]
-        logger.info(f"Получено {len(valid_results)} валидных ответов от LLM.")
+        logging.info(f"Получено {len(valid_results)} валидных ответов от LLM.")
         if not valid_results:
              return {"entities": [], "relationships": []}
 
@@ -461,8 +459,8 @@ class GraphExtractor:
             if isinstance(relationships, list):
                  all_relationships_raw.extend(rel for rel in relationships if isinstance(rel, dict) and rel.get("source") and rel.get("target"))
 
-        logger.info(f"Всего извлечено сущностей (до слияния): {len(all_entities_raw)}")
-        logger.info(f"Всего извлечено связей (до обновления): {len(all_relationships_raw)}")
+        logging.info(f"Всего извлечено сущностей (до слияния): {len(all_entities_raw)}")
+        logging.info(f"Всего извлечено связей (до обновления): {len(all_relationships_raw)}")
 
         # 3*. Лемматизация названий сущностей (приводим к единственному числу) 
         # Лемматизируем назавания сущностей в all_entities_raw
@@ -479,25 +477,25 @@ class GraphExtractor:
         try:
             threshold = self.config["processing"]["levenshtein_threshold"]
         except KeyError:
-            logger.warning("Ключ 'levenshtein_threshold' не найден в config['processing']. Используется значение 0.85.")
+            logging.warning("Ключ 'levenshtein_threshold' не найден в config['processing']. Используется значение 0.85.")
             threshold = 0.85
         except TypeError:
-            logger.warning("Раздел 'processing' в конфигурации имеет неверный формат. Используется threshold 0.85.")
+            logging.warning("Раздел 'processing' в конфигурации имеет неверный формат. Используется threshold 0.85.")
             threshold = 0.85
 
         unique_entities_map, name_mapping = self._merge_entities(all_entities_raw, threshold)
         if not unique_entities_map:
-             logger.warning("Не найдено уникальных сущностей после слияния.")
+             logging.warning("Не найдено уникальных сущностей после слияния.")
              return {"entities": [], "relationships": []}
 
         # 5. Асинхронная Суммаризация описаний
-        logger.info("Начало суммирования описаний для сущностей...")
+        logging.info("Начало суммирования описаний для сущностей...")
         summarization_tasks = [
             self._summarize_description(name, entity_obj.descriptions)
             for name, entity_obj in unique_entities_map.items()
         ]
         summarized_descriptions = await asyncio.gather(*summarization_tasks)
-        logger.info("Суммирование описаний завершено.")
+        logging.info("Суммирование описаний завершено.")
 
         # Формируем финальный список сущностей
         final_entities_list: List[Dict[str, Any]] = []
@@ -505,12 +503,13 @@ class GraphExtractor:
         for i, name in enumerate(entity_names_in_order):
             final_entities_list.append({
                 "name": name,
+                "type": unique_entities_map[name].type,
                 "description": summarized_descriptions[i]
             })
         final_entity_names_set: Set[str] = set(entity_names_in_order)
 
         # 6. Обновление и фильтрация связей (с добавлением недостающих сущностей)
-        logger.info("Обновление, фильтрация связей и добавление недостающих сущностей...")
+        logging.info("Обновление, фильтрация связей и добавление недостающих сущностей...")
         final_relationships_list: List[Dict[str, Any]] = []
         seen_relationships: Set[Tuple[str, str, str]] = set()
         added_entities_names: Set[str] = set() # Отслеживаем имена добавленных сущностей
@@ -521,7 +520,7 @@ class GraphExtractor:
             description = rel_data.get("description", "").strip()
 
             if not original_source or not original_target:
-                logger.warning(f"Пропуск связи с некорректным source или target: {rel_data}")
+                logging.warning(f"Пропуск связи с некорректным source или target: {rel_data}")
                 continue
 
             # Получаем канонические имена, используя исходное имя как fallback, если его нет в карте
@@ -532,9 +531,10 @@ class GraphExtractor:
             entities_to_check = [final_source, final_target]
             for entity_name in entities_to_check:
                 if entity_name not in final_entity_names_set and entity_name not in added_entities_names:
-                    logger.info(f"Сущность '{entity_name}', упомянутая в связи, отсутствует. Добавление новой сущности с пустым описанием.")
+                    logging.info(f"Сущность '{entity_name}', упомянутая в связи, отсутствует. Добавление новой сущности с пустым описанием.")
                     final_entities_list.append({
                         "name": entity_name,
+                        "type": "object",
                         "description": ""
                     })
                     final_entity_names_set.add(entity_name)
@@ -551,7 +551,7 @@ class GraphExtractor:
                     })
                     seen_relationships.add(rel_tuple)
                 else:
-                    logger.debug(f"Пропуск дублирующей связи: {rel_tuple}")
+                    logging.debug(f"Пропуск дублирующей связи: {rel_tuple}")
             else:
                 # Логируем только если имя было в name_mapping, но не попало в final_entity_names_set (что странно)
                 # или если исходного имени нет в final_entity_names_set
@@ -559,15 +559,15 @@ class GraphExtractor:
                 (original_target in name_mapping and final_target not in final_entity_names_set) or \
                 (original_source not in name_mapping and final_source not in final_entity_names_set) or \
                 (original_target not in name_mapping and final_target not in final_entity_names_set):
-                    logger.warning(f"Пропуск связи из-за отсутствия source ('{final_source}' из '{original_source}') или target ('{final_target}' из '{original_target}') в финальном списке сущностей. Исходная связь: {rel_data}")
+                    logging.warning(f"Пропуск связи из-за отсутствия source ('{final_source}' из '{original_source}') или target ('{final_target}' из '{original_target}') в финальном списке сущностей. Исходная связь: {rel_data}")
 
         initial_entity_names_set = set(entity_names_in_order)
         total_added_count = len(final_entity_names_set - initial_entity_names_set)
         if total_added_count > 0:
-            logger.info(f"Всего добавлено {total_added_count} недостающих сущностей из связей.")
+            logging.info(f"Всего добавлено {total_added_count} недостающих сущностей из связей.")
 
-        logger.info(f"Финальное количество сущностей: {len(final_entities_list)}")
-        logger.info(f"Финальное количество связей: {len(final_relationships_list)}")
+        logging.info(f"Финальное количество сущностей: {len(final_entities_list)}")
+        logging.info(f"Финальное количество связей: {len(final_relationships_list)}")
 
         # 7. Формирование и возврат результата
         final_result = {
@@ -579,9 +579,9 @@ class GraphExtractor:
             # 8. Сохранение в JSON (если указан путь)
             self.save_to_json(save_json_path, final_result)
         else:
-            logger.info(f"Выбран режим без сохранения в JSON. Результаты не будут сохранены в {save_json_path}.")
+            logging.info(f"Выбран режим без сохранения в JSON. Результаты не будут сохранены в {save_json_path}.")
         
-        logger.info("Экстракция графа завершена.")
+        logging.info("Экстракция графа завершена.")
         # Возвращаем финальный результат
         return final_result
     
@@ -590,40 +590,43 @@ class GraphExtractor:
         Метод для загрузки документов из директории, обработки их с помощью LLM и сохранения результатов в JSON файл.
         """
 
-        logger.info("Запуск: извлечение файлов из директории...")
+        logging.info("Запуск: извлечение файлов из директории...")
 
         data_directory = os.getenv(DATA_DIR_ENV)
         if not data_directory:
-            logger.critical(f"Критическая ошибка: Переменная окружения '{DATA_DIR_ENV}' не установлена. Завершение работы.")
+            logging.critical(f"Критическая ошибка: Переменная окружения '{DATA_DIR_ENV}' не установлена. Завершение работы.")
             exit(1) # Завершаем скрипт, если нет пути к данным
 
         try:
             # Получение пути для сохранения из конфига (если есть)
             output_file_path = self.config.get("output", {}).get("json_file", "./output.json")
             if not output_file_path:
-                logger.warning("Путь для сохранения JSON не найден в конфигурации (output.json_file). Результат будет сохранен в ./output.json. ")
+                logging.warning("Путь для сохранения JSON не найден в конфигурации (output.json_file). Результат будет сохранен в ./output.json. ")
 
             # Запуск основного метода экстракции
             graph_data = asyncio.run(
                 self.extract_graph_from_path(data_directory, save_json_path=output_file_path, save = save_to_json)
             )
-            logger.info(f"Экстракция завершена. Найдено {len(graph_data.get('entities', []))} сущностей и {len(graph_data.get('relationships', []))} связей.")
+            logging.info(f"Экстракция завершена. Найдено {len(graph_data.get('entities', []))} сущностей и {len(graph_data.get('relationships', []))} связей.")
             return graph_data
         
         except (ValueError, FileNotFoundError, RuntimeError, KeyError) as init_error:
             # Ловим ошибки инициализации или отсутствия ключей в конфиге
-            logger.critical(f"Ошибка инициализации GraphExtractor: {init_error}. Завершение работы.")
+            logging.critical(f"Ошибка инициализации GraphExtractor: {init_error}. Завершение работы.")
             exit(1)
 
         except Exception as e:
-            logger.critical(f"Непредвиденная ошибка во время выполнения: {e}", exc_info=True)
+            logging.critical(f"Непредвиденная ошибка во время выполнения: {e}", exc_info=True)
             exit(1)
         
         return None
 
 
 # --- Блок для автономного запуска ---
-if __name__ == "__main__":
+if __name__ == "__main__":    
+    # --- Конфигурация логирования ---
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     # 1. Инициализация экстрактора с путем к конфигу
     extractor = GraphExtractor(config_path= "./config.yaml")
     extractor.update()

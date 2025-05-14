@@ -25,15 +25,22 @@ class GraphDB:
             for entity in json_data["entities"]:
                 session.run(
                     "MERGE (e:Entity {name: $name}) "
-                    "ON CREATE SET e.description = $description",
-                    name=entity["name"], description=entity["description"]
+                    "ON CREATE SET e.description = $description, e.type = $type",
+                    name=entity["name"], description=entity["description"], type=entity["type"]
                 )
             # Добавление связей
             for rel in json_data["relationships"]:
+                # session.run(
+                #     "MATCH (source:Entity {name: $source}), (target:Entity {name: $target}) "
+                #     "MERGE (source)-[r:RELATED_TO]->(target) "
+                #     "ON CREATE SET r.description = $description",
+                #     source=rel["source"], target=rel["target"], description=rel["description"]
+                # )
                 session.run(
-                    "MATCH (source:Entity {name: $source}), (target:Entity {name: $target}) "
-                    "MERGE (source)-[r:RELATED_TO]->(target) "
-                    "ON CREATE SET r.description = $description",
+                    "MERGE (a:Entity {name: $source})"
+                    "MERGE (b:Entity {name: $target})"
+                    "MERGE (a)-[r:RELATED_TO]->(b)"
+                    "SET r.description = coalesce(r.description + '; ', '') + $description;",
                     source=rel["source"], target=rel["target"], description=rel["description"]
                 )
 
