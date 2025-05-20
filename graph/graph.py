@@ -5,9 +5,10 @@ class GraphDB:
     Класс для работы с графовой базой данных Neo4j.
     Поддерживает статический и динамический графы.
     """
-    def __init__(self, uri, user, password):
+    def __init__(self, uri, user, password, database_name = None):
         """Инициализация подключения к Neo4j."""
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.database_name = database_name
 
     def __del__(self):
         """Закрытие соединения при удалении объекта."""
@@ -20,7 +21,7 @@ class GraphDB:
 
     def load_from_json(self, json_data):
         """Загрузка данных из JSON в Neo4j."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             # Добавление узлов
             for entity in json_data["entities"]:
                 session.run(
@@ -46,7 +47,7 @@ class GraphDB:
 
     def get_node_by_id(self, node_id):
         """Получение узла по ID (name)."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             result = session.run("MATCH (e:Entity {name: $name}) RETURN e", name=node_id)
             record = result.single()
             return record["e"] if record else None
@@ -60,7 +61,7 @@ class GraphDB:
 
     def add_node(self, entity):
         """Добавление нового узла."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "CREATE (e:Entity {name: $name, description: $description})",
                 name=entity["name"], description=entity["description"]
@@ -68,7 +69,7 @@ class GraphDB:
 
     def update_node(self, node_id, new_description):
         """Редактирование узла."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (e:Entity {name: $name}) SET e.description = $description",
                 name=node_id, description=new_description
@@ -76,7 +77,7 @@ class GraphDB:
 
     def delete_node(self, node_id):
         """Удаление узла и всех его связей."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (e:Entity {name: $name}) DETACH DELETE e",
                 name=node_id
@@ -84,7 +85,7 @@ class GraphDB:
 
     def add_relationship(self, source_id, target_id, description):
         """Добавление новой связи."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (source:Entity {name: $source}), (target:Entity {name: $target}) "
                 "CREATE (source)-[r:RELATED_TO {description: $description}]->(target)",
@@ -93,7 +94,7 @@ class GraphDB:
 
     def update_relationship(self, source_id, target_id, new_description):
         """Обновление связи."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (source:Entity {name: $source})-[r:RELATED_TO]->(target:Entity {name: $target}) "
                 "SET r.description = $description",
@@ -102,7 +103,7 @@ class GraphDB:
 
     def delete_relationship(self, source_id, target_id):
         """Удаление связи."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (source:Entity {name: $source})-[r:RELATED_TO]->(target:Entity {name: $target}) "
                 "DELETE r",
@@ -190,7 +191,7 @@ class GraphDB:
     
     def _get_relationships(self, node_id):
         """Получение всех связей узла."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             # Односторонний поиск
             # result = session.run(
             #     "MATCH (e:Entity {name: $name}) "
@@ -235,7 +236,7 @@ class GraphDB:
 
     def ping(self):
         """Проверка соединения с базой данных."""
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database_name) as session:
             try:
                 session.run("RETURN 1")
                 return True

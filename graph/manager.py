@@ -1,7 +1,29 @@
 from extractor import GraphExtractor
 from graph import GraphDB
 import os
+from knowledgeBase_pre import KnowledgeBaseModule
+import logging
 
+class Manager:
+    def __init__(self, load = False, static_db_name = "staticdb", dynamic_db_name = "dynamicdb"):
+        self.static_database = KnowledgeBaseModule(db_name=static_db_name)
+        self.dynamic_database = KnowledgeBaseModule(db_name=dynamic_db_name)
+
+        # Загрузка базы знаний из файла
+        if load:
+            self.load()
+    
+    def load(self):
+        self.static_database.load()
+
+    def close(self):
+        if hasattr(self, 'static_database') and self.static_database:
+            self.static_database.close()
+        if hasattr(self, 'dynamic_database') and self.dynamic_database:
+            self.dynamic_database.close()
+    
+    def __del__(self):
+        self.close()
 
 
 
@@ -13,28 +35,16 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
 
-    # NEO4J_URI
-    # NEO4J_USERNAME
-    # NEO4J_PASSWORD
-    # Проверка наличия необходимых переменных окружения
-    required_env_vars = ["NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD"]
-    for var in required_env_vars:
-        if var not in os.environ:
-            raise ValueError(f"Отсутствует переменная окружения: {var}")
+    # Логирование 
+    logging.basicConfig(
+        level=logging.DEBUG, 
+        format='%(asctime)s - %(levelname)s - %(message)s', 
+        filename='logs.log',
+        encoding='utf-8'
+    )
 
-    # Инициализация GraphDB
-    graph_module = GraphDB(uri=os.getenv("NEO4J_URI"), user=os.getenv("NEO4J_USERNAME"), password=os.getenv("NEO4J_PASSWORD"))
-    if not graph_module.ping():  # Проверка соединения с Neo4j
-        print("Не удалось подключиться к Neo4j. Проверьте параметры подключения.")
-        exit(1)
-
-    
-    # Инициализация GraphExtractor
-    extractor = GraphExtractor(config_path="./config.yaml")
-    graph_data = extractor.update()  # Получение данных в формате JSON
-
-    # Загрузка данных в Neo4j (для статического графа)
-    graph_module.load_from_json(graph_data)
+    # Инициализация менеджера базы знаний
+    manager = Manager(load=True)
 
     # # Пример добавления узла (для динамического графа)
     # new_entity = {"name": "Игрок", "description": "Главный герой"}
@@ -47,12 +57,3 @@ if __name__ == "__main__":
     # node_with_rels = graph_module.get_node_with_relationships("semyon")
     # print(node_with_rels)
 
-    # Пример получения узла по ID
-    node = graph_module.get_node_description("semyon")
-    print(node)
-
-    nodes_rels = graph_module.get_relationships_only("semyon")
-    print(nodes_rels)
-
-    # Закрытие соединения
-    graph_module.close()

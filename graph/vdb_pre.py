@@ -16,6 +16,7 @@ class VectorDBModule:
     COLLECTION_DESCRIPTIONS = "entity_descriptions"
 
     def __init__(self,
+                 db_name: str = None,
                  persist_path: str = DEFAULT_PERSIST_PATH,
                  embedding_model_name: str = DEFAULT_EMBEDDING_MODEL):
         """
@@ -25,6 +26,7 @@ class VectorDBModule:
             persist_path: Путь для сохранения данных ChromaDB.
             embedding_model_name: Имя модели sentence-transformer для создания эмбеддингов.
         """
+        self.db_name = db_name
         try:
             self.client = chromadb.PersistentClient(path=persist_path)
             logging.info(f"ChromaDB PersistentClient инициализирован по пути: {persist_path}")
@@ -36,15 +38,23 @@ class VectorDBModule:
             logging.info(f"Функция эмбеддингов инициализирована с моделью: {embedding_model_name}")
 
             # Получаем или создаем коллекции
+            if db_name:
+                en_name_col = f"{db_name}_{self.COLLECTION_NAMES}"
+                en_desc_col = f"{db_name}_{self.COLLECTION_DESCRIPTIONS}"
+            else:
+                en_name_col = self.COLLECTION_NAMES
+                en_desc_col = self.COLLECTION_DESCRIPTIONS
+                
+
             self.names_collection = self.client.get_or_create_collection(
-                name=self.COLLECTION_NAMES,
+                name=en_name_col,
                 embedding_function=self.embedding_function,
                 metadata={"hnsw:space": "cosine"} # Используем косинусное расстояние
             )
             logging.info(f"Коллекция '{self.COLLECTION_NAMES}' загружена/создана.")
 
             self.descriptions_collection = self.client.get_or_create_collection(
-                name=self.COLLECTION_DESCRIPTIONS,
+                name=en_desc_col,
                 embedding_function=self.embedding_function,
                 metadata={"hnsw:space": "cosine"}
             )

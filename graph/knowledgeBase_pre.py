@@ -23,7 +23,8 @@ class KnowledgeBaseModule:
             neo4j_user: Optional[str] = None,
             neo4j_password: Optional[str] = None,
             # Параметры поиска
-            n_results_graph_query: int = DEFAULT_GRAPH_QUERY_RESULTS
+            n_results_graph_query: int = DEFAULT_GRAPH_QUERY_RESULTS, 
+            db_name: Optional[str] = None,
             ):
         """
         Инициализирует KnowledgeBaseModule.
@@ -42,6 +43,7 @@ class KnowledgeBaseModule:
         # Инициализация VectorDB
         try:
             self.vector_db = VectorDBModule(
+                db_name=db_name,
                 persist_path=chroma_persist_path,
                 embedding_model_name=embedding_model_name
             )
@@ -60,7 +62,7 @@ class KnowledgeBaseModule:
             self.graph_db = None # Или можно создать заглушку
         else:
             try:
-                self.graph_db = GraphDB(uri=uri, user=user, password=password)
+                self.graph_db = GraphDB(uri=uri, user=user, password=password, database_name=db_name)
                 if not self.graph_db.ping():
                      logging.error("Не удалось подключиться к Neo4j. Проверьте параметры и доступность БД.")
                      # Можно установить self.graph_db = None или выбросить исключение
@@ -248,6 +250,14 @@ class KnowledgeBaseModule:
             except Exception as e:
                  logging.error(f"Ошибка при закрытии соединения с GraphDB: {e}", exc_info=True)
 
+    def add_entity(self, name, description):
+        '''Add entity in all databases'''
+        self.vector_db.add_entity(name=name, description=description)
+        self.graph_db.add_node({"name":name, "description": description})
+    
+    def add_relationship(self,source_name, target_name, description):
+        """Add relationship to Graph Databse"""
+        self.add_relationship(source_name=source_name, target_name=target_name, description=description)
 
 # --- Пример использования ---
 if __name__ == '__main__':
@@ -269,8 +279,8 @@ if __name__ == '__main__':
     # и GraphDB содержит соответствующие узлы и связи.
 
     # Инициализация KB
-    kb = KnowledgeBaseModule()
-    # kb.load()  # Загрузка данных в VectorDB и GraphDB
+    kb = KnowledgeBaseModule(db_name='staticdb')
+    kb.load()  # Загрузка данных в VectorDB и GraphDB
 
     # Проверка подключения к графу
     if not kb.graph_db:
