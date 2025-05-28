@@ -97,6 +97,18 @@ class Manager:
         This function searches for the given item in the current location.
         """
         return f'{string} - найден под лестницей !'
+    
+
+    def get_all_locations(self) -> str:
+        """
+        This function returns all locations in the game.
+        """
+        locations = self.static_database.get_all_locations()
+        if not locations:
+            return 'No locations found in the database.'
+        # Форматируем список локаций в строку
+        locations = ";\n".join([str(l) for l in locations])
+        return f'Available locations: \n{locations}'
 
 
 
@@ -118,8 +130,11 @@ if __name__ == "__main__":
 
     # Инициализация менеджера базы знаний
     manager = Manager(
-        load=True
+        # load=True
         )
+    
+    # Пример использования методов менеджера
+    # print(manager.get_all_locations())
 
     # # Пример добавления узла (для динамического графа)
     # new_entity = {"name": "Игрок", "description": "Главный герой"}

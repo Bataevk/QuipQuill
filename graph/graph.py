@@ -296,3 +296,12 @@ class GraphDB:
                     name=node_id
                 )
             return [record["name"] for record in result]
+    
+    def _query(self, query: str, parameters: dict = None):
+        """
+        Выполнение произвольного запроса к базе данных.
+        Возвращает список записей.
+        """
+        with self.driver.session(database=self.database_name) as session:
+            result = session.run(query, parameters or {})
+            return [record for record in result]

@@ -294,6 +294,28 @@ class KnowledgeBaseModule:
         if not self.graph_db:
             logging.error("Поиск связанных имен невозможен: GraphDB не инициализирован.")
             return []
+    
+    def get_all_locations(self) -> List[str]:
+        """
+        Получение всех локаций из графовой БД.
+
+        Returns:
+            Список имен всех локаций.
+        """
+        if not self.graph_db:
+            logging.error("Получение локаций невозможно: GraphDB не инициализирован.")
+            return []
+        
+        results = self.graph_db._query("MATCH (e:Entity) WHERE e.type IN ['LOCATION', 'SPOT', 'BUILDING', 'COUNTRY'] RETURN e.name, e.description, e.type")
+
+        if not results:
+            logging.warning("Не найдено локаций в графовой БД.")
+            return []
+        
+        return [ "{0} ({2}): {1}".format(*r.values()) for r in results]
+
+
+
         
 
 # --- Пример использования ---
