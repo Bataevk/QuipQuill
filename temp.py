@@ -1,5 +1,6 @@
 # сторонние импорты
 from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
 
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import PromptTemplate
@@ -28,7 +29,7 @@ from langgraph.types import Command, interrupt
 # Tools
 import custom_tools as ctls
 
-tools = [ctls.get_location, ctls.get_player_inventory, ctls.move_to, ctls.search_object, ctls.search]
+tools = [ctls.get_location, ctls.get_player_inventory, ctls.move_to, ctls.search_object]
 
 
 
@@ -45,10 +46,21 @@ load_dotenv()
 
 
 # Инициализируйте модель Gemini 2.0 Flash через Langchain  
-llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
+# llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
 
 # Инициализируйте модель Mistral через Langchain
 # llm = init_chat_model("mistral-large-latest", model_provider="mistralai")
+
+# Инициализируйте модель OpenAI через Langchain, но с другими параметрами baseurl
+llm = ChatOpenAI(
+    model=os.getenv("RAG_LLM_MODEL"),
+    base_url=os.getenv('RAG_BASE_URL'),
+    temperature=0.8, # Используем .get с дефолтом для необязательных параметров
+    top_p=0.9,
+    max_tokens=2048,
+    timeout=600,
+    openai_api_key=os.getenv('OPENAI_API_KEY')
+)
 
 llm_with_tools = llm.bind_tools(tools)
 

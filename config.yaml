@@ -8,7 +8,155 @@ llm:
   max_tokens: null # null означает отсутствие лимита со стороны клиента
 
 prompts:
+  json_fields:
+    entities: 
+      name: "name"
+      type: "type"
+      description: "description"
+    relationships:
+      source: "source_entity_name"
+      type: "relationship_type"
+      target: "target_entity_name"
+      description: "context_phrase"
+
   extraction_system_prompt: |
+    You are a high-precision data extraction assistant. Your task is to meticulously analyze the provided game world description text and convert it into a strictly structured JSON format. You must be extremely precise and EXCLUSIVELY use information explicitly stated in the text.
+
+    Your goal is to achieve the maximum possible score. You earn +1 point for every correctly extracted entity and +1 point for every correctly extracted relationship. Mistakes, omissions, or information not based on the text will result in point deductions.
+
+    **JSON STRUCTURE (MUST BE EXACTLY AS FOLLOWS):**
+    ```json
+    {
+      "entities": [
+        {
+          "name": "<Unique entity name. MUST EXACTLY match the text or be clearly implied. For locations, use the capitalized title. For items/agents, use their descriptive name.>",
+          "type": "<Entity type. Choose ONE from the list: Spot, Building, Country, Person, Organization, Creature, Tool, Vehicle, Document, Action, Occasion>",
+          "description": "<Concise description based EXCLUSIVELY on the text. Include attributes like HP, atk, def for Creatures if mentioned. For items, specify properties like 'shines 5m' or 'opens simple locks'.>"
+        }
+        // ... other found entities
+      ],
+      "relationships": [
+        {
+          "source_entity_name": "<Name of the source entity. MUST EXACTLY match a name from the 'entities' list.>",
+          "relationship_type": "<Specific relationship type. Choose from: IS_IN_LOCATION, CONTAINS_ITEM, HAS_AGENT, LEADS_TO, HAS_ATTRIBUTE, INTERACTS_WITH>",
+          "context_phrase": "<Description of the relationship. A short phrase from the text that supports this relationship, e.g., 'rests on a low pedestal', 'slumbers in the semi-darkness', 'North → Torchlight Corridor'>"
+          "target_entity_name": "<Name of the target entity. MUST EXACTLY match a name from the 'entities' list.>",
+        }
+        // ... other found relationships
+      ]
+    }
+    ```
+
+    **ALLOWED ENTITY TYPES:**
+
+    * **Location:**
+        * `Spot` (e.g., a corner of a room, a specific point in a larger area)
+        * `Building` (e.g., Hall, Library, Altar - named game areas)
+        * `Country` (unlikely for your example)
+    * **Agent:**
+        * `Person` (e.g., Dark Paladin, Ghost Reader)
+        * `Organization` (unlikely for your example)
+        * `Creature` (e.g., Skeleton Guardian, Swamp Walker, Stone Golem)
+    * **Item:**
+        * `Tool` (e.g., copper torch, iron screwdriver, key)
+        * `Vehicle` (unlikely for your example)
+        * `Document` (e.g., Fire Touch Scroll, burnt protection formula page)
+    * **Event:** (Can be more complex for small models to extract; for now, actions can be included in entity descriptions or omitted for simplicity)
+        * `Action` (e.g., opening a lock, lighting a torch)
+        * `Occasion` (e.g., a battle)
+
+    **KEY EXTRACTION RULES:**
+
+    1.  **Identify Entities First:** Mentally (or if you were human, actually) list all distinct locations, agents, and items.
+        * **Location Names:** Use the primary capitalized names (e.g., "The Entrance Rune Hall", "Torchlight Corridor").
+        * **Item Names:** Be specific (e.g., "copper torch", "extinguished torch", "iron screwdriver"). If an item has a state, consider if it's a different entity or an attribute. Initially, if properties change significantly, they can be treated as different entities.
+        * **Agent Names:** Use their titles (e.g., "Skeleton Guardian", "Swamp Walker").
+    2.  **Entity Descriptions:** Extract relevant details verbatim or summarized very closely from the text. For agents, include stats (HP, atk, def) if provided. For items, include their functions or properties.
+    3.  **Relationships – Be Specific and Use Defined Types:**
+        * `IS_IN_LOCATION`: For an entity being in a location (e.g., "copper torch" `IS_IN_LOCATION` "Entrance Rune Hall"; "Skeleton Guardian" `IS_IN_LOCATION` "Torchlight Corridor").
+        * `CONTAINS_ITEM`: For a location (or agent) possessing an item (e.g., "Entrance Rune Hall" `CONTAINS_ITEM` "copper torch").
+        * `HAS_AGENT`: For a location where an agent can be encountered (e.g., "Torchlight Corridor" `HAS_AGENT` "Skeleton Guardian"). If "no one is there," this relationship can be omitted, or you can use a special target entity name like "No One" if you define such an entity.
+        * `LEADS_TO`: For navigation between locations (e.g., "Entrance Rune Hall" `LEADS_TO` "Torchlight Corridor"). The `context_phrase` field can store the direction, e.g., "North".
+        * `HAS_ATTRIBUTE`: For describing a property of an entity not covered in its main description but which is an important relation (e.g., "copper torch" `HAS_ATTRIBUTE` "shines 5m"). Often, this can be included in the entity's `description`.
+        * `INTERACTS_WITH`: For describing interactions between entities if explicitly stated (e.g., key `INTERACTS_WITH` door).
+    4.  **No External Information:** Use ONLY the provided text. Do not infer or add knowledge.
+    5.  **Completeness:** Extract ALL entities and ALL clear relationships.
+    6.  **Exact Naming in Relationships:** In the `relationships` section, `source_entity_name` and `target_entity_name` MUST EXACTLY match the `name` fields of entities defined in the `entities` list.
+    7.  **Valid JSON Only:** Your entire response must be a SINGLE, valid JSON object, starting with ```json and ending with ```. No other text, explanations, or apologies.
+
+    ---
+    **FEW-SHOT EXAMPLE (CRITICAL FOR MODEL TRAINING):**
+    *Provide 1-2 clear examples. This is vital.*
+
+    **Input Text 1:**
+    ```
+    **The Quiet Clearing**
+    A small, circular clearing bathed in dappled sunlight. A weathered wooden sign stands crookedly near a narrow path leading east. The sign reads: "Beware the Grumblesnouts". A discarded rusty dagger lies half-buried in the soft earth.
+    - **What to take:** rusty dagger (low damage)
+    - **Who to meet:** none
+    - **Where to go next:** East → Whispering Woods
+    ```
+
+    **Expected JSON Output 1:**
+    ```json
+    {
+      "entities": [
+        {
+          "name": "The Quiet Clearing",
+          "type": "Spot",
+          "description": "A small, circular clearing bathed in dappled sunlight. A weathered wooden sign stands crookedly near a narrow path leading east."
+        },
+        {
+          "name": "weathered wooden sign",
+          "type": "Item",
+          "description": "Stands crookedly, reads: \'Beware the Grumblesnouts\'."
+        },
+        {
+          "name": "rusty dagger",
+          "type": "Tool",
+          "description": "Discarded, half-buried in the soft earth, low damage."
+        },
+        {
+          "name": "Whispering Woods",
+          "type": "Spot",
+          "description": "Destination mentioned for travel."
+        }
+      ],
+      "relationships": [
+        {
+          "source_entity_name": "weathered wooden sign",
+          "relationship_type": "IS_IN_LOCATION",
+          "context_phrase": "stands crookedly near a narrow path",
+          "target_entity_name": "The Quiet Clearing"
+        },
+        {
+          "source_entity_name": "rusty dagger",
+          "relationship_type": "IS_IN_LOCATION",
+          "context_phrase": "lies half-buried in the soft earth",
+          "target_entity_name": "The Quiet Clearing"
+        },
+        {
+          "source_entity_name": "The Quiet Clearing",
+          "relationship_type": "CONTAINS_ITEM",
+          "context_phrase": "What to take: rusty dagger",
+          "target_entity_name": "rusty dagger"
+        },
+        {
+          "source_entity_name": "The Quiet Clearing",
+          "relationship_type": "LEADS_TO",
+          "context_phrase": "East → Whispering Woods",
+          "target_entity_name": "Whispering Woods"
+        }
+      ]
+    }
+    ```
+    ---
+
+    **Now, process the following text and provide ONLY the JSON output:**
+
+    [YOUR TEST TEXT WILL GO HERE]
+
+  old_extraction_system_prompt: |
     You are a professional JSON programmer. Your task is to extract data from the text and represent it as JSON.
 
     You have 0 point and you need to max it!
@@ -17,9 +165,9 @@ prompts:
     {
       "entities": [
         {
-          "name": "Entity Name",
-          "type": <choose: "Location", "Character", "Event",  "object">,
-          "description": "Concise description based ONLY on the text"
+          "name": <"Entity Name">,
+          "type": <"Entity Type">,
+          "description": <"Concise description based ONLY on the text">
         }
         // ... other entities found
       ],
@@ -32,6 +180,24 @@ prompts:
         // ... other relationships found 
       ]
     }
+    ---
+    You are required to use only these types of entities:
+      * Location:
+        * Spot
+        * Building
+        * Country
+      * Agent:
+        * Person
+        * Organization
+        * Creature
+      * Item:
+        * Tool
+        * Vehicle
+        * Document
+      * Event:
+        * Action
+        * Occasion
+    ---
     **Rules:**
     1.  **entities**: List of ALL entities with descriptions from the text.
     2.  **relationships**: List of ALL relationships. Use EXACT names from `entities`.
@@ -53,9 +219,9 @@ prompts:
   summarization_user_template: "<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\nDescriptions to summarize:\n{text_to_summarize}<|im_end|>\n<|im_start|>assistant"
 
 processing:
-  chunk_size: 1000
+  chunk_size: 2000
   chunk_overlap: 200
-  levenshtein_threshold: 0.8 # Порог схожести (1.0 = точное совпадение, 0.8 = высокая схожесть)
+  levenshtein_threshold: 0.85 # Порог схожести (1.0 = точное совпадение, 0.8 = высокая схожесть)
 
 output:
   json_file: "./output.json" # Имя выходного JSON файла

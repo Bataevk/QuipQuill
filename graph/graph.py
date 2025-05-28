@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+from extractor import Entity
 
 class GraphDB:
     """
@@ -31,18 +32,28 @@ class GraphDB:
                 )
             # Добавление связей
             for rel in json_data["relationships"]:
+                # Используем MERGE для создания связи
                 # session.run(
                 #     "MATCH (source:Entity {name: $source}), (target:Entity {name: $target}) "
                 #     "MERGE (source)-[r:RELATED_TO]->(target) "
                 #     "ON CREATE SET r.description = $description",
                 #     source=rel["source"], target=rel["target"], description=rel["description"]
                 # )
+
+                # Используем MERGE для создания или обновления связи в случае повторяющихся узлов
+                # session.run(
+                #     "MERGE (a:Entity {name: $source})"
+                #     "MERGE (b:Entity {name: $target})"
+                #     "MERGE (a)-[r:RELATED_TO]->(b)"
+                #     "SET r.description = coalesce(r.description + '; ', '') + $description;",
+                #     source=rel["source"], target=rel["target"], description=rel["description"]
+                # )
+                # Используем MERGE для создания связи, даже если узлы уже существуют
                 session.run(
-                    "MERGE (a:Entity {name: $source})"
-                    "MERGE (b:Entity {name: $target})"
-                    "MERGE (a)-[r:RELATED_TO]->(b)"
-                    "SET r.description = coalesce(r.description + '; ', '') + $description;",
-                    source=rel["source"], target=rel["target"], description=rel["description"]
+                    "MERGE (a:Entity {name: $source}) "
+                    "MERGE (b:Entity {name: $target}) "
+                    "CREATE (a)-[r:RELATED_TO {description: $description, type: $type}]->(b)",
+                    source=rel["source"], target=rel["target"], description=rel["description"], type=rel.get("type", "related_to")
                 )
 
     def get_node_by_id(self, node_id):
@@ -74,6 +85,27 @@ class GraphDB:
                 "MATCH (e:Entity {name: $name}) SET e.description = $description",
                 name=node_id, description=new_description
             )
+    def add_or_update_entity(self, entity: Entity):
+        """
+        Добавление новой сущности или обновление существующей.
+        Использует MERGE для поиска или создания узла.
+        """
+        with self.driver.session(database=self.database_name) as session:
+            session.run(
+                """
+                MERGE (e:Entity {name: $name})
+                ON CREATE SET e.description = $description
+                ON MATCH SET e.description = $description
+                """,
+                name=entity["name"], description=entity["description"]
+            )
+    
+    def check_node_exists(self, node_id):
+        """Проверка существования узла по ID (name)."""
+        with self.driver.session(database=self.database_name) as session:
+            result = session.run("MATCH (e:Entity {name: $name}) RETURN count(e) > 0", name=node_id)
+            record = result.single()
+            return record[0] if record else False
 
     def delete_node(self, node_id):
         """Удаление узла и всех его связей."""
@@ -243,3 +275,24 @@ class GraphDB:
             except Exception as e:
                 print(f"Error pinging Neo4j: {e}")
                 return False
+    
+    def get_linked_nodes(self, node_id, relationship_type=None):
+        """
+        Получение связанных узлов для заданного узла.
+        Если relationship_type не указан, возвращает все связанные узлы.
+        """
+        with self.driver.session(database=self.database_name) as session:
+            if relationship_type:
+                result = session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "WHERE e.type = $relationship_type "
+                    "RETURN e",
+                    name=node_id, relationship_type=relationship_type
+                )
+            else:
+                result = session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "RETURN e",
+                    name=node_id
+                )
+            return [record["name"] for record in result]

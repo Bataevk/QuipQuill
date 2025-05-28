@@ -77,7 +77,7 @@ class KnowledgeBaseModule:
         self.n_results_graph_query = n_results_graph_query
         logging.info(f"KnowledgeBaseModule инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
 
-    def _get_top_entity_names(self, vector_results: Optional[Dict[str, Any]], n_top: Optional[int] = None) -> List[str]:
+    def _get_top_entity_names(self, vector_results: Optional[Dict[str, Any]], n_top: Optional[int] = None, treshholder = None) -> List[str]:
         """Вспомогательная функция для извлечения имен сущностей из результатов векторного поиска."""
         names = []
         if not vector_results or not vector_results.get('ids') or not vector_results['ids'][0]:
@@ -85,9 +85,16 @@ class KnowledgeBaseModule:
 
         limit = n_top if n_top is not None else self.n_results_graph_query
 
+
         # Результаты ChromaDB могут содержать метаданные в разном виде в зависимости от include
         ids = vector_results['ids'][0]
         metadatas = vector_results.get('metadatas', [[]])[0] # [[meta1, meta2,...]]
+        
+        if treshholder:
+            # Фильтруем метаданные по treshholder
+            distances = vector_results.get('distances', [[]])[0]
+            ids = [ids[i] for i, dist in enumerate(distances) if dist > treshholder]
+            metadatas = [metadatas[i] for i, dist in enumerate(distances) if dist > treshholder]
 
         if metadatas and len(metadatas) == len(ids):
              # Предполагаем, что имя хранится в 'entity_name'
@@ -165,6 +172,20 @@ class KnowledgeBaseModule:
                 graph_results.append(None) # Добавляем None в случае ошибки
 
         return graph_results
+    
+    def search_names(self, query_text: str, n_vector_results: int = 10, threshholder = None) -> List[Optional[Dict[str, Any]]]:
+        """
+        Поиск имен: поиск имен в векторной БД.
+        """
+
+        vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
+        top_names = self._get_top_entity_names(vector_results, threshholder = threshholder)
+
+        if not top_names:
+            logging.warning("Поиск имен: не найдено релевантных имен в векторной БД.")
+            return []
+        
+        return top_names
     
     def search_lite(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
         """
@@ -258,6 +279,22 @@ class KnowledgeBaseModule:
     def add_relationship(self,source_name, target_name, description):
         """Add relationship to Graph Databse"""
         self.add_relationship(source_name=source_name, target_name=target_name, description=description)
+    
+    def search_linked_names_by_type(self, name: str, entity_type: str) -> List[str]:
+        """
+        Поиск связанных имен по типу entity в графовой БД.
+
+        Args:
+            name: Имя узла для поиска.
+            link_type: Тип связи для фильтрации.
+
+        Returns:
+            Список связанных имен.
+        """
+        if not self.graph_db:
+            logging.error("Поиск связанных имен невозможен: GraphDB не инициализирован.")
+            return []
+        
 
 # --- Пример использования ---
 if __name__ == '__main__':

@@ -64,7 +64,7 @@ class VectorDBModule:
             logging.error(f"Ошибка инициализации VectorDBModule: {e}", exc_info=True)
             raise RuntimeError("Не удалось инициализировать VectorDBModule") from e
 
-    def add_entity(self, name: str, description: str):
+    def add_entity(self, name: str, description: str, etype = None):
         """
         Добавляет или обновляет сущность в обеих коллекциях.
 
@@ -82,14 +82,14 @@ class VectorDBModule:
             # Добавляем/обновляем имя
             self.names_collection.upsert(
                 ids=[name],
-                documents=[name], # Векторизуем само имя
+                documents=[ f"{etype}: {name}" if etype else name ], # Векторизуем само тип + имя
                 metadatas=[{"entity_name": name}],
             )
             logging.debug(f"Имя сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_NAMES}'.")
 
             # Подготавливаем текст для коллекции описаний
             # Встраиваем имя в описание для потенциально лучшего поиска
-            description_text_for_embedding = f"Сущность: {name}. Описание: {preprocess_text(description)}"
+            description_text_for_embedding = f"Type: {etype}| Entity: {name}| Description: {preprocess_text(description)}"
 
             # Добавляем/обновляем описание
             self.descriptions_collection.upsert(
@@ -123,6 +123,7 @@ class VectorDBModule:
         for entity in entities:
             name = entity.get("name")
             description = entity.get("description", "")
+            etype = entity.get("type", None) # Получаем тип сущности, если есть
 
             if not name or not isinstance(name, str):
                 logging.warning(f"Пропуск сущности с некорректным именем в батче: {name}")
@@ -133,11 +134,11 @@ class VectorDBModule:
 
             # Данные для коллекции имен
             names_ids.append(name)
-            names_docs.append(name)
+            names_docs.append( f"{etype}: {name}" if etype else name )
             names_metadatas.append({"entity_name": name})
 
             # Данные для коллекции описаний
-            description_text_for_embedding = f"Сущность: {name}. Описание: {preprocess_text(description)}"
+            description_text_for_embedding = f"Type: {etype}| Entity: {name}| Description: {preprocess_text(description)}"
             desc_ids.append(name)
             desc_docs.append(description_text_for_embedding)
             desc_metadatas.append({"entity_name": name, "original_description": description})

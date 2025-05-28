@@ -36,7 +36,7 @@ def lemmatize_phrase(phrase):
     """
     Лемматизирует фразу, заменяя слова на их начальную форму (лемму).
     """
-    words = nltk.word_tokenize(phrase)  # Токенизация фразы на отдельные слова  
+    words = nltk.word_tokenize(phrase.lower())  # Токенизация фразы на отдельные слова  
     lemmatized_words = [__lemmatizer.lemmatize(word, pos='n') for word in words]  
     return ' '.join(lemmatized_words)  # Объединяем обратно в строку  
 
@@ -44,7 +44,7 @@ def lemmatize_phrase(phrase):
 def preprocess_text(text: str) -> str:
     """Преобразует текст, убирая лишние пробелы, точки и символы. Затем выполняет лемматизацию"""
     # замена '-' на пробел
-    text = text.replace('-', ' ')
+    text = text.replace('-', ' ').lower()
     # Убираем токены вида <|КАКОЙ_ТО ТЕКСТ|>
     text = remove_tokens(text)
     # Убираем лишние пробелы
@@ -54,8 +54,11 @@ def preprocess_text(text: str) -> str:
     # Убираем символы, которые не нужны
     text = re.sub(r'[^\w\s]', '', text)
 
+    # Удаляем артикли
+    text = re.sub(r'\b(?:a|an|the)\b', '', text)
+
     # Лемматизируем текст
-    text = lemmatize_phrase(text.lower())
+    text = lemmatize_phrase(text)
 
     return text
 
@@ -69,5 +72,7 @@ def remove_tokens(text):
   Returns:  
     Строка, из которой удалены токены.  
   """  
+  if not text or text.strip() == "":
+    return ""  # Возвращаем пустую строку, если входная строка пустая
   pattern = r"<\|[^|>]*\|>"  
-  return re.sub(pattern, "", text)  
+  return re.sub(pattern, "", text, flags=re.IGNORECASE)  

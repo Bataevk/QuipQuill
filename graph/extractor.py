@@ -44,6 +44,7 @@ class Entity:
 class Relationship:
     source: str
     target: str
+    type: str
     description: str
 
 
@@ -54,9 +55,13 @@ def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
     Также чистит от лишних пробелов и заменяет кавычки на стандартные.
     """
     stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
+    # Для думающих моделей удалим все блоки <think>...</think> вместе с тегами где бы он не был
+    if "<think>" in stripped_content:
+        stripped_content = re.sub(r'<think>.*?</think>', '', stripped_content, flags=re.DOTALL).strip()
     
     stripped_content = stripped_content.replace('“', '"').replace('”', '"')
     stripped_content = stripped_content.replace('‘', "'").replace('’', "'")
+
     
     if stripped_content.startswith("```json"):
         stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
@@ -74,30 +79,30 @@ def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
     return ai_message 
 
 
-def __lemmatize_phrase(phrase):  
-    """
-    Лемматизирует фразу, заменяя слова на их начальную форму (лемму).
-    """
-    words = nltk.word_tokenize(phrase)  # Токенизация фразы на отдельные слова  
-    lemmatized_words = [__lemmatizer.lemmatize(word, pos='n') for word in words]  
-    return ' '.join(lemmatized_words)  # Объединяем обратно в строку  
+# def __lemmatize_phrase(phrase):  
+#     """
+#     Лемматизирует фразу, заменяя слова на их начальную форму (лемму).
+#     """
+#     words = nltk.word_tokenize(phrase)  # Токенизация фразы на отдельные слова  
+#     lemmatized_words = [__lemmatizer.lemmatize(word, pos='n') for word in words]  
+#     return ' '.join(lemmatized_words)  # Объединяем обратно в строку  
 
-def _preprocess_text(text: str) -> str:
-    """Преобразует текст, убирая лишние пробелы, точки и символы. Затем выполняет лемматизацию"""
-    # замена '-' на пробел
-    text = text.replace('-', ' ')
-    # Убираем лишние пробелы
-    text = re.sub(r'\s+', ' ', text).strip()
-    # Убираем точки в конце текста
-    if text.endswith('.'):
-        text = text[:-1]
-    # Убираем символы, которые не нужны
-    text = re.sub(r'[^\w\s]', '', text)
+# def preprocess_text(text: str) -> str:
+#     """Преобразует текст, убирая лишние пробелы, точки и символы. Затем выполняет лемматизацию"""
+#     # замена '-' на пробел
+#     text = text.replace('-', ' ')
+#     # Убираем лишние пробелы
+#     text = re.sub(r'\s+', ' ', text).strip()
+#     # Убираем точки в конце текста
+#     if text.endswith('.'):
+#         text = text[:-1]
+#     # Убираем символы, которые не нужны
+#     text = re.sub(r'[^\w\s]', '', text)
 
-    # Лемматизируем текст
-    text = __lemmatize_phrase(text.lower())
+#     # Лемматизируем текст
+#     text = __lemmatize_phrase(text.lower())
 
-    return text
+#     return text
 
 def _get_similarity(name1: str, name2: str) -> float:
     """
@@ -105,10 +110,6 @@ def _get_similarity(name1: str, name2: str) -> float:
     """
     if not name1 or not name2:
         return 0.0
-    
-    # Приводим к нижнему регистру и убираем лишние пробелы
-    # name1 = __lemmatize_phrase(name1.strip().lower())
-    # name2 = __lemmatize_phrase(name2.strip().lower())
 
     return ratio(name1.lower(), name2.lower())
 
@@ -137,6 +138,23 @@ class GraphExtractor:
 
         self.config = self._load_config(config_path)
         self._initialize_llms()
+
+                # Задаем конфиг имен
+        self.json_naming = self.config["prompts"].get("json_fields", {
+            'entities': {
+                'name': 'name',
+                'type': 'type',
+                'description': 'description'
+            },
+            'relationships': {
+                'source': 'source',
+                'target': 'target',
+                'type': 'type',
+                'description': 'description'
+            }
+        })
+        logging.info(f"Используемые ключи для сущностей: {self.json_naming['entities']}")
+        logging.info(f"Используемые ключи для связей: {self.json_naming['relationships']}")
 
     @staticmethod
     def _load_config(config_path: str) -> Dict[str, Any]:
@@ -414,8 +432,26 @@ class GraphExtractor:
             logging.error(f"Ошибка при суммировании описания для '{entity_name}': {e}", exc_info=True)
             return ". ".join(unique_descriptions)
 
+    def _preprocess_entities(self, ent, default_type: str = "OTHER") -> Dict[str, Any]:
+        # Лемматизация и предобработка
+        entity = {}
+        if isinstance(ent, dict):
+            entity["name"] = preprocess_text(ent[self.json_naming['entities']['name']])
+            entity["type"] = preprocess_text(ent[self.json_naming['entities']['type']]) if ent.get(self.json_naming['entities']['type']) else default_type
+            entity["description"] = remove_tokens(ent[self.json_naming['entities']['description']]) if ent.get(self.json_naming['entities']['description']) else ""
+        return entity
+    
+    def _preprocess_relationships(self, rel, default_type: str = "OTHER") -> Dict[str, Any]:
+        # Лемматизация и предобработка связей
+        relationship = {}
+        if isinstance(rel, dict):
+            relationship["source"] = preprocess_text(rel[self.json_naming['relationships']["source"]])
+            relationship["target"] = preprocess_text(rel[self.json_naming['relationships']["target"]])
+            relationship["type"] = preprocess_text(rel.get(self.json_naming['relationships']["type"], default_type))
+            relationship["description"] = remove_tokens(rel.get(self.json_naming['relationships']["description"], ""))
+        return relationship
 
-    async def extract_graph_from_path(self, data_path: str, save_json_path: Optional[str] = None, save: bool = True) -> Dict[str, List[Dict[str, Any]]]:
+    async def extract_graph_from_path(self, data_path: str, save_json_path: Optional[str] = None, save: bool = True, default_type = "OTHER") -> Dict[str, List[Dict[str, Any]]]:
         """
         Основной метод для извлечения графа из документов в указанной директории.
 
@@ -448,6 +484,8 @@ class GraphExtractor:
         if not valid_results:
              return {"entities": [], "relationships": []}
 
+
+
         # 3. Сбор всех сущностей и связей
         all_entities_raw: List[Dict[str, Any]] = []
         all_relationships_raw: List[Dict[str, Any]] = []
@@ -455,24 +493,15 @@ class GraphExtractor:
             entities = res.get("entities", [])
             relationships = res.get("relationships", [])
             if isinstance(entities, list):
-                 all_entities_raw.extend(ent for ent in entities if isinstance(ent, dict) and ent.get("name"))
+                # 3*. предобработка сущностей
+                all_entities_raw.extend(self._preprocess_entities(ent) for ent in entities if isinstance(ent, dict) and ent.get(self.json_naming['entities']['name']))
             if isinstance(relationships, list):
-                 all_relationships_raw.extend(rel for rel in relationships if isinstance(rel, dict) and rel.get("source") and rel.get("target"))
+                # 3*. предобработка названий сущностей в связях (source и target)
+                all_relationships_raw.extend(self._preprocess_relationships(rel) for rel in relationships if isinstance(rel, dict) and rel.get(self.json_naming['relationships']["source"]) and rel.get(self.json_naming['relationships']["target"]))
 
         logging.info(f"Всего извлечено сущностей (до слияния): {len(all_entities_raw)}")
         logging.info(f"Всего извлечено связей (до обновления): {len(all_relationships_raw)}")
 
-        # 3*. Лемматизация названий сущностей (приводим к единственному числу) 
-        # Лемматизируем назавания сущностей в all_entities_raw
-        for entity in all_entities_raw:
-            entity["name"] = _preprocess_text(entity["name"])
-            entity["description"] = remove_tokens(entity["description"]) if entity.get("description") else ""
-        
-        # Лемматизируем назавания сущностей в all_relationships_raw
-        for relationship in all_relationships_raw:
-            relationship["source"] = _preprocess_text(relationship["source"])
-            relationship["target"] = _preprocess_text(relationship["target"])
-        
         # 4. Слияние дубликатов сущностей
         try:
             threshold = self.config["processing"]["levenshtein_threshold"]
@@ -503,7 +532,7 @@ class GraphExtractor:
         for i, name in enumerate(entity_names_in_order):
             final_entities_list.append({
                 "name": name,
-                "type": unique_entities_map[name].type,
+                "type": unique_entities_map[name].type.upper(),
                 "description": summarized_descriptions[i]
             })
         final_entity_names_set: Set[str] = set(entity_names_in_order)
@@ -511,30 +540,45 @@ class GraphExtractor:
         # 6. Обновление и фильтрация связей (с добавлением недостающих сущностей)
         logging.info("Обновление, фильтрация связей и добавление недостающих сущностей...")
         final_relationships_list: List[Dict[str, Any]] = []
-        seen_relationships: Set[Tuple[str, str, str]] = set()
+        seen_relationships: Set[Tuple[str, str, str, str]] = set()
         added_entities_names: Set[str] = set() # Отслеживаем имена добавленных сущностей
 
         for rel_data in all_relationships_raw:
             original_source = rel_data.get("source", "").strip()
             original_target = rel_data.get("target", "").strip()
             description = rel_data.get("description", "").strip()
+            rel_type = rel_data.get("type", default_type).strip().upper()  # Используем тип по умолчанию
 
             if not original_source or not original_target:
                 logging.warning(f"Пропуск связи с некорректным source или target: {rel_data}")
                 continue
 
-            # Получаем канонические имена, используя исходное имя как fallback, если его нет в карте
+            # Получаем new канонические имена, используя исходное имя как fallback, если его нет в карте
             final_source = name_mapping.get(original_source, original_source)
             final_target = name_mapping.get(original_target, original_target)
 
             # Пытаемся добавить сущности, если их нет в финальном списке
             entities_to_check = [final_source, final_target]
-            for entity_name in entities_to_check:
+            for i, entity_name in enumerate(entities_to_check):
                 if entity_name not in final_entity_names_set and entity_name not in added_entities_names:
                     logging.info(f"Сущность '{entity_name}', упомянутая в связи, отсутствует. Добавление новой сущности с пустым описанием.")
+
+                    # Попробуем найти ближайшее имя в финальном списке сущностей
+                    near_entity_name = [ name for name in final_entity_names_set if _get_similarity(name, entity_name) >= threshold]
+
+                    # Тоже самое но через фильтр
+                    near_entity_name = next(filter(lambda name: _get_similarity(name, entity_name) >= threshold, final_entity_names_set), None)
+                    if near_entity_name:
+                        logging.info(f"Найдено похожее имя сущности '{near_entity_name}' для '{entity_name}'. Используем его.")
+                        if i == 0:
+                            final_source = near_entity_name
+                        else:
+                            final_target = near_entity_name
+                        break
+
                     final_entities_list.append({
                         "name": entity_name,
-                        "type": "object",
+                        "type": default_type.upper(),  # Используем тип по умолчанию
                         "description": ""
                     })
                     final_entity_names_set.add(entity_name)
@@ -542,11 +586,12 @@ class GraphExtractor:
 
             # Проверяем, существуют ли финальные source и target в множестве финальных сущностей
             if final_source in final_entity_names_set and final_target in final_entity_names_set:
-                rel_tuple = (final_source, final_target, description)
+                rel_tuple = (final_source, final_target, rel_type, description)
                 if rel_tuple not in seen_relationships:
                     final_relationships_list.append({
                         "source": final_source,
                         "target": final_target,
+                        "type": rel_type,
                         "description": description
                     })
                     seen_relationships.add(rel_tuple)
