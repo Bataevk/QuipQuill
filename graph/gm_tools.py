@@ -12,18 +12,23 @@ def get_toolpack():
         get_agent_state,
         get_agent_location,
         get_agent_inventory,
+        get_all_locations,
+        move_agent,
         add_item_to_inventory,
         delete_item_from_inventory,
-        move_agent,
-        get_all_locations,
         describe_entity,
+        edit_entity,
         search_about
     ]
 
 @tool
 def describe_entity(location_name: str, config: RunnableConfig) -> str:
     """
-    This function describes a specific entity in the game.
+    Use this:
+        * to give a detailed description of a specific entity (location, creature, item).
+        * to describe the location when the player wants to look around
+        * when the player asks, “Describe the Torch Corridor” or “What is this object?”.
+    Insert the result directly into your response, explaining the details.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
@@ -34,7 +39,8 @@ def describe_entity(location_name: str, config: RunnableConfig) -> str:
 @tool
 def search_about(query: str, config: RunnableConfig) -> str:
     """
-    This function searches for information about a specific entity in the game.
+    Use this for a “deep” search in the game’s lore - if the player asks a question beyond the immediate location (for example, “Tell me the history of the Dark Paladin”).
+    Then present the found information to the player while maintaining the Game Master’s style.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
@@ -67,7 +73,8 @@ def get_agent_state(config: RunnableConfig) -> str:
 @tool
 def get_agent_location(config: RunnableConfig) -> str:
     """
-    Returns the current location of the agent.
+    Use it whenever you need to know which location the player (agent) is currently in.
+    Based on the result, describe the surroundings and offer possible actions.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
@@ -79,7 +86,8 @@ def get_agent_location(config: RunnableConfig) -> str:
 @tool
 def get_agent_inventory(config: RunnableConfig) -> str:
     """
-    Returns the current inventory of the agent.
+    Call this when the player asks about their inventory or after obtaining/removing items.
+    Structure your response so the player clearly understands what they have in their bag.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
@@ -91,7 +99,8 @@ def get_agent_inventory(config: RunnableConfig) -> str:
 @tool
 def add_item_to_inventory(item_name: str, config: RunnableConfig) -> str:
     """
-    Adds an item to the agent's inventory.
+    Use these when the player picks up an item or spends/gives it away.
+    After adding or removing an item, always check the inventory and report the operation’s success.
     """
 
     gm = config.get("configurable",{}).get('gm', None)
@@ -100,7 +109,6 @@ def add_item_to_inventory(item_name: str, config: RunnableConfig) -> str:
     
     agent_name = config.get("agent_name", "player").lower()
     return gm.add_item_to_inventory(item_name, agent_name)
-
 
 @tool
 def delete_item_from_inventory(item_name: str, config: RunnableConfig) -> str:
@@ -114,11 +122,11 @@ def delete_item_from_inventory(item_name: str, config: RunnableConfig) -> str:
     agent_name = config.get("agent_name", "player").lower()
     return gm.move_item_from_inventory(item_name, agent_name)
 
-
 @tool
 def move_agent(location_name: str, config: RunnableConfig) -> str:
     """
-    Moves the agent to a specified location.
+    Use this when the player decides to change location (e.g., go north/south/east/west, etc.).
+    After performing the move, immediately use function named "get_agent_location" to confirm the new area and describe it.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
@@ -126,3 +134,14 @@ def move_agent(location_name: str, config: RunnableConfig) -> str:
     
     agent_name = config.get("agent_name", "player").lower()
     return gm.move_agent(location_name, agent_name)
+
+@tool
+def edit_entity(entity_name: str, description: str, config: RunnableConfig) -> str:
+    """
+    Edits the description of a specific entity in the game.
+    """
+    gm = config.get("configurable",{}).get('gm', None)
+    if not gm:
+        return 'Game manager not initialized.'
+    
+    return gm.edit_entity(entity_name, description)

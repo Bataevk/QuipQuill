@@ -37,7 +37,7 @@ class Manager:
         agent_name = agent_name.lower()
         return self.dynamic_database.add_agent(agent_name)
 
-    def _remove_duplicate_nodes(self, old_entities: List[Entity], new_entities: List[Entity]) -> str:
+    def _remove_duplicate_nodes(self, old_entities: List[Entity], new_entities: List[Entity], uniques_types =  ["LOCATED_IN", "HAS_ITEM"]) -> str:
         """
         Removes duplicate nodes from the old_entities list based on the new_entities list.
         If a node in old_entities has the same name as a node in new_entities, it is removed.
@@ -48,16 +48,35 @@ class Manager:
             return old_entities
         
 
+        # Создаем множество для хранения существующих сущностей из new_entities
         existing_entities = set()
         for actual_rel in new_entities:
             existing_entities.add((actual_rel.type, actual_rel.source, actual_rel.target))
 
+        # Удаляем дубликаты из old_entities, которые уже есть в existing_entities
+        dedup_old_entities = []
         for rel in old_entities:
             if (rel.type, rel.source, rel.target) not in existing_entities:
-                new_entities.append(rel)
+                dedup_old_entities.append(rel)
                 existing_entities.add((rel.type, rel.source, rel.target)) # Добавляем новый элемент в множество
         
-        return new_entities
+        # Удаляем дубликаты, где type и target совпадают и type совпадает с "LOCATED_IN" или "HAS_ITEM" (сохраняем из new_entities)
+        dedup_old_entities = [
+            rel for rel in dedup_old_entities 
+            if not any(
+                (rel.type == new_rel.type and rel.target == new_rel.target and new_rel.type in uniques_types)
+                for new_rel in new_entities
+            )
+        ]
+        
+        return new_entities + dedup_old_entities  # Возвращаем объединенный список новых и уникальных старых сущностей
+
+    def update(self):
+        """
+        Updates the dynamic database - removes not linked nodes.
+        """
+
+        self.dynamic_database.delete_orphaned_nodes()
 
 
     # TOOLS METHODS
@@ -70,15 +89,12 @@ class Manager:
         if not locations and not inventory:
             return f"AGENT - '{agent_name}' has no known state."
         state_description = f"AGENT - '{agent_name}' current state:\n"
-        if locations:
-            state_description += f"Current location(s): {', '.join([location.name for location in locations])}\n"
+        state_description += f"Current location(s): {', '.join([location.name for location in locations])}\n"
         if inventory:
             str_inventory = ',\n'.join(list(map( lambda e: f"name: {e.name} - decription: {e.description}", inventory)))
             state_description += f"Inventory:\n{str_inventory}\n"
         return state_description.strip()  # Удаляем лишние пробелы в конце строки
 
-    
-    
     def get_agent_inventory(self, agent_name: str = "player") -> str:
         """
         Returns the current inventory of the agent.
@@ -106,7 +122,7 @@ class Manager:
         
         if not self.dynamic_database.graph_db.has_node(item_name):
             # Если предмет не существует в динамической базе, добавляем его
-            self.dynamic_database.graph_db.add_node(self.static_database.graph_db.get_node_by_id(item_name))
+            self.dynamic_database.upsert_entity(self.static_database.graph_db.get_node_by_id(item_name))
         
         agent_name = agent_name.lower()
         return self.dynamic_database.add_item_to_inventory(item_name, agent_name)
@@ -157,7 +173,10 @@ class Manager:
         If the entity is not found, it returns an error message.
         """
         entity_name = entity_name.lower()
-        main_entity = self.static_database.graph_db.get_node_by_id(entity_name)
+        main_entity = self.dynamic_database.graph_db.get_node_by_id(entity_name)
+        if not main_entity:
+            # Если сущность не найдена в динамической базе, проверяем в статической базе
+            main_entity = self.static_database.graph_db.get_node_by_id(entity_name)
 
         if not main_entity:
             return f"Entity '{entity_name}' not found in the static database."
@@ -171,7 +190,23 @@ class Manager:
         return f"Entity '{main_entity.name}' - {main_entity.description}\n" + \
                 "Related entities:\n" + \
                 "\n".join([f"{rel.name} - {rel.description}" for rel in results_entity]) if results_entity else "No related entities found."
-            
+    
+    def edit_entity(self, entity_name: str, new_description: str) -> str:
+        """
+        Edits the description of the entity.
+        If the entity is not found, it returns an error message.
+        """
+        entity_name = entity_name.lower()
+        main_entity = self.static_database.graph_db.get_node_by_id(entity_name)
+
+        if not main_entity:
+            return f"Entity '{entity_name}' not found in the static database."
+
+        # Обновляем описание сущности
+        main_entity.description = new_description
+        self.dynamic_database.upsert_entity(main_entity)
+
+        return f"Entity '{main_entity.name}' has been updated with new description: {new_description}."
 
     def get_agent_location(self, agent_name: str = "player") -> str:
         """
@@ -188,7 +223,6 @@ class Manager:
         
         return f"AGENT - '{agent_name}' is currently located in: {', '.join([location.name for location in locations])}."
     
-
     def move_agent(self, new_location, agent_name=None):
         """
         Moves the agent to a new location.
@@ -211,7 +245,7 @@ class Manager:
         # Проверяем, существует ли новая локация в динамическом графе
         if not self.dynamic_database.graph_db.has_node(new_location):
             # Если новая локация не существует в динамической базе, добавляем ее
-            self.dynamic_database.graph_db.add_node(self.static_database.graph_db.get_node_by_id(new_location))
+            self.dynamic_database.upsert_entity(self.static_database.graph_db.get_node_by_id(new_location))
         
         # Удаляем старую локацию игрока
         self.dynamic_database.graph_db.delete_relationships_by_type(agent_name, "LOCATED_IN")
@@ -232,19 +266,23 @@ class Manager:
         locations = ";\n".join([str(l) for l in locations])
         return f'Available locations: \n{locations}'
     
-    def search_deep(self, query: str, tresholder = 0.8) -> str:
+    def search_deep(self, query: str, n_names = 5, tresholder = 0.8) -> str:
         """
         Searches for a query in the static database and returns the results.
         """
-        results = self.static_database.search_deep(query, tresholder=tresholder)        
-        actual_results = self.dynamic_database.search_deep(query, tresholder=tresholder)
+        names = self.static_database.search_names(query, n_vector_results=n_names, tresholder=tresholder)
 
-        # Форматируем результаты в строку
-        return  f"Search results for '{query}':\n" \
-                "From Static Database:\n" + \
-                "\n".join([f"{res.name} - {res.description}" for res in results]) if results else "No results found in static database.\n" + \
-                "From Dynamic Database (Actual):\n" + \
-                "\n".join([f"{res.name} - {res.description}" for res in actual_results]) if actual_results else "No results found in dynamic database."
+        if not names:
+            return f"No results found for query '{query}'."
+        
+        results = "Search results for query '{}':\n".format(query)
+        for name in names:
+            results += self.describe_entity(name) + "\n"
+
+        return results.strip()  # Удаляем лишние пробелы в конце строки
+
+
+    
 
     
 

@@ -31,7 +31,7 @@ class DynDBMod(KnowledgeDB):
             agent_name = self.agent_name
         
         if not self.graph_db.has_node(agent_name):
-            agent = E(name=agent_name, type="AGENT", description="Default agent node")
+            agent = E(name=agent_name, type="AGENT", description="NOT DELETE")
             self.graph_db.upsert_entity(agent)  # Ensure agent name is in lowercase for consistency
             return f"AGENT - '{agent_name}' added to the dynamic graph."
         else:
@@ -137,13 +137,16 @@ class DynDBMod(KnowledgeDB):
         """
         orphaned_nodes = self.graph_db._query("""
             MATCH (n)
-            WHERE NOT (n)-[:*]->()
-            RETURN n.name AS name
+            WHERE NOT (EXISTS((n)-[]->()) OR EXISTS((n)<-[]-()))
+            RETURN n.name AS name 
         """)
+        orphaned_nodes = [node for node in orphaned_nodes if node['name'] != self.agent_name.lower()]
         if not orphaned_nodes:
             return "No orphaned nodes found in the dynamic graph."
         
         for node in orphaned_nodes:
+            logging.debug(f"Deleting orphaned node: {node['name']}")
+            # Удаляем узел из графа и векторной БД
             self.graph_db.delete_node(node['name'])
             self.vector_db.delete_entity(node['name'])
         

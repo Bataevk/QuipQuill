@@ -39,6 +39,9 @@ from manager import Manager as gm
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(levelname)s - %(message)s', 
+    filename='game_master.log',
+    filemode='w',  # 'w' для перезаписи файла при каждом запуске, 'a' для добавления в конец
+    encoding='utf-8'  # Кодировка для поддержки кириллицы
     )
 
 # Загружаем инструменты из gm_tools.py
@@ -88,10 +91,25 @@ memory = MemorySaver()
 
 #  Посмотреть create react agent https://github.com/langchain-ai/langmem
 
+# Создаём систему с помощью LangGraph, которая будет управлять взаимодействием с игроком
 
 # Поганали мутить узлы!
 def chatbot(state: State):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+    return {
+        "messages": [
+            llm_with_tools.invoke( 
+                    [
+                        {
+                            "role": "system",
+                            "content": 
+                            "You are a Game Master (GM) for a text-based role-playing game. "
+                            "You are forbidden to deviate from the state of the game and you are obliged to navigate only on the information available to you"
+                            "CURRENT STATE: " + game_manager.get_agent_state(state.get("agent_name", "player"))
+                        }
+                    ] + state["messages"]
+                )
+            ]
+        }
 
 
 
@@ -145,4 +163,5 @@ while True:
         break
 
     stream_graph_updates(user_input)
+    game_manager.update()
 
