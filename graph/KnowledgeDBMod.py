@@ -1,13 +1,14 @@
-from graph import GraphDB 
-from vdb_pre import VectorDBModule
+from GDBMod import GraphDB 
+from VDBMod import VectorDB
 from extractor import GraphExtractor
 import logging
 import os
 import json
 from typing import List, Dict, Optional, Any
 
+from my_dataclasses import Entity, Relationship
 
-class KnowledgeBaseModule:
+class KnowledgeDB:
     """
     Общий модуль базы знаний, объединяющий векторный поиск (ChromaDB)
     и графовую базу данных (Neo4j).
@@ -16,8 +17,8 @@ class KnowledgeBaseModule:
 
     def __init__(self,
             # Параметры для VectorDB
-            chroma_persist_path: str = VectorDBModule.DEFAULT_PERSIST_PATH,
-            embedding_model_name: str = VectorDBModule.DEFAULT_EMBEDDING_MODEL,
+            chroma_persist_path: str = VectorDB.DEFAULT_PERSIST_PATH,
+            embedding_model_name: str = VectorDB.DEFAULT_EMBEDDING_MODEL,
             # Параметры для GraphDB (из .env или передать явно)
             neo4j_uri: Optional[str] = None,
             neo4j_user: Optional[str] = None,
@@ -27,7 +28,7 @@ class KnowledgeBaseModule:
             db_name: Optional[str] = None,
             ):
         """
-        Инициализирует KnowledgeBaseModule.
+        Инициализирует KnowledgeDB.
 
         Args:
             chroma_persist_path: Путь для ChromaDB.
@@ -38,19 +39,19 @@ class KnowledgeBaseModule:
             n_results_graph_query: Количество топ-результатов векторного поиска,
                                     для которых выполняется запрос к графовой БД.
         """
-        logging.info("Инициализация KnowledgeBaseModule...")
+        logging.info("Инициализация KnowledgeDB...")
 
         # Инициализация VectorDB
         try:
-            self.vector_db = VectorDBModule(
+            self.vector_db = VectorDB(
                 db_name=db_name,
                 persist_path=chroma_persist_path,
                 embedding_model_name=embedding_model_name
             )
         except Exception as e:
-            logging.error(f"Ошибка инициализации VectorDBModule внутри KnowledgeBase: {e}", exc_info=True)
+            logging.error(f"Ошибка инициализации VectorDB внутри KnowledgeDB: {e}", exc_info=True)
             # Решаем, что делать - падать или работать без векторной части? Пока падаем.
-            raise RuntimeError("Не удалось инициализировать VectorDBModule") from e
+            raise RuntimeError("Не удалось инициализировать VectorDB") from e
 
         # Инициализация GraphDB
         uri = neo4j_uri or os.getenv("NEO4J_URI")
@@ -75,10 +76,16 @@ class KnowledgeBaseModule:
                 self.graph_db = None # Работаем без графа
 
         self.n_results_graph_query = n_results_graph_query
-        logging.info(f"KnowledgeBaseModule инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
+        logging.info(f"KnowledgeDB инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
 
-    def _get_top_entity_names(self, vector_results: Optional[Dict[str, Any]], n_top: Optional[int] = None, treshholder = None) -> List[str]:
-        """Вспомогательная функция для извлечения имен сущностей из результатов векторного поиска."""
+    def _get_top_entity_names(self, vector_results: Optional[Dict[str, Any]], n_top: Optional[int] = None, tresholder = None) -> List[str]:
+        """
+        Вспомогательная функция для извлечения имен сущностей из результатов векторного поиска.
+        Args:
+            vector_results: Результаты векторного поиска, полученные из VectorDB.
+            n_top: Максимальное количество имен для извлечения (по умолчанию self.n_results_graph_query).
+            treshholder: Пороговое значение для фильтрации результатов по расстоянию.
+        """
         names = []
         if not vector_results or not vector_results.get('ids') or not vector_results['ids'][0]:
             return names
@@ -90,11 +97,11 @@ class KnowledgeBaseModule:
         ids = vector_results['ids'][0]
         metadatas = vector_results.get('metadatas', [[]])[0] # [[meta1, meta2,...]]
         
-        if treshholder:
-            # Фильтруем метаданные по treshholder
+        if tresholder:
+            # Фильтруем метаданные по tresholder
             distances = vector_results.get('distances', [[]])[0]
-            ids = [ids[i] for i, dist in enumerate(distances) if dist > treshholder]
-            metadatas = [metadatas[i] for i, dist in enumerate(distances) if dist > treshholder]
+            ids = [ids[i] for i, dist in enumerate(distances) if dist > tresholder]
+            metadatas = [metadatas[i] for i, dist in enumerate(distances) if dist > tresholder]
 
         if metadatas and len(metadatas) == len(ids):
              # Предполагаем, что имя хранится в 'entity_name'
@@ -107,7 +114,7 @@ class KnowledgeBaseModule:
         return [name for name in names if name]
 
     def load(self):
-        '''Загрузка данных в KnowledgeBaseModule из директории, генерация эмбеддингов и графа.'''
+        '''Загрузка данных в KnowledgeDB из директории, генерация эмбеддингов и графа.'''
         # Загрузка данных в VectorDB
         json_data = GraphExtractor(config_path="./config.yaml").update()
         self.vector_db.add_entities_batch(json_data['entities'])
@@ -137,7 +144,7 @@ class KnowledgeBaseModule:
             logging.warning("Классический поиск не дал результатов или произошла ошибка.")
             return []
 
-    def search_extended(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
+    def search_extended(self, query_text: str, n_vector_results: int = 10, tresholder = None) -> List[Optional[Dict[str, Any]]]:
         """
         Расширенный поиск: поиск по именам -> запрос полной информации из графа для топ-N.
 
@@ -155,7 +162,7 @@ class KnowledgeBaseModule:
              return []
 
         vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
-        top_names = self._get_top_entity_names(vector_results) # Использует self.n_results_graph_query
+        top_names = self._get_top_entity_names(vector_results, tresholder=tresholder) # Использует self.n_results_graph_query
 
         if not top_names:
             logging.warning("Расширенный поиск: не найдено релевантных имен в векторной БД.")
@@ -173,13 +180,13 @@ class KnowledgeBaseModule:
 
         return graph_results
     
-    def search_names(self, query_text: str, n_vector_results: int = 10, threshholder = None) -> List[Optional[Dict[str, Any]]]:
+    def search_names(self, query_text: str, n_vector_results: int = 10, tresholder = None) -> List[Optional[Dict[str, Any]]]:
         """
         Поиск имен: поиск имен в векторной БД.
         """
 
         vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
-        top_names = self._get_top_entity_names(vector_results, threshholder = threshholder)
+        top_names = self._get_top_entity_names(vector_results, tresholder = tresholder)
 
         if not top_names:
             logging.warning("Поиск имен: не найдено релевантных имен в векторной БД.")
@@ -187,7 +194,7 @@ class KnowledgeBaseModule:
         
         return top_names
     
-    def search_lite(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
+    def search_lite(self, query_text: str, n_vector_results: int = 10, tresholder = None) -> List[Optional[Dict[str, Any]]]:
         """
         Краткий поиск: поиск по именам -> запрос частичной информации из графа для топ-N
                      (без описаний соседних узлов).
@@ -205,7 +212,7 @@ class KnowledgeBaseModule:
             return []
 
         vector_results = self.vector_db.query_names(query_text, n_results=n_vector_results)
-        top_names = self._get_top_entity_names(vector_results)
+        top_names = self._get_top_entity_names(vector_results, tresholder=tresholder)
 
         if not top_names:
             logging.warning("Быстрый поиск: не найдено релевантных имен в векторной БД.")
@@ -226,7 +233,7 @@ class KnowledgeBaseModule:
 
         return graph_results
 
-    def search_deep(self, query_text: str, n_vector_results: int = 10) -> List[Optional[Dict[str, Any]]]:
+    def search_deep(self, query_text: str, n_vector_results: int = 10, tresholder =  None) -> List[Optional[Dict[str, Any]]]:
         """
         Глубокий поиск: поиск по описаниям -> извлечение имен -> запрос полной информации из графа для топ-N.
 
@@ -244,7 +251,7 @@ class KnowledgeBaseModule:
 
         vector_results = self.vector_db.query_descriptions(query_text, n_results=n_vector_results)
         # Извлекаем имена из метаданных результатов поиска по описаниям
-        top_names = self._get_top_entity_names(vector_results) # Использует self.n_results_graph_query
+        top_names = self._get_top_entity_names(vector_results, tresholder=tresholder) # Использует self.n_results_graph_query
 
         if not top_names:
             logging.warning("Глубокий поиск: не найдено релевантных описаний/имен в векторной БД.")
@@ -262,6 +269,7 @@ class KnowledgeBaseModule:
 
         return graph_results
 
+    # --------------------------------------
     def close_graph_db(self):
         """Закрывает соединение с графовой базой данных, если оно было открыто."""
         if self.graph_db and hasattr(self.graph_db, 'close'):
@@ -271,29 +279,31 @@ class KnowledgeBaseModule:
             except Exception as e:
                  logging.error(f"Ошибка при закрытии соединения с GraphDB: {e}", exc_info=True)
 
-    def add_entity(self, name, description):
+
+    # --------------------------------------
+    def add_entity(self, entity: Entity):
         '''Add entity in all databases'''
-        self.vector_db.add_entity(name=name, description=description)
-        self.graph_db.add_node({"name":name, "description": description})
+        self.vector_db.add_entity(entity)
+        self.graph_db.add_node(entity)
     
-    def add_relationship(self,source_name, target_name, description):
-        """Add relationship to Graph Databse"""
-        self.add_relationship(source_name=source_name, target_name=target_name, description=description)
+    def upsert_entity(self, entity: Entity):
+        """Update or insert entity in all databases"""
+        self.vector_db.add_entity(entity)
+        self.graph_db.upsert_entity(entity)
     
-    def search_linked_names_by_type(self, name: str, entity_type: str) -> List[str]:
-        """
-        Поиск связанных имен по типу entity в графовой БД.
-
+    def add_relationship(self, rel: Relationship):
+        """Add relationship to Graph Databse
         Args:
-            name: Имя узла для поиска.
-            link_type: Тип связи для фильтрации.
-
-        Returns:
-            Список связанных имен.
+            rel: Relationship object containing source, target, type and description.
         """
         if not self.graph_db:
-            logging.error("Поиск связанных имен невозможен: GraphDB не инициализирован.")
-            return []
+            logging.error("Добавление связи невозможно: GraphDB не инициализирован.")
+            return
+        
+        try:
+            self.graph_db.add_relationship(rel.source, rel.target, rel.type, rel.description)
+        except Exception as e:
+            logging.error(f"Ошибка при добавлении связи '{rel}': {e}", exc_info=True)
     
     def get_all_locations(self) -> List[str]:
         """
@@ -332,22 +342,22 @@ if __name__ == '__main__':
 
     logging.debug("DEBAG MODE")
 
-    print("Запуск примера KnowledgeBaseModule...")
+    print("Запуск примера KnowledgeDB...")
 
     # Предполагается, что VectorDB уже содержит данные из примера vector_db_module.py
     # и GraphDB содержит соответствующие узлы и связи.
 
     # Инициализация KB
-    kb = KnowledgeBaseModule(db_name='staticdb')
+    kb = KnowledgeDB(db_name='staticdb')
     kb.load()  # Загрузка данных в VectorDB и GraphDB
 
     # Проверка подключения к графу
     if not kb.graph_db:
         print("\nWARNING: GraphDB не инициализирован, графовые поиски не будут работать.")
     else:
-        query = input("Введите запрос для поиска в KnowledgeBase (или 'exit' для выхода): ")
+        query = input("Введите запрос для поиска в KnowledgeDB (или 'exit' для выхода): ")
         if query.lower() == 'exit':
-            print("Выход из примера KnowledgeBaseModule.")
+            print("Выход из примера KnowledgeDB.")
             exit(0)
         print(f"\n--- Поиск Classic ({query}) ---")
         classic_res = kb.search_classic(query, n_results=2)
@@ -368,4 +378,4 @@ if __name__ == '__main__':
         # Закрытие соединения с графом
         kb.close_graph_db()
 
-    print("\nПример KnowledgeBaseModule завершен.")
+    print("\nПример KnowledgeDB завершен.")

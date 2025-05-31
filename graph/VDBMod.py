@@ -1,11 +1,14 @@
 import chromadb
 from chromadb.utils import embedding_functions
+from chromadb.config import Settings
 import logging
 from typing import List, Dict, Optional, Any
 from utils import preprocess_text
 
+from my_dataclasses import Entity
+
 # --- Модуль для работы с ChromaDB и векторизацией текста ---
-class VectorDBModule:
+class VectorDB:
     """
     Модуль для взаимодействия с ChromaDB, управляющий коллекциями
     для имен и описаний сущностей.
@@ -28,7 +31,14 @@ class VectorDBModule:
         """
         self.db_name = db_name
         try:
-            self.client = chromadb.PersistentClient(path=persist_path)
+            self.client = chromadb.PersistentClient(
+                path=persist_path,
+                    settings=Settings(
+                        is_persistent=True,
+                        persist_directory=".chroma_db",
+                        anonymized_telemetry=False,   # <-- вот эта опция С БЕСПОЛЕЗНЫМИ СПАМ-сообщениями (отключает телеметрию)
+                    )
+                )
             logging.info(f"ChromaDB PersistentClient инициализирован по пути: {persist_path}")
 
             # Используем SentenceTransformer для эмбеддингов
@@ -64,43 +74,40 @@ class VectorDBModule:
             logging.error(f"Ошибка инициализации VectorDBModule: {e}", exc_info=True)
             raise RuntimeError("Не удалось инициализировать VectorDBModule") from e
 
-    def add_entity(self, name: str, description: str, etype = None):
+    def add_entity(self, entity: Entity):
         """
         Добавляет или обновляет сущность в обеих коллекциях.
 
         Args:
-            name: Уникальное имя сущности (используется как ID).
-            description: Описание сущности.
+            entity: Экземпляр класса Entity, содержащий имя, тип и описание.
         """
-        if not name or not isinstance(name, str):
-            logging.warning(f"Пропуск добавления сущности с некорректным именем: {name}")
+        if not entity.name or not isinstance(entity.name, str):
+            logging.warning(f"Пропуск добавления сущности с некорректным именем: {entity.name}")
             return
-
-        description = description or "" # Гарантируем, что описание - строка
 
         try:
             # Добавляем/обновляем имя
             self.names_collection.upsert(
-                ids=[name],
-                documents=[ f"{etype}: {name}" if etype else name ], # Векторизуем само тип + имя
-                metadatas=[{"entity_name": name}],
+                ids=[entity.name],
+                documents=[ f"{entity.type}: {entity.name}" if entity.type else entity.name ], # Векторизуем само тип + имя
+                metadatas=[{"entity_name": entity.name}],
             )
-            logging.debug(f"Имя сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_NAMES}'.")
+            logging.debug(f"Имя сущности '{entity.name}' добавлено/обновлено в коллекцию '{self.COLLECTION_NAMES}'.")
 
             # Подготавливаем текст для коллекции описаний
             # Встраиваем имя в описание для потенциально лучшего поиска
-            description_text_for_embedding = f"Type: {etype}| Entity: {name}| Description: {preprocess_text(description)}"
+            description_text_for_embedding = f"Type: {entity.type}| Entity: {entity.name}| Description: {preprocess_text(entity.description)}"
 
             # Добавляем/обновляем описание
             self.descriptions_collection.upsert(
-                ids=[name],
+                ids=[entity.name],
                 documents=[description_text_for_embedding],
-                metadatas=[{"entity_name": name, "original_description": description}], # Сохраняем исходные данные
+                metadatas=[{"entity_name": entity.name, "original_description": entity.description}], # Сохраняем исходные данные
             )
-            logging.debug(f"Описание сущности '{name}' добавлено/обновлено в коллекцию '{self.COLLECTION_DESCRIPTIONS}'.")
+            logging.debug(f"Описание сущности '{entity.name}' добавлено/обновлено в коллекцию '{self.COLLECTION_DESCRIPTIONS}'.")
 
         except Exception as e:
-            logging.error(f"Ошибка при добавлении/обновлении сущности '{name}': {e}", exc_info=True)
+            logging.error(f"Ошибка при добавлении/обновлении сущности '{entity.name}': {e}", exc_info=True)
 
     def add_entities_batch(self, entities: List[Dict[str, str]]):
         """
@@ -215,7 +222,7 @@ class VectorDBModule:
             description = preprocess_text(query_text) # Предобработка текста
             # Выполняем поиск
             results = self.descriptions_collection.query(
-                query_texts=[query_text],
+                query_texts=[description],
                 n_results=n_results,
                 include=['metadatas', 'distances'] # Включаем метаданные (имя, описание) и расстояния
             )
@@ -258,7 +265,7 @@ if __name__ == '__main__':
     print("Запуск примера VectorDBModule...")
 
     # Инициализация
-    vector_db = VectorDBModule(persist_path="./.test_chroma_db") # Используем тестовую директорию
+    vector_db = VectorDB(persist_path="./.test_chroma_db") # Используем тестовую директорию
 
     # from json import loads
     # with open("./output.json", "r", encoding="utf-8") as f:

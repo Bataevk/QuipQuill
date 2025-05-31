@@ -1,5 +1,6 @@
 from neo4j import GraphDatabase
-from extractor import Entity
+from extractor import Entity, Relationship
+import logging
 
 class GraphDB:
     """
@@ -20,6 +21,14 @@ class GraphDB:
         """Закрытие соединения с Neo4j."""
         self.driver.close()
 
+    def _node_to_entity(self, node):
+        """Преобразование узла Neo4j в объект Entity."""
+        return Entity(
+            name=node.get("name", ""),
+            type=node.get("type", "UNKNOWN"),
+            description=node.get("description", "")
+        )
+
     def load_from_json(self, json_data):
         """Загрузка данных из JSON в Neo4j."""
         with self.driver.session(database=self.database_name) as session:
@@ -28,7 +37,7 @@ class GraphDB:
                 session.run(
                     "MERGE (e:Entity {name: $name}) "
                     "ON CREATE SET e.description = $description, e.type = $type",
-                    name=entity["name"], description=entity["description"], type=entity["type"]
+                    name=entity["name"], description=entity["description"], type=entity.get("type", "UNKNOWN")
                 )
             # Добавление связей
             for rel in json_data["relationships"]:
@@ -53,7 +62,7 @@ class GraphDB:
                     "MERGE (a:Entity {name: $source}) "
                     "MERGE (b:Entity {name: $target}) "
                     "CREATE (a)-[r:RELATED_TO {description: $description, type: $type}]->(b)",
-                    source=rel["source"], target=rel["target"], description=rel["description"], type=rel.get("type", "related_to")
+                    source=rel["source"], target=rel["target"], description=rel["description"], type=rel.get("type", "RELATED_TO")
                 )
 
     def get_node_by_id(self, node_id):
@@ -61,7 +70,15 @@ class GraphDB:
         with self.driver.session(database=self.database_name) as session:
             result = session.run("MATCH (e:Entity {name: $name}) RETURN e", name=node_id)
             record = result.single()
-            return record["e"] if record else None
+
+            if record:
+                # Transform the record to a Entity object
+                entity_data = record["e"]
+                return Entity(
+                    name=entity_data["name"],
+                    type=entity_data.get("type", "UNKNOWN"),
+                    description=entity_data.get("description", "")
+                )
 
     def get_node_description(self, node_id):
         """Получение описания узла по ID (name)."""
@@ -70,40 +87,59 @@ class GraphDB:
             return node.get("description", "")
         return None
 
-    def add_node(self, entity):
-        """Добавление нового узла."""
+    def add_node(self, entity: Entity):
+        """
+        Добавление нового узла.
+        Args:
+            entity: Экземпляр класса Entity, содержащий имя, тип и описание.
+        """
         with self.driver.session(database=self.database_name) as session:
             session.run(
-                "CREATE (e:Entity {name: $name, description: $description})",
-                name=entity["name"], description=entity["description"]
+                "CREATE (e:Entity {name: $name, description: $description, type: $type})",
+                name=entity.name, description=entity.description, type=entity.type
             )
 
-    def update_node(self, node_id, new_description):
-        """Редактирование узла."""
-        with self.driver.session(database=self.database_name) as session:
-            session.run(
-                "MATCH (e:Entity {name: $name}) SET e.description = $description",
-                name=node_id, description=new_description
-            )
-    def add_or_update_entity(self, entity: Entity):
+    def upsert_entity(self, entity: Entity):
         """
         Добавление новой сущности или обновление существующей.
         Использует MERGE для поиска или создания узла.
+        Args:
+            entity: Экземпляр класса Entity, содержащий имя, тип и описание.
         """
         with self.driver.session(database=self.database_name) as session:
             session.run(
                 """
                 MERGE (e:Entity {name: $name})
-                ON CREATE SET e.description = $description
-                ON MATCH SET e.description = $description
+                ON CREATE SET e.description = $description, e.type = $type
+                ON MATCH SET e.description = $description, e.type = $type
+
                 """,
-                name=entity["name"], description=entity["description"]
+                name=entity.name, description=entity.description, type=entity.type
             )
     
-    def check_node_exists(self, node_id):
+    def has_node(self, node_id):
         """Проверка существования узла по ID (name)."""
         with self.driver.session(database=self.database_name) as session:
             result = session.run("MATCH (e:Entity {name: $name}) RETURN count(e) > 0", name=node_id)
+            record = result.single()
+            return record[0] if record else False
+    
+    def has_relationship(self, source_id, target_id, relationship_type=None):
+        """Проверка существования связи между двумя узлами."""
+        with self.driver.session(database=self.database_name) as session:
+            if relationship_type:
+                result = session.run(
+                    "MATCH (source:Entity {name: $source})-[r]->(target:Entity {name: $target}) "
+                    "WHERE r.type = $relationship_type "
+                    "RETURN count(r) > 0",
+                    source=source_id, target=target_id, relationship_type=relationship_type
+                )
+            else:
+                result = session.run(
+                    "MATCH (source:Entity {name: $source})-[r]->(target:Entity {name: $target}) "
+                    "RETURN count(r) > 0",
+                    source=source_id, target=target_id
+                )
             record = result.single()
             return record[0] if record else False
 
@@ -114,32 +150,52 @@ class GraphDB:
                 "MATCH (e:Entity {name: $name}) DETACH DELETE e",
                 name=node_id
             )
+    def delete_relationship(self, source_id, target_id, relationship_type=None):
+        """Удаление связи между двумя узлами."""
+        if not relationship_type:
+            with self.driver.session(database=self.database_name) as session:
+                session.run(
+                    "MATCH (source:Entity {name: $source})-[r:RELATED_TO]->(target:Entity {name: $target}) "
+                    "DELETE r",
+                    source=source_id, target=target_id
+                )
+        else:
+            with self.driver.session(database=self.database_name) as session:
+                session.run(
+                    "MATCH (source:Entity {name: $source})-[r]->(target:Entity {name: $target}) "
+                    "WHERE r.type = $relationship_type "
+                    "DELETE r",
+                    source=source_id, target=target_id, relationship_type=relationship_type
+                )
+        
+    def delete_relationships_by_type(self, source_id, relationship_type):
+        """Удаление всех связей определенного типа между узлом и связанными узлами."""
+        with self.driver.session(database=self.database_name) as session:
+            session.run(
+                "MATCH (source:Entity {name: $source})-[r]->(target:Entity) "
+                "WHERE r.type = $relationship_type "
+                "DELETE r",
+                source=source_id, relationship_type=relationship_type
+            )
 
-    def add_relationship(self, source_id, target_id, description):
+
+    def add_relationship(self, source_id, target_id, description, relationship_type="RELATED_TO"):
         """Добавление новой связи."""
         with self.driver.session(database=self.database_name) as session:
             session.run(
-                "MATCH (source:Entity {name: $source}), (target:Entity {name: $target}) "
-                "CREATE (source)-[r:RELATED_TO {description: $description}]->(target)",
-                source=source_id, target=target_id, description=description
+                "MERGE (source:Entity {name: $source}) "
+                "MERGE (target:Entity {name: $target}) "
+                "MERGE (source)-[r:RELATED_TO {description: $description, type: $relationship_type}]->(target)",
+                source=source_id, target=target_id, description=description, relationship_type=relationship_type
             )
 
-    def update_relationship(self, source_id, target_id, new_description):
+    def update_relationship(self, source_id, target_id, new_description, relationship_type="RELATED_TO"):
         """Обновление связи."""
         with self.driver.session(database=self.database_name) as session:
             session.run(
                 "MATCH (source:Entity {name: $source})-[r:RELATED_TO]->(target:Entity {name: $target}) "
-                "SET r.description = $description",
-                source=source_id, target=target_id, description=new_description
-            )
-
-    def delete_relationship(self, source_id, target_id):
-        """Удаление связи."""
-        with self.driver.session(database=self.database_name) as session:
-            session.run(
-                "MATCH (source:Entity {name: $source})-[r:RELATED_TO]->(target:Entity {name: $target}) "
-                "DELETE r",
-                source=source_id, target=target_id
+                "SET r.description = $description, r.type = $relationship_type",
+                source=source_id, target=target_id, description=new_description, relationship_type=relationship_type
             )
 
     def _format_entity_relationships(self, data):
@@ -224,13 +280,6 @@ class GraphDB:
     def _get_relationships(self, node_id):
         """Получение всех связей узла."""
         with self.driver.session(database=self.database_name) as session:
-            # Односторонний поиск
-            # result = session.run(
-            #     "MATCH (e:Entity {name: $name}) "
-            #     "OPTIONAL MATCH (e)-[r]->(related:Entity) "
-            #     "RETURN e, collect({relationship: r, related: related}) as relationships",
-            #     name=node_id
-            # )
             # Двусторонний поиск
             result = session.run(  
                 "MATCH (e:Entity {name: $name}) "  
@@ -247,6 +296,39 @@ class GraphDB:
                 relationships = record["relationships_to"] + record["relationships_from"]
                 return {"node": node, "relationships": relationships}
             return None
+    
+    def get_nodes_and_relationships(self, node_id, to_str=True):
+        """Получение узла и связанных с ним узлов вместе со связями."""
+        with self.driver.session(database=self.database_name) as session:
+            # Двусторонний поиск
+            result = session.run(  
+                "MATCH (e:Entity {name: $name}) "  
+                "OPTIONAL MATCH (e)-[r]->(related:Entity) "  
+                "OPTIONAL MATCH (e)<-[r2]-(related_from:Entity) "  
+                "RETURN e, "  
+                "collect({relationship: r, related: related}) as relationships_to, "  
+                "collect({relationship: r2, related: related_from}) as relationships_from",  
+                name=node_id  
+            )  
+            record = result.single()
+            if record:
+                node = record["e"]
+                relationships = record["relationships_to"] + record["relationships_from"]
+                
+                return Entity(
+                    name=node.get("name", ""),
+                    description=node.get("description", ""),
+                    type=node.get("type", "UNKNOWN"),
+                    relationships=relationships
+                ), [
+                    Relationship(
+                        source=node.get("name", ""),
+                        target=rel["related"].get("name", ""),
+                        type=rel["relationship"].get("type", "RELATED_TO"),
+                        description=rel["relationship"].get("description", "")
+                    ) for rel in relationships if rel.get("related") and rel.get("relationship")
+                ]
+            return None , None
 
     def get_node_with_relationships(self, node_id, to_str=True):
         """Получение узла и связанных с ним узлов вместе со связями."""
@@ -276,27 +358,67 @@ class GraphDB:
                 print(f"Error pinging Neo4j: {e}")
                 return False
     
-    def get_linked_nodes(self, node_id, relationship_type=None):
+    def get_linked_nodes_by_type(self, node_id, entity_type=None, relationship_type=None):
         """
         Получение связанных узлов для заданного узла.
-        Если relationship_type не указан, возвращает все связанные узлы.
+        Если entity_type не указан, возвращает все связанные узлы.
+        Если relationship_type не указан, возвращает все связанные узлы независимо от типа связи.
+        """
+        records = []
+
+        with self.driver.session(database=self.database_name) as session:
+            if relationship_type and entity_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "WHERE e.type = $entity_type AND r.type in $relationship_type "
+                    "RETURN related",
+                    name=node_id, entity_type=entity_type, relationship_type=relationship_type
+                ))
+            elif relationship_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "WHERE r.type = $relationship_type "
+                    "RETURN related",
+                    name=node_id, relationship_type=relationship_type
+                ))
+            elif entity_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "WHERE e.type = $entity_type "
+                    "RETURN related",
+                    name=node_id, entity_type=entity_type
+                ))
+            else:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+                    "RETURN related",
+                    name=node_id
+                    ))
+        logging.debug(f"get_linked_nodes_by_type: {node_id} - found {len(records)} related nodes")
+        return [self._node_to_entity(record["related"]) for record in records] if records else []
+        
+    def get_linked_nodes_by_types(self, node_id, entity_types=[], relationship_type=[]):
+        """
+        Получение связанных узлов для заданного узла по типам сущностей и связей.
+        Возвращает список связанных узлов.
         """
         with self.driver.session(database=self.database_name) as session:
+            query = "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
+            part_2 = ["WHERE "]
+            parameters = {"name": node_id}
+            if entity_types:
+                part_2.append("related.type IN $entity_types ")
+                parameters["entity_types"] = entity_types
             if relationship_type:
-                result = session.run(
-                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
-                    "WHERE e.type = $relationship_type "
-                    "RETURN e",
-                    name=node_id, relationship_type=relationship_type
-                )
-            else:
-                result = session.run(
-                    "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
-                    "RETURN e",
-                    name=node_id
-                )
-            return [record["name"] for record in result]
-    
+                if entity_types:
+                    part_2.append("AND ")
+                part_2.append("r.type IN $relationship_type ")
+                parameters["relationship_type"] = relationship_type
+            
+            query += "".join(part_2) + "RETURN related"
+
+            return list(session.run(query, **parameters))
+
     def _query(self, query: str, parameters: dict = None):
         """
         Выполнение произвольного запроса к базе данных.

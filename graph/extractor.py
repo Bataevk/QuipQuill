@@ -3,8 +3,9 @@ import json
 import asyncio
 import logging
 import re
-from typing import List, Dict, Any, Tuple, Optional, Set, Union
-from dataclasses import dataclass, field
+
+from my_dataclasses import *
+from typing import List, Dict, Any, Optional, Union, Tuple, Set
 from utils import remove_tokens, preprocess_text
 
 import yaml
@@ -33,19 +34,7 @@ nltk.download('wordnet')
 # --- Загрузка переменных окружения ---
 load_dotenv()
 
-# --- Датаклассы ---
-@dataclass
-class Entity:
-    name: str
-    type: str
-    descriptions: List[str] = field(default_factory=list)
 
-@dataclass
-class Relationship:
-    source: str
-    target: str
-    type: str
-    description: str
 
 
 # --- Функции ---
@@ -78,31 +67,6 @@ def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
     # Возвращаем новое AI-сообщение с очищенным содержимым
     return ai_message 
 
-
-# def __lemmatize_phrase(phrase):  
-#     """
-#     Лемматизирует фразу, заменяя слова на их начальную форму (лемму).
-#     """
-#     words = nltk.word_tokenize(phrase)  # Токенизация фразы на отдельные слова  
-#     lemmatized_words = [__lemmatizer.lemmatize(word, pos='n') for word in words]  
-#     return ' '.join(lemmatized_words)  # Объединяем обратно в строку  
-
-# def preprocess_text(text: str) -> str:
-#     """Преобразует текст, убирая лишние пробелы, точки и символы. Затем выполняет лемматизацию"""
-#     # замена '-' на пробел
-#     text = text.replace('-', ' ')
-#     # Убираем лишние пробелы
-#     text = re.sub(r'\s+', ' ', text).strip()
-#     # Убираем точки в конце текста
-#     if text.endswith('.'):
-#         text = text[:-1]
-#     # Убираем символы, которые не нужны
-#     text = re.sub(r'[^\w\s]', '', text)
-
-#     # Лемматизируем текст
-#     text = __lemmatize_phrase(text.lower())
-
-#     return text
 
 def _get_similarity(name1: str, name2: str) -> float:
     """
@@ -376,7 +340,7 @@ class GraphExtractor:
                 if similarity >= threshold:
                     logging.debug(f"Обнаружено слияние: '{name}' -> '{canonical_name}' (Схожесть: {similarity:.2f})")
                     if description:
-                        unique_entities[canonical_name].descriptions.append(description)
+                        unique_entities[canonical_name].description += "<sep>\n" + str(description)
                     if name != canonical_name:
                         name_mapping[name] = canonical_name
                     matched = True
@@ -384,36 +348,37 @@ class GraphExtractor:
 
             if not matched:
                 logging.debug(f"Добавлена новая уникальная сущность: '{name}'")
-                unique_entities[name] = Entity(name=name, type=e_type, descriptions=[desc for desc in [description] if desc])
+                unique_entities[name] = Entity(name=name, type=e_type, description=description)
 
         merged_count = sum(1 for old, new in name_mapping.items() if old != new)
         logging.info(f"Слияние сущностей завершено. Уникальных сущностей: {len(unique_entities)}. Обнаружено слияний: {merged_count}.")
         return unique_entities, name_mapping
 
 
-    async def _summarize_description(self, entity_name: str, descriptions: List[str]) -> str:
+    async def _summarize_description(self, entity_name: str, descriptions: str, sep = ".\n") -> str:
         """Асинхронно суммирует список описаний для одной сущности."""
         if not descriptions:
             return ""
-        unique_descriptions = sorted(list(set(filter(None, descriptions))))
-        if not unique_descriptions:
-             return ""
-        if len(unique_descriptions) == 1:
-            return unique_descriptions[0]
+        
+        desc_count = descriptions.count("<sep>") + 1
+        if desc_count == 1:
+            return descriptions
 
-        logging.debug(f"Суммаризация {len(unique_descriptions)} описаний для '{entity_name}'...")
+        default_return = descriptions.replace("<sep>", sep) 
+
+        logging.debug(f"Суммаризация {desc_count} описаний для '{entity_name}'...")
         try:
              system_prompt = self.config["prompts"]["summarization_system_prompt"]
              user_template = self.config["prompts"]["summarization_user_template"]
         except KeyError as e:
              logging.error(f"Отсутствует ключ промпта суммаризации в конфигурации: {e}")
-             return ". ".join(unique_descriptions) # Fallback
+             return default_return  # Возвращаем исходные описания с заменой <sep> на значение sep
         except TypeError:
              logging.error("Раздел 'prompts' в конфигурации имеет неверный формат.")
-             return ". ".join(unique_descriptions) # Fallback
+             return default_return  # Возвращаем исходные описания с заменой <sep> на значение sep
 
 
-        prompt = user_template.format(system_message=system_prompt, text_to_summarize="\n---\n".join(unique_descriptions))
+        prompt = user_template.format(system_message=system_prompt, text_to_summarize=descriptions)
 
         try:
             summary_response = await self.llm_summarizer.ainvoke(prompt)
@@ -424,13 +389,13 @@ class GraphExtractor:
                 summary = summary_response.strip()
             else:
                 logging.warning(f"Неожиданный тип ответа от LLM-суммаризатора для '{entity_name}': {type(summary_response)}")
-                summary = ". ".join(unique_descriptions) # Fallback
+                summary = default_return # Fallback
 
             logging.debug(f"Описание для '{entity_name}' суммировано.")
-            return summary or ". ".join(unique_descriptions)
+            return summary or default_return
         except Exception as e:
             logging.error(f"Ошибка при суммировании описания для '{entity_name}': {e}", exc_info=True)
-            return ". ".join(unique_descriptions)
+            return default_return
 
     def _preprocess_entities(self, ent, default_type: str = "OTHER") -> Dict[str, Any]:
         # Лемматизация и предобработка
@@ -447,7 +412,7 @@ class GraphExtractor:
         if isinstance(rel, dict):
             relationship["source"] = preprocess_text(rel[self.json_naming['relationships']["source"]])
             relationship["target"] = preprocess_text(rel[self.json_naming['relationships']["target"]])
-            relationship["type"] = preprocess_text(rel.get(self.json_naming['relationships']["type"], default_type))
+            relationship["type"] = str(rel.get(self.json_naming['relationships']["type"], default_type)).upper()  # Приводим тип к верхнему регистру
             relationship["description"] = remove_tokens(rel.get(self.json_naming['relationships']["description"], ""))
         return relationship
 
@@ -520,7 +485,7 @@ class GraphExtractor:
         # 5. Асинхронная Суммаризация описаний
         logging.info("Начало суммирования описаний для сущностей...")
         summarization_tasks = [
-            self._summarize_description(name, entity_obj.descriptions)
+            self._summarize_description(name, entity_obj.description)
             for name, entity_obj in unique_entities_map.items()
         ]
         summarized_descriptions = await asyncio.gather(*summarization_tasks)

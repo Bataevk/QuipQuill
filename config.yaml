@@ -2,7 +2,7 @@
 llm:
   chunk_processing_model: "ИМЯ_ВАШЕЙ_МОДЕЛИ_ДЛЯ_ОБРАБОТКИ_ЧАНКОВ" # Укажите модель из .env или напрямую
   summarization_model: "ИМЯ_ВАШЕЙ_МОДЕЛИ_ДЛЯ_СУММАРИЗАЦИИ" # Может быть та же или другая модель
-  temperature: 0.7
+  temperature: 0.1
   top_p: 0.9
   request_timeout: 600 # Таймаут для одного запроса к LLM в секундах
   max_tokens: null # null означает отсутствие лимита со стороны клиента
@@ -38,7 +38,7 @@ prompts:
       "relationships": [
         {
           "source_entity_name": "<Name of the source entity. MUST EXACTLY match a name from the 'entities' list.>",
-          "relationship_type": "<Specific relationship type. Choose from: IS_IN_LOCATION, CONTAINS_ITEM, HAS_AGENT, LEADS_TO, HAS_ATTRIBUTE, INTERACTS_WITH>",
+          "relationship_type": "<Specific relationship type. Choose from: LOCATED_IN, HAS_ITEM, HAS_AGENT, LEADS_TO, HAS_ATTRIBUTE, INTERACTS_WITH>",
           "context_phrase": "<Description of the relationship. A short phrase from the text that supports this relationship, e.g., 'rests on a low pedestal', 'slumbers in the semi-darkness', 'North → Torchlight Corridor'>"
           "target_entity_name": "<Name of the target entity. MUST EXACTLY match a name from the 'entities' list.>",
         }
@@ -73,8 +73,8 @@ prompts:
         * **Agent Names:** Use their titles (e.g., "Skeleton Guardian", "Swamp Walker").
     2.  **Entity Descriptions:** Extract relevant details verbatim or summarized very closely from the text. For agents, include stats (HP, atk, def) if provided. For items, include their functions or properties.
     3.  **Relationships – Be Specific and Use Defined Types:**
-        * `IS_IN_LOCATION`: For an entity being in a location (e.g., "copper torch" `IS_IN_LOCATION` "Entrance Rune Hall"; "Skeleton Guardian" `IS_IN_LOCATION` "Torchlight Corridor").
-        * `CONTAINS_ITEM`: For a location (or agent) possessing an item (e.g., "Entrance Rune Hall" `CONTAINS_ITEM` "copper torch").
+        * `LOCATED_IN`: For an entity being in a location (e.g., "copper torch" `LOCATED_IN` "Entrance Rune Hall"; "Skeleton Guardian" `LOCATED_IN` "Torchlight Corridor").
+        * `HAS_ITEM`: For a location (or agent) possessing an item (e.g., "Entrance Rune Hall" `HAS_ITEM` "copper torch").
         * `HAS_AGENT`: For a location where an agent can be encountered (e.g., "Torchlight Corridor" `HAS_AGENT` "Skeleton Guardian"). If "no one is there," this relationship can be omitted, or you can use a special target entity name like "No One" if you define such an entity.
         * `LEADS_TO`: For navigation between locations (e.g., "Entrance Rune Hall" `LEADS_TO` "Torchlight Corridor"). The `context_phrase` field can store the direction, e.g., "North".
         * `HAS_ATTRIBUTE`: For describing a property of an entity not covered in its main description but which is an important relation (e.g., "copper torch" `HAS_ATTRIBUTE` "shines 5m"). Often, this can be included in the entity's `description`.
@@ -125,19 +125,19 @@ prompts:
       "relationships": [
         {
           "source_entity_name": "weathered wooden sign",
-          "relationship_type": "IS_IN_LOCATION",
+          "relationship_type": "LOCATED_IN",
           "context_phrase": "stands crookedly near a narrow path",
           "target_entity_name": "The Quiet Clearing"
         },
         {
           "source_entity_name": "rusty dagger",
-          "relationship_type": "IS_IN_LOCATION",
+          "relationship_type": "LOCATED_IN",
           "context_phrase": "lies half-buried in the soft earth",
           "target_entity_name": "The Quiet Clearing"
         },
         {
           "source_entity_name": "The Quiet Clearing",
-          "relationship_type": "CONTAINS_ITEM",
+          "relationship_type": "HAS_ITEM",
           "context_phrase": "What to take: rusty dagger",
           "target_entity_name": "rusty dagger"
         },

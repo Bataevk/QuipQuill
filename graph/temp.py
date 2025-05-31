@@ -51,21 +51,21 @@ load_dotenv()
 
 
 # Инициализируйте модель Gemini 2.0 Flash через Langchain  
-# llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
+llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
 
 # Инициализируйте модель Mistral через Langchain
 # llm = init_chat_model("mistral-large-latest", model_provider="mistralai")
 
-# Инициализируйте модель OpenAI через Langchain, но с другими параметрами baseurl
-llm = ChatOpenAI(
-    model=os.getenv("RAG_LLM_MODEL"),
-    base_url=os.getenv('RAG_BASE_URL'),
-    temperature=0.8, # Используем .get с дефолтом для необязательных параметров
-    top_p=0.9,
-    max_tokens=2048,
-    timeout=600,
-    openai_api_key=os.getenv('OPENAI_API_KEY')
-)
+# # Инициализируйте модель OpenAI через Langchain, но с другими параметрами baseurl
+# llm = ChatOpenAI(
+#     model=os.getenv("RAG_LLM_MODEL"),
+#     base_url=os.getenv('RAG_BASE_URL'),
+#     temperature=0.8, # Используем .get с дефолтом для необязательных параметров
+#     top_p=0.9,
+#     max_tokens=2048,
+#     timeout=600,
+#     openai_api_key=os.getenv('OPENAI_API_KEY')
+# )
 
 llm_with_tools = llm.bind_tools(tools)
 
@@ -128,7 +128,14 @@ def stream_graph_updates(user_input: str):
 
 
 # Chat config 
-config = {"configurable": {"thread_id": "1"}, 'gm': gm()}
+game_manager = gm(
+    load=False
+)  # Инициализация менеджера игры
+agent_name = "player"  # Имя агента
+
+game_manager.initalize_agent(agent_name)  # Инициализация агента в динамическом графе
+
+config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name}
 
 # Start chat
 while True:
