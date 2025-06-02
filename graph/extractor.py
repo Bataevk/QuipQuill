@@ -23,6 +23,8 @@ from langchain_core.exceptions import OutputParserException
 import nltk  
 from nltk.stem import WordNetLemmatizer  
 
+from utils import load_config
+
 # Инициализируем лемматизатор
 __lemmatizer = WordNetLemmatizer() 
 
@@ -100,7 +102,7 @@ class GraphExtractor:
         if not config_path or not isinstance(config_path, str):
              raise ValueError("Необходимо указать действительный путь к файлу конфигурации (config_path).")
 
-        self.config = self._load_config(config_path)
+        self.config = load_config(config_path)
         self._initialize_llms()
 
                 # Задаем конфиг имен
@@ -119,29 +121,6 @@ class GraphExtractor:
         })
         logging.info(f"Используемые ключи для сущностей: {self.json_naming['entities']}")
         logging.info(f"Используемые ключи для связей: {self.json_naming['relationships']}")
-
-    @staticmethod
-    def _load_config(config_path: str) -> Dict[str, Any]:
-        """Загружает конфигурацию из YAML файла."""
-        logging.info(f"Загрузка конфигурации из файла: {config_path}")
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            if not isinstance(config, dict):
-                 raise ValueError(f"Файл конфигурации {config_path} не содержит валидный YAML словарь.")
-            logging.info(f"Конфигурация успешно загружена.")
-            # TODO: Добавить валидацию наличия необходимых ключей в config (например, llm, prompts и т.д.)
-            return config
-        except FileNotFoundError:
-            logging.error(f"Файл конфигурации не найден: {config_path}")
-            raise # Передаем исключение выше
-        except yaml.YAMLError as e:
-            logging.error(f"Ошибка парсинга YAML файла {config_path}: {e}")
-            raise ValueError(f"Некорректный формат YAML в файле {config_path}") from e
-        except Exception as e:
-            logging.error(f"Неожиданная ошибка при загрузке config файла {config_path}: {e}", exc_info=True)
-            raise ValueError(f"Ошибка при чтении файла конфигурации {config_path}") from e
-
 
     def _initialize_llms(self):
         """Инициализирует LLM модели на основе конфигурации."""

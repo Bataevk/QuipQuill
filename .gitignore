@@ -6,3 +6,6 @@ __pycache__/
 # JSON files
 *.json
 *.log
+
+# .db files
+*.db

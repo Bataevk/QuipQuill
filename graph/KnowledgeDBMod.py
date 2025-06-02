@@ -325,9 +325,6 @@ class KnowledgeDB:
         return [ "{0} ({2}): {1}".format(*r.values()) for r in results]
 
 
-
-        
-
 # --- Пример использования ---
 if __name__ == '__main__':
     logging.basicConfig(

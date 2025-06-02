@@ -139,6 +139,8 @@ def move_agent(location_name: str, config: RunnableConfig) -> str:
 def edit_entity(entity_name: str, description: str, config: RunnableConfig) -> str:
     """
     Edits the description of a specific entity in the game.
+    Use this when you need to update the description of a location, creature, or item.
+    You can also use it to add new details to an existing entity or initialize the player.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:

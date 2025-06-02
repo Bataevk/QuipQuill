@@ -6,6 +6,11 @@ from nltk.stem import WordNetLemmatizer
 import string
 import re
 
+import yaml
+import logging
+from typing import Dict, Any
+
+
 nltk.download('punkt')
 nltk.download('stopwords')
 
@@ -76,3 +81,24 @@ def remove_tokens(text):
     return ""  # Возвращаем пустую строку, если входная строка пустая
   pattern = r"<\|[^|>]*\|>"  
   return re.sub(pattern, "", text, flags=re.IGNORECASE)  
+
+def load_config(config_path: str) -> Dict[str, Any]:
+  """Загружает конфигурацию из YAML файла."""
+  logging.info(f"Загрузка конфигурации из файла: {config_path}")
+  try:
+      with open(config_path, 'r', encoding='utf-8') as f:
+          config = yaml.safe_load(f)
+      if not isinstance(config, dict):
+            raise ValueError(f"Файл конфигурации {config_path} не содержит валидный YAML словарь.")
+      logging.info(f"Конфигурация успешно загружена.")
+      # TODO: Добавить валидацию наличия необходимых ключей в config (например, llm, prompts и т.д.)
+      return config
+  except FileNotFoundError:
+      logging.error(f"Файл конфигурации не найден: {config_path}")
+      raise # Передаем исключение выше
+  except yaml.YAMLError as e:
+      logging.error(f"Ошибка парсинга YAML файла {config_path}: {e}")
+      raise ValueError(f"Некорректный формат YAML в файле {config_path}") from e
+  except Exception as e:
+      logging.error(f"Неожиданная ошибка при загрузке config файла {config_path}: {e}", exc_info=True)
+      raise ValueError(f"Ошибка при чтении файла конфигурации {config_path}") from e

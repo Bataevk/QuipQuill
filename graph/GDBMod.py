@@ -2,6 +2,8 @@ from neo4j import GraphDatabase
 from extractor import Entity, Relationship
 import logging
 
+from typing import List
+
 class GraphDB:
     """
     Класс для работы с графовой базой данных Neo4j.
@@ -26,6 +28,14 @@ class GraphDB:
         return Entity(
             name=node.get("name", ""),
             type=node.get("type", "UNKNOWN"),
+            description=node.get("description", "")
+        )
+    def _node_to_relationship(self, node):
+        """Преобразование узла Neo4j в объект Relationship."""
+        return Relationship(
+            source=node.get("source", ""),
+            target=node.get("target", ""),
+            type=node.get("type", "RELATED_TO"),
             description=node.get("description", "")
         )
 
@@ -124,7 +134,7 @@ class GraphDB:
             record = result.single()
             return record[0] if record else False
     
-    def has_relationship(self, source_id, target_id, relationship_type=None):
+    def has_relationship(self, source_id, target_id, relationship_type=None) -> bool:
         """Проверка существования связи между двумя узлами."""
         with self.driver.session(database=self.database_name) as session:
             if relationship_type:
@@ -396,6 +406,45 @@ class GraphDB:
                     ))
         logging.debug(f"get_linked_nodes_by_type: {node_id} - found {len(records)} related nodes")
         return [self._node_to_entity(record["related"]) for record in records] if records else []
+
+    def get_linked_rel_by_type(self, node_id, entity_type=None, relationship_type=None) -> List[Relationship]:
+        """
+        Получение связей для заданного узла.
+        Если entity_type не указан, возвращает все связанные узлы.
+        Если relationship_type не указан, возвращает все связанные узлы независимо от типа связи.
+        """
+        records = []
+
+        with self.driver.session(database=self.database_name) as session:
+            if relationship_type and entity_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]-(related:Entity) "
+                    "WHERE e.type = $entity_type AND r.type in $relationship_type "
+                    "RETURN r.type as type, r.description as description, e.name as source, related.name as target",
+                    name=node_id, entity_type=entity_type, relationship_type=relationship_type
+                ))
+            elif relationship_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]-(related:Entity) "
+                    "WHERE r.type = $relationship_type "
+                    "RETURN r.type as type, r.description as description, e.name as source, related.name as target",
+                    name=node_id, relationship_type=relationship_type
+                ))
+            elif entity_type:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]-(related:Entity) "
+                    "WHERE e.type = $entity_type "
+                    "RETURN r.type as type, r.description as description, e.name as source, related.name as target",
+                    name=node_id, entity_type=entity_type
+                ))
+            else:
+                records = list(session.run(
+                    "MATCH (e:Entity {name: $name})-[r]-(related:Entity) "
+                    "RETURN r.type as type, r.description as description, e.name as source, related.name as target",
+                    name=node_id
+                    ))
+        logging.debug(f"get_linked_nodes_by_type: {node_id} - found {len(records)} related nodes")
+        return [self._node_to_relationship(record) for record in records] if records else []
         
     def get_linked_nodes_by_types(self, node_id, entity_types=[], relationship_type=[]):
         """

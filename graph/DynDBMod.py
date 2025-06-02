@@ -84,38 +84,6 @@ class DynDBMod(KnowledgeDB):
         # Получаем связанные узлы для игрока с отношением 'HAS_ITEM' через метод get_related_nodes
         return self.graph_db.get_linked_nodes_by_type(agent_name, relationship_type="HAS_ITEM")
 
-    
-    def add_item_to_inventory(self, item_name, agent_name=None):
-        """
-        Adds an item to the agent's inventory.
-        If a agent name is provided, it uses that name; otherwise, it uses the default agent name.
-        """
-        if agent_name is None:
-            agent_name = self.agent_name
-        
-        agent_name = agent_name.lower()
-        item_name = item_name.lower()
-
-        # Ensure agent name is in lowercase for consistency
-        if not self.graph_db.has_node(agent_name):
-            return f"AGENT - '{agent_name}' does not exist in the dynamic graph."
-        # Проверяем, существует ли предмет
-        if not self.graph_db.has_node(item_name):
-            return f"Item '{item_name}' does not exist in the dynamic graph."
-        
-        # Проверяем, есть ли уже связь между агентом и предметом
-        if self.graph_db.has_relationship(agent_name, item_name, "HAS_ITEM"):
-            return f"AGENT - '{agent_name}' already has the item '{item_name}' in their inventory."
-
-        # Добавляем связь между агентом и предметом
-        self.graph_db.add_relationship(agent_name, item_name, description=f"{agent_name} has {item_name}", relationship_type="HAS_ITEM")
-
-        # Удаляем связь между предметом и локацией, если она существует
-        self.graph_db.delete_relationships_by_type(item_name, "LOCATED_IN")
-
-        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory."
-
-
 
     def get_agent_state(self, agent_name='player') -> tuple[List[E], List[E]]:
         """
@@ -123,11 +91,11 @@ class DynDBMod(KnowledgeDB):
         """
         agent_name = self.agent_name.lower()
         if not self.graph_db.has_node(agent_name):
-            return f"AGENT - '{agent_name}' does not exist in the dynamic graph."
+            return (None, None)
         location = self.get_agent_location(agent_name)
         inventory = self.get_agent_inventory(agent_name)
 
-        return location, inventory
+        return (location, inventory)
 
     # Удаляем все узлы без связей
     def delete_orphaned_nodes(self):
