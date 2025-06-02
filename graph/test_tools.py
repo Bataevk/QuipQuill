@@ -29,7 +29,6 @@ def test_get_all_locations(gm: Gm):
     assert isinstance(result, str)
     assert ("Available locations:" in result) or ("No locations found" in result)
 
-
 def test_get_agent_state(gm: Gm):
     result = gm.get_agent_state("test_player")
     assert isinstance(result, str)
@@ -44,8 +43,6 @@ def test_get_agent_inventory(gm: Gm):
     result = gm.get_agent_inventory("test_player")
     assert isinstance(result, str)
     assert "copper torch" in result
-
-
 
 def test_move_agent_without_current_location(gm: Gm):
     result = gm.move_agent("flood hall", "test_player")

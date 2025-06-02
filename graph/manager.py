@@ -198,7 +198,7 @@ class Manager:
         if has_r_h:
             self.del_rel_db.add_deleted_relationship(Relationship(source=item_name, target=agent_location[0].name, type="HAS_ITEM"))
 
-        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory."+ f"\n WARNING: THE ITEM DESCRIPTION MIGHT NEED EDITING.\nCurrent item description: {item.description}\n'"
+        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory."+ f"\IMPORTANT: THE ITEM DESCRIPTION VERY LIKELY NEED EDITING (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
     
     def move_item_from_inventory(self, item_name, agent_name=None):
         """
