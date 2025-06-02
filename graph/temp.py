@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 
 # Notice we're using an in-memory checkpointer. This is convenient for our tutorial (it saves it all in-memory). 
 # In a production application, you would likely change this to use SqliteSaver or PostgresSaver and connect to your own DB.
-from langgraph.checkpoint.memory import MemorySaver # Очень удобно для тестов, но не для продакшена
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import Command, interrupt
@@ -20,6 +20,16 @@ from typing import Annotated
 import logging
 from dotenv import load_dotenv
 import os
+
+# from langmem.short_term import SummarizationNode
+# from langchain_core.messages.utils import count_tokens_approximately
+
+from langchain_core.messages.utils import (
+    trim_messages,
+    count_tokens_approximately
+)
+
+# -----------------------------------------------------------------------------------------------------------
 
 # Tools
 from gm_tools import get_toolpack
@@ -60,25 +70,32 @@ logger.addHandler(debug_handler)
 # -----------------------------------------------------------------------------------------------------------
 def get_master_agent(tools, provider: str = "google_genai") -> PromptTemplate:
     """Функция для получения главного агента с инструментами."""
-    if provider == "google_genai":
-        # Инициализируйте модель Gemini 2.0 Flash через Langchain
-        llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
-    else:
-        # Инициализируйте модель OpenAI через Langchain, но с другими параметрами baseurl
-        llm = ChatOpenAI(
-            model=os.getenv("RAG_LLM_MODEL"),
-            base_url=os.getenv('RAG_BASE_URL'),
-            temperature=0.8, 
-            top_p=0.9,
-            max_tokens=16384,  # Увеличиваем лимит токенов для больших ответов
-            timeout=600,
-            openai_api_key=os.getenv('OPENAI_API_KEY')
-        )
+    match provider:
+        case "google_genai":
+            # Инициализируйте модель Gemini 2.0 Flash через Langchain
+            llm = init_chat_model("gemini-2.5-flash-preview-05-20", model_provider="google_genai")
+            # llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
+            # llm = init_chat_model("gemini-2.0-flash-lite", model_provider="google_genai")
+
+        case "mistral":
+            # Инициализируйте модель Mistral через Langchain
+            llm = init_chat_model("mistral-large-latest", model_provider="mistralai")
+        case _:
+            # Инициализируйте модель OpenAI через Langchain, но с другими параметрами baseurl
+            llm = ChatOpenAI(
+                model=os.getenv("RAG_LLM_MODEL"),
+                base_url=os.getenv('RAG_BASE_URL'),
+                temperature=0.8, 
+                top_p=0.9,
+                max_tokens=16384,  # Увеличиваем лимит токенов для больших ответов
+                timeout=600,
+                openai_api_key=os.getenv('OPENAI_API_KEY')
+            )
     llm_with_tools = llm.bind_tools(tools)
     master_agent = PromptTemplate.from_template(system_prompt) | llm_with_tools 
-    return master_agent
+    return master_agent, llm
 
-def create_graph(llm_provider = 'google_genai') -> StateGraph:
+def create_graph(llm_provider = 'google_genai', max_tokens_trim = 2048) -> StateGraph:
     """Функция для создания графа взаимодействия с игроком."""
     # Каждый node может получать текущее State в качестве входных данных и выводить обновлённое состояние.
     # Обновления для messages будут добавляться к существующему списку, а не перезаписывать его, благодаря 
@@ -90,11 +107,24 @@ def create_graph(llm_provider = 'google_genai') -> StateGraph:
 
     # Создаем главного агента
     def chatbot(state: State, config: RunnableConfig) -> Command[State]:
+        """Функция для обработки сообщений от игрока."""
+
+        # Trim messages 
+        messages = trim_messages(
+            state["messages"],
+            strategy="last",
+            token_counter=count_tokens_approximately,
+            max_tokens=max_tokens_trim,  # Устанавливаем лимит на количество токенов
+            start_on="human",
+            end_on="human",
+            include_system = False
+        )
+
         return {
             "messages": [
                 llm_agent.invoke(
                     {
-                        "messages": state["messages"], 
+                        "messages": messages, 
                         "game_state": config['configurable']['gm'].get_agent_state()
                     }),
                 ]
@@ -102,14 +132,14 @@ def create_graph(llm_provider = 'google_genai') -> StateGraph:
     
     # Инициализация LLM с инструментами
     tools = get_toolpack()  
-    llm_agent = get_master_agent(tools=tools, provider=llm_provider) 
+    llm_agent, _ = get_master_agent(tools=tools, provider=llm_provider) 
 
 
     # Создание графа состояний
     graph_builder = StateGraph(State)
         
     # Память 
-    memory = MemorySaver()
+    memory = InMemorySaver()
 
     # Make graph
     graph_builder.add_node("chatbot", chatbot)
@@ -126,8 +156,16 @@ def create_graph(llm_provider = 'google_genai') -> StateGraph:
     # Any time a tool is called, we return to the chatbot to decide the next step
     graph_builder.add_edge("tools", "chatbot")
 
+    # graph_builder.add_node("summarization", summarization_node)
+    # graph_builder.add_edge("chatbot", "summarization")
+
     graph_builder.set_entry_point("chatbot")
-    return graph_builder.compile(checkpointer=memory)
+
+    # Хранимим граф в памяти в оперативной памяти
+    # return graph_builder.compile(checkpointer=memory)
+
+    # Хранимим граф в памяти на длительный срок
+    return graph_builder.compile(store=memory)
 
 
 def stream_graph_updates(graph, config, user_input: str, role: str = "user"):
@@ -172,7 +210,7 @@ game_manager.initalize_agent(agent_name, start_location=start_location)
 run_config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name}
 
 # Создание графа взаимодействия с игроком
-graph = create_graph(llm_provider='openai')  # Используем OpenAI в качестве провайдера LLM
+graph = create_graph()  # Используем OpenAI в качестве провайдера LLM
 
 # Start chat
 print("Welcome to the text-based RPG! Type 'quit' or 'exit' to end the game.")
@@ -189,3 +227,7 @@ while True:
     stream_graph_updates(graph, run_config, user_input)
     game_manager.update()
 
+
+
+snapshot = graph.get_state(run_config)
+print("Snapshot:", snapshot)

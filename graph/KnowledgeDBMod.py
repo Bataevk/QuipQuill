@@ -75,6 +75,9 @@ class KnowledgeDB:
                 logging.error(f"Ошибка инициализации GraphDB: {e}", exc_info=True)
                 self.graph_db = None # Работаем без графа
 
+        if not self.graph_db:
+            logging.critical("GraphDB не инициализирован, работа с графом невозможна. Проверьте переменные окружения NEO4J_URI и NEO4J_USERNAME.")
+            raise RuntimeError("GraphDB не инициализирован. Проверьте параметры подключения к Neo4j.")
         self.n_results_graph_query = n_results_graph_query
         logging.info(f"KnowledgeDB инициализирован. Количество результатов для графовых запросов: {self.n_results_graph_query}")
 

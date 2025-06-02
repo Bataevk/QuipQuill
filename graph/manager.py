@@ -198,7 +198,7 @@ class Manager:
         if has_r_h:
             self.del_rel_db.add_deleted_relationship(Relationship(source=item_name, target=agent_location[0].name, type="HAS_ITEM"))
 
-        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory."+ f"\IMPORTANT: THE ITEM DESCRIPTION VERY LIKELY NEED EDITING (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
+        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory.\nIMPORTANT: Check the description of the item needs to be edited? (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
     
     def move_item_from_inventory(self, item_name, agent_name=None):
         """
@@ -294,10 +294,13 @@ class Manager:
         If the entity is not found, it returns an error message.
         """
         entity_name = entity_name.lower()
-        main_entity = self.static_database.graph_db.get_node_by_id(entity_name)
+        main_entity = self.dynamic_database.graph_db.get_node_by_id(entity_name)
 
         if not main_entity:
-            return f"Entity '{entity_name}' not found in the static database."
+            # Если сущность не найдена в динамической базе, проверяем в статической базе
+            main_entity = self.static_database.graph_db.get_node_by_id(entity_name)
+            if not main_entity:
+                return f"Entity '{entity_name}' not found in the static database."
 
         # Обновляем описание сущности
         main_entity.description = new_description
