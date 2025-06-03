@@ -123,6 +123,29 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     # Общее сосотояние для графа
     class State(TypedDict):
         messages: Annotated[list, add_messages]
+    
+    def _trim_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+        return trim_messages(
+            messages,
+            strategy="last",
+            token_counter=count_tokens_approximately,
+            max_tokens=max_tokens_trim,  # Устанавливаем лимит на количество токенов
+            start_on=("human", "system"),  # Начинаем с human и system сообщений
+            end_on=("human","system"),
+            include_system = False
+        )
+
+    def trimmer(state: State, config: RunnableConfig) -> Command[State]:
+        """Функция для обрезки сообщений в состоянии."""
+        state["messages"] = _trim_messages(state["messages"])
+        return state
+
+    def validator(state: State, config: RunnableConfig) -> Command[State]:
+        """Функция для валидации сообщений от игрока."""
+        # Здесь можно добавить логику валидации сообщений
+        # Например, проверка на наличие запрещённых слов или фраз
+        # Если сообщение невалидно, можно вернуть команду interrupt
+        return {"validated": True}
 
     # Создаем главного агента
     def chatbot(state: State, config: RunnableConfig) -> Command[State]:
@@ -135,18 +158,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
                 "content": config['configurable']['gm'].get_agent_state()
             })
 
-        # Trim messages 
-        messages = trim_messages(
-            state["messages"],
-            strategy="last",
-            token_counter=count_tokens_approximately,
-            max_tokens=max_tokens_trim,  # Устанавливаем лимит на количество токенов
-            start_on=("human", "system"),  # Начинаем с human и system сообщений
-            end_on=("human","system"),
-            include_system = False
-        )
-
-        return {"messages": [llm_agent.invoke(messages)]}
+        return {"messages": [llm_agent.invoke(state["messages"])]}
     
     # Инициализация LLM с инструментами
     tools = get_toolpack()  

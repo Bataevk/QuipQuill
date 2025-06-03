@@ -6,7 +6,28 @@ from DelRelDBMod import DelRelDBM
 from typing import List
 
 class Manager:
+    """
+    Manager class to manage the game state and interactions with the dynamic and static databases.
+    This class provides methods to initialize the agent, manage the game state, and interact with the databases.
+    It allows for adding entities, moving agents, managing inventory, and describing entities.
+    It also provides methods to load the databases and close the connections.
+    The manager can be used to create a game world, manage the player's state, and interact with the game environment.
+
+    Attributes:
+        static_database (KnowledgeDB): The static database containing the game world knowledge.
+        dynamic_database (DynDBMod): The dynamic database containing the current game state.
+        agent_name (str): The name of the agent, default is "player".
+        del_rel_db (DelRelDBM): Database for storing deleted relationships.
+        state (dict): The current state of the game, such as the agent's location and inventory.
+    """
     def __init__(self, load = False, static_db_name = "staticdb", dynamic_db_name = "dynamicdb"):
+        """
+        Initializes the Manager with the static and dynamic databases.
+        Args:
+            load (bool): Whether to export the entities from txt files. Default is False.
+            static_db_name (str): The name of the static database. Default is "staticdb".
+            dynamic_db_name (str): The name of the dynamic database. Default is "dynamicdb".
+        """
         self.static_database = KnowledgeDB(db_name=static_db_name)
         self.dynamic_database = DynDBMod(db_name=dynamic_db_name)
         self.agent_name = "player"  # Имя агента по умолчанию, можно изменить при инициализации агента
@@ -43,16 +64,16 @@ class Manager:
         Initializes the agent in the dynamic graph.
         If a agent name is provided, it uses that name; otherwise, it uses the default agent name.
         """
-        agent_name = agent_name.lower()
+        self.agent_name = agent_name.lower()
         callback = ""
-        callback +=  self.dynamic_database.add_agent(agent_name)
+        callback +=  self.dynamic_database.add_agent(self.agent_name)
         if start_location:
             start_location = start_location.lower()
             callback2 = self.dynamic_database.add_location(start_location)
             if callback2:
                 # Перемещаем агента в начальную локацию
                 callback += "\n" + callback2
-                callback += "\n" + self.move_agent(start_location, agent_name=agent_name)
+                callback += "\n" + self.move_agent(start_location, agent_name=self.agent_name)
         return callback.strip()  # Удаляем лишние пробелы в конце строки
 
     def _filter_duplicate_rels(self, old_rels: List[Relationship], new_rels: List[Relationship], uniques_types =  ["LOCATED_IN", "HAS_ITEM"]) -> List[Relationship]:
@@ -198,7 +219,7 @@ class Manager:
         if has_r_h:
             self.del_rel_db.add_deleted_relationship(Relationship(source=item_name, target=agent_location[0].name, type="HAS_ITEM"))
 
-        return f"Item '{item_name}' added to AGENT - '{agent_name}' inventory.\nIMPORTANT: Check the description of the item needs to be edited? (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
+        return f"Item '{item_name}' has been successfully added to AGENT - '{agent_name}' inventory.\nIMPORTANT: Check the description of the item needs to be edited? (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
     
     def move_item_from_inventory(self, item_name, agent_name=None):
         """
@@ -252,7 +273,7 @@ class Manager:
         item_description = self.dynamic_database.graph_db.get_node_by_id(item_name).description
         
 
-        return f'AGENT - {agent_name} has moved the item "{item_name}" from their inventory to their current location: {current_location}.\n WARNING: THE ITEM DESCRIPTION MIGHT NEED EDITING.\nCurrent item description: {item_description}\n'
+        return f'AGENT - {agent_name} has been moved the item "{item_name}" from their inventory to their current location: {current_location}.\n WARNING: THE ITEM DESCRIPTION MIGHT NEED EDITING.\nCurrent item description: {item_description}\n'
     
     def describe_entity(self, entity_name: str, NAME_LEAD_LINK = "LEADS_TO") -> str:
         """
@@ -354,6 +375,31 @@ class Manager:
         self.dynamic_database.graph_db.add_relationship(agent_name, new_location, f"Located in {new_location}", "LOCATED_IN")
         
         return f"AGENT - '{agent_name}' moved to {new_location}."
+
+    def add_entity(self, name, description, type, location = None) -> str:
+        """
+        Adds a new entity to the dynamic graph.
+        """
+        entity = Entity(name=name.lower(), description=description, type=type.upper())
+        if not isinstance(entity, Entity):
+            return "Invalid entity. Please provide an instance of Entity."
+
+        if not location:
+            # Если локация не указана, используем текущее местоположение агента
+            location = self.dynamic_database.get_agent_location(self.agent_name)
+            if not location:
+                return "No current location found for the agent. Please specify a location."
+            location = location[0].name
+
+        # Проверяем, существует ли сущность в динамической базе
+
+        if self.dynamic_database.graph_db.has_node(entity.name) or self.static_database.graph_db.has_node(entity.name):
+            # Если сущность уже существует, Сообщаем об этом и обновляем ее описание
+            return f"Entity '{entity.name}' already exists. USE `edit_entity` to update its description."
+        
+        # Если сущность не существует, добавляем ее
+        self.dynamic_database.upsert_entity(entity)
+        return f"Entity '{entity.name}' added to the dynamic graph."
 
     def get_all_locations(self) -> str:
         """

@@ -446,10 +446,10 @@ class GraphDB:
         logging.debug(f"get_linked_nodes_by_type: {node_id} - found {len(records)} related nodes")
         return [self._node_to_relationship(record) for record in records] if records else []
         
-    def get_linked_nodes_by_types(self, node_id, entity_types=[], relationship_type=[]):
+    def get_linked_nodes_by_types(self, node_id, entity_types: List[str] = [], relationship_type: List[str] = []) -> List[Entity]:
         """
-        Получение связанных узлов для заданного узла по типам сущностей и связей.
-        Возвращает список связанных узлов.
+        Получение связанных entity для заданного узла по типам сущностей и связей.
+        Возвращает список связанных entity.
         """
         with self.driver.session(database=self.database_name) as session:
             query = "MATCH (e:Entity {name: $name})-[r]->(related:Entity) "
@@ -466,7 +466,7 @@ class GraphDB:
             
             query += "".join(part_2) + "RETURN related"
 
-            return list(session.run(query, **parameters))
+            return [self._node_to_entity(record['related']) for record in session.run(query, **parameters)]
 
     def _query(self, query: str, parameters: dict = None):
         """

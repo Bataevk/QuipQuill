@@ -19,9 +19,12 @@ def gm():
     gm.initalize_agent("test_player","entrance rune hall")
     
     assert gm.dynamic_database.graph_db.has_node("test_player"), "Agent 'test_player' should be initialized in the graph."
+    assert gm.agent_name == "test_player", "Agent name should be 'test_player'."
     yield gm
     # Метод close() в Manager есть, поэтому можно оставить
     gm.close()
+
+    gm.restart()  # Перезапускаем менеджер игры после тестов
 
 
 def test_get_all_locations(gm: Gm):
@@ -58,6 +61,19 @@ def test_search_deep(gm: Gm):
     result = gm.search_deep("test_player", n_names=1, tresholder=0.5)
     assert isinstance(result, str)
     assert len(result) > 0
+
+def test_add_entity(gm: Gm) -> str:
+    # This function adds a new entity to the game.
+    result = gm.add_entity('test_entity', 'description of test entity','ITEM', 'location_name')
+
+    assert isinstance(result, str)
+    assert "added to the dynamic graph" in result, "The entity should be added successfully."
+
+def test_update_user(gm: Gm) -> str:
+    # This function updates the user in the game, such as moving them to a new location.
+    result = gm.edit_entity(gm.agent_name, 'NEW AGENT DESCRIPTION')
+    assert isinstance(result, str)
+    assert "has been updated with new description" in result, "The agent should be updated successfully."
 
 def test_delete_node(gm: Gm):
     # Удаляем узел, который точно есть в графе
