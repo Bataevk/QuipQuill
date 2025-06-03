@@ -1,5 +1,26 @@
 from src.storymind.agentgraph import *
 
+# -----------------------------------------------------------------------------------------------------------
+# Настройка логирования
+# Создаем корневой логгер
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG) # Устанавливаем минимальный уровень для корневого логгера
+
+# Создаем обработчик для INFO-сообщений
+info_handler = logging.FileHandler('./logs/INFO.log', mode='w', encoding='utf-8')
+info_handler.setLevel(logging.INFO)
+info_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+info_handler.setFormatter(info_formatter)
+logger.addHandler(info_handler)
+
+# Создаем обработчик для DEBUG-сообщений
+debug_handler = logging.FileHandler('./logs/DEBUG.log', mode='w', encoding='utf-8')
+debug_handler.setLevel(logging.DEBUG)
+debug_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+debug_handler.setFormatter(debug_formatter)
+logger.addHandler(debug_handler)
+
+
 def stream_graph_updates(graph, config, user_input: str, role: str = "user"):
     for event in graph.stream(
         {"messages": [{"role": role, "content": user_input}]},

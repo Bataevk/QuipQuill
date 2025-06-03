@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM RPG Interface</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+        :root {
+            --background-main: #1C2526;
+            --background-container: #2E2E2E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B0B0B0;
+            --border-color: #4A4A4A;
+            --input-focus-border: #4A4A4A;
+            --button-text-color: #FFFFFF;
+            --user-message-bg: #2E2E2E;
+            --user-message-text: #FFFFFF;
+            --assistant-message-bg: #3A3A3A;
+            --assistant-message-text: #FFFFFF;
+            --system-message-bg: #3A3A3A;
+            --system-message-text: #B0B0B0;
+            --error-bg: #3A3A3A;
+            --error-text: #FFFFFF;
+            --error-border: #4A4A4A;
+            --font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: calc(100vh - 40px);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            background-color: var(--background-container);
+            padding: 24px 32px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(60,64,67,0.15), 0 1px 2px rgba(60,64,67,0.2);
+            width: 100%;
+            max-width: 720px;
+            margin-top: 20px;
+            box-sizing: border-box;
+        }
+
+        h1, h2 {
+            color: var(--text-primary);
+            text-align: center;
+            font-weight: 500;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 24px;
+        }
+        h2 {
+            font-size: 22px;
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .config-form div, .chat-controls div:not(.chat-input-container) {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+            color: var(--text-primary);
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: var(--input-focus-border);
+            box-shadow: 0 0 0 2px rgba(74, 74, 74, 0.2);
+        }
+
+        button {
+            color: var(--button-text-color);
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            text-transform: uppercase;
+        }
+        button:hover {
+            background-color: #4A4A4A;
+            box-shadow: none;
+        }
+        button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #startGameBtn, #sendBtn {
+            background-color: #3A3A3A;
+        }
+        #startGameBtn:hover:not(:disabled), #sendBtn:hover:not(:disabled) {
+            background-color: #4A4A4A;
+        }
+
+        #resetConfigBtn {
+            background-color: transparent;
+            border: 1px solid #4A4A4A;
+            color: #FFFFFF;
+            margin-top: 10px;
+        }
+        #resetConfigBtn:hover:not(:disabled) {
+            background-color: rgba(74, 74, 74, 0.1);
+        }
+
+        #chat-area {
+            height: 450px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            background-color: var(--background-main);
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 15px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            max-width: 75%;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .user-message {
+            background-color: var(--user-message-bg);
+            color: var(--user-message-text);
+            text-align: left;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+
+        .assistant-message {
+            background-color: var(--assistant-message-bg);
+            color: var(--assistant-message-text);
+            text-align: left;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+
+        .system-message {
+            background-color: var(--system-message-bg);
+            color: var(--system-message-text);
+            text-align: center;
+            font-style: italic;
+            font-size: 13px;
+            max-width: 90%;
+            margin: 10px auto;
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        .error-message {
+            background-color: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid var(--error-border);
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        #loading-indicator {
+            text-align: center;
+            padding: 15px;
+            color: var(--text-secondary);
+            display: none;
+            font-size: 14px;
+        }
+        #loading-indicator::before {
+            content: '⏳';
+            margin-right: 8px;
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .chat-input-container {
+            display: flex;
+            align-items: center;
+            background-color: #2E2E2E;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        #userInput {
+            background-color: transparent;
+            border: none;
+            color: #FFFFFF;
+            flex-grow: 1;
+        }
+        #userInput:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        #sendBtn {
+            background: none;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #sendBtn::before {
+            content: '➤'; /* Иконка бумажного самолетика */
+            color: #FFFFFF;
+            font-size: 18px;
+        }
+        .chat-controls {
+            margin-top: 10px;
+        }
+        #resetConfigBtn {
+            display: block;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .config-form input{
+            background-color: #1C2526;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LLM RPG Interface</h1>
+
+        <div id="error-display" class="error-message" style="display:none;"></div>
+
+        <div id="config-section">
+            <h2>Настройка игры</h2>
+            <div class="config-form">
+                <div>
+                    <label for="agentName">Имя агента</label>
+                    <input type="text" id="agentName" name="agentName" value="player">
+                </div>
+                <div>
+                    <label for="startLocation">Стартовая локация</label>
+                    <input type="text" id="startLocation" name="startLocation" value="entrance rune hall">
+                </div>
+                <div>
+                    <label for="threadId">Номер потока (ID сессии)</label>
+                    <input type="text" id="threadId" name="threadId" value="1">
+                </div>
+                <button id="startGameBtn">Начать игру</button>
+            </div>
+        </div>
+
+        <div id="chat-section" style="display:none;">
+            <h2>Чат с ИИ (Поток: <span id="currentThreadId"></span>)</h2>
+            <div id="chat-area">
+                <!-- Сообщения будут появляться здесь -->
+            </div>
+            <div id="loading-indicator">Обработка...</div>
+            <div class="chat-controls">
+                <div class="chat-input-container">
+                    <input type="text" id="userInput" placeholder="Введите ваше действие...">
+                    <button id="sendBtn"></button>
+                </div>
+                <button id="resetConfigBtn">Изменить конфигурацию</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const agentNameInput = document.getElementById('agentName');
+        const startLocationInput = document.getElementById('startLocation');
+        const threadIdInput = document.getElementById('threadId');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const resetConfigBtn = document.getElementById('resetConfigBtn');
+
+        const configSection = document.getElementById('config-section');
+        const chatSection = document.getElementById('chat-section');
+        const currentThreadIdSpan = document.getElementById('currentThreadId');
+
+        const chatArea = document.getElementById('chat-area');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorDisplay = document.getElementById('error-display');
+
+        let currentThreadId = null;
+
+        function showError(message) {
+            errorDisplay.textContent = message;
+            errorDisplay.style.display = 'block';
+        }
+
+        function clearError() {
+            errorDisplay.textContent = '';
+            errorDisplay.style.display = 'none';
+        }
+
+        function addMessageToChat(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(sender === 'user' ? 'user-message' : (sender === 'system' ? 'system-message' : 'assistant-message'));
+            messageDiv.textContent = text;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        startGameBtn.addEventListener('click', async () => {
+            clearError();
+            const agentName = agentNameInput.value.trim();
+            const startLocation = startLocationInput.value.trim();
+            const threadId = threadIdInput.value.trim();
+
+            if (!agentName || !startLocation || !threadId) {
+                showError('Все поля конфигурации должны быть заполнены.');
+                return;
+            }
+
+            startGameBtn.disabled = true;
+            startGameBtn.innerHTML = '<span class="spinner"></span> Загрузка...';
+
+            try {
+                const response = await fetch('/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_name: agentName,
+                        start_location: startLocation,
+                        thread_id: threadId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || `Ошибка сервера: ${response.status}`);
+                }
+
+                currentThreadId = data.thread_id;
+                currentThreadIdSpan.textContent = currentThreadId;
+                chatArea.innerHTML = '';
+                addMessageToChat(`Игра настроена для потока ${currentThreadId}. Имя агента: ${agentName}, локация: ${startLocation}.`, 'system');
+                if (data.initial_message) {
+                    addMessageToChat(data.initial_message, 'assistant');
+                }
+
+                configSection.style.display = 'none';
+                chatSection.style.display = 'block';
+                userInput.focus();
+            } catch (err) {
+                showError(`Ошибка конфигурации: ${err.message}`);
+                console.error('Config error:', err);
+            } finally {
+                startGameBtn.disabled = false;
+                startGameBtn.textContent = 'Начать игру';
+            }
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !sendBtn.disabled) {
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            clearError();
+            const messageText = userInput.value.trim();
+            if (!messageText || !currentThreadId) {
+                if (!currentThreadId) showError("ID потока не установлен. Пожалуйста, настройте игру.");
+                return;
+            }
+
+            addMessageToChat(messageText, 'user');
+            const tempUserInput = userInput.value;
+            userInput.value = '';
+            sendBtn.disabled = true;
+            userInput.disabled = true;
+            loadingIndicator.style.display = 'block';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: messageText,
+                        thread_id: currentThreadId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || `Ошибка сервера: ${response.status}`);
+                }
+                addMessageToChat(data.reply, 'assistant');
+            } catch (err) {
+                showError(`Ошибка отправки сообщения: ${err.message}`);
+                console.error('Chat error:', err);
+                addMessageToChat(`Ошибка: ${err.message}. Попробуйте еще раз.`, 'system');
+                userInput.value = tempUserInput;
+            } finally {
+                sendBtn.disabled = false;
+                userInput.disabled = false;
+                loadingIndicator.style.display = 'none';
+                userInput.focus();
+            }
+        }
+
+        resetConfigBtn.addEventListener('click', () => {
+            configSection.style.display = 'block';
+            chatSection.style.display = 'none';
+            chatArea.innerHTML = '';
+            currentThreadId = null;
+            currentThreadIdSpan.textContent = '';
+            clearError();
+            agentNameInput.focus();
+        });
+
+        agentNameInput.focus();
+    </script>
+</body>
+</html>
