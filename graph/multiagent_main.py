@@ -20,6 +20,7 @@ from typing import Annotated
 import logging
 from dotenv import load_dotenv
 import os
+import random
 
 # from langmem.short_term import SummarizationNode
 # from langchain_core.messages.utils import count_tokens_approximately
@@ -36,6 +37,7 @@ from gm_tools import get_toolpack
 
 # Импортируем менеджер игры
 from manager import Manager as gm
+from prompts import warning_templates, validator_system_prompt, updator_system_prompt
 
 # INIT CONFIG .yaml
 from utils import load_config
@@ -119,12 +121,20 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
         logging.critical("System prompt not found in config.yaml. Please check your configuration file. Will use default system prompt instead.")
         system_prompt = "You are a Game Master (GM) for a text-based role-playing game. You are forbidden to deviate from the state of the game and you are obliged to navigate only on the information available to you."
 
+    # Инициализация LLM с инструментами
+    tools = get_toolpack()  
+    llm_agent, model = get_master_agent(system_prompt ,tools=tools, provider=llm_provider) 
+
+    validator_agent = PromptTemplate.from_template(validator_system_prompt) | model
+    updator_agent = PromptTemplate.from_template(updator_system_prompt) | model
+
 
     # Общее сосотояние для графа
     class State(TypedDict):
         messages: Annotated[list, add_messages]
     
     def _trim_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+        """Функция для обрезки сообщений в состоянии."""
         return trim_messages(
             messages,
             strategy="last",
@@ -134,35 +144,54 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
             end_on=("human","system"),
             include_system = False
         )
+    
+    def _get_agent_state_message(config: RunnableConfig) -> str:
+        """Функция для получения состояния агента в виде сообщения."""
+        return {"role": "system","content": config['configurable']['gm'].get_agent_state()}
 
     def trimmer(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обрезки сообщений в состоянии."""
+                # Add message with game state
         state["messages"] = _trim_messages(state["messages"])
-        return state
 
     def validator(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для валидации сообщений от игрока."""
-        # Здесь можно добавить логику валидации сообщений
-        # Например, проверка на наличие запрещённых слов или фраз
-        # Если сообщение невалидно, можно вернуть команду interrupt
-        return {"validated": True}
+        # Добавляем сообщение с состоянием агента
+        state["messages"].append(_get_agent_state_message(config))
+
+        if not config['configurable'].get('generated_mode', False):
+            # Если режим генерации не включен, добавляем сообщение с текущим состоянием агента
+            return 'passed'
+
+        result = validator_agent.invoke(state["messages"]).content.strip().lower()
+        if 'passed' in result:
+            return 'passed'
+        if 'failed' in result:
+            return 'failed'
+        if 'edit' in result:
+            return 'edit'
+    
+    def updator(state: State, config: RunnableConfig) -> Command[State]:
+        """Функция для обновления состояния игры."""
+        Gm: gm = config['configurable']['gm']
+        string_entities = list(map( lambda string: string.spit(":"), updator_agent.invoke(state["messages"]).content.strip().split('\n')))
+        return {'messages':[ 
+            {"role": "system", "content": "[Agent:Updator]:\n" + \
+            Gm.add_entity(e.strip().lower(), d.strip(), "ITEM")}
+            for e, d in string_entities if e]}  # Фильтруем пустые строки
+
+    def warning_bot(state: State, config: RunnableConfig) -> Command[State]:
+        """Функция для предупреждения игрока о нарушении правил игры."""
+        # Здесь можно добавить логику предупреждения игрока
+        # Например, если игрок пытается использовать запрещённые действия
+        return {'messages': [{'role': 'assistant', 'content': random.choice(warning_templates)}]}
 
     # Создаем главного агента
     def chatbot(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обработки сообщений от игрока."""
 
-        # Add message with game state
-        state["messages"].append(
-            {
-                "role": "system",
-                "content": config['configurable']['gm'].get_agent_state()
-            })
-
         return {"messages": [llm_agent.invoke(state["messages"])]}
     
-    # Инициализация LLM с инструментами
-    tools = get_toolpack()  
-    llm_agent, _ = get_master_agent(system_prompt ,tools=tools, provider=llm_provider) 
 
 
     # Создание графа состояний
@@ -171,25 +200,34 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     # Память 
     memory = InMemorySaver()
 
-    # Make graph
-    graph_builder.add_node("chatbot", chatbot)
-
     # Add tools
     tool_node = ToolNode(tools=tools)
     graph_builder.add_node("tools", tool_node)
+    # Make graph
+    graph_builder.add_node("trimmer", trimmer)
 
+    graph_builder.add_node("updator", updator)
+    graph_builder.add_node("chatbot", chatbot)
+
+    # Any time a tool is called, we return to the chatbot to decide the next step
+
+    # Other edges
+    graph_builder.add_conditional_edges("trimmer", validator , {
+        'passed': "chatbot",  # Если валидация прошла, переходим к чат-боту
+        'edit': "updator",
+        'failed': warning_bot  # Если валидация не прошла, возвращаемся к чат-боту
+    })
+
+    graph_builder.add_edge("updator", "chatbot")
     graph_builder.add_conditional_edges(
         "chatbot",
         tools_condition,
     )
-
-    # Any time a tool is called, we return to the chatbot to decide the next step
     graph_builder.add_edge("tools", "chatbot")
+    graph_builder.add_edge("chatbot", END)
+    graph_builder.add_edge("warning_bot", END)
 
-    # graph_builder.add_node("summarization", summarization_node)
-    # graph_builder.add_edge("chatbot", "summarization")
-
-    graph_builder.set_entry_point("chatbot")
+    graph_builder.set_entry_point("trimmer")
 
     # Хранимим граф в памяти в оперативной памяти
     return graph_builder.compile(checkpointer=memory)
