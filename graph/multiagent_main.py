@@ -174,7 +174,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     def updator(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обновления состояния игры."""
         Gm: gm = config['configurable']['gm']
-        string_entities = list(map( lambda string: string.spit(":"), updator_agent.invoke(state["messages"]).content.strip().split('\n')))
+        string_entities = list(map( lambda string: string.split(":"), updator_agent.invoke(state["messages"]).content.strip().split('\n')))
         return {'messages':[ 
             {"role": "system", "content": "[Agent:Updator]:\n" + \
             Gm.add_entity(e.strip().lower(), d.strip(), "ITEM")}
@@ -205,6 +205,8 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     graph_builder.add_node("tools", tool_node)
     # Make graph
     graph_builder.add_node("trimmer", trimmer)
+    graph_builder.add_node("warning_bot", warning_bot)
+
 
     graph_builder.add_node("updator", updator)
     graph_builder.add_node("chatbot", chatbot)
@@ -215,7 +217,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     graph_builder.add_conditional_edges("trimmer", validator , {
         'passed': "chatbot",  # Если валидация прошла, переходим к чат-боту
         'edit': "updator",
-        'failed': warning_bot  # Если валидация не прошла, возвращаемся к чат-боту
+        'failed': "warning_bot"  # Если валидация не прошла, возвращаемся к чат-боту
     })
 
     graph_builder.add_edge("updator", "chatbot")
@@ -224,8 +226,6 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
         tools_condition,
     )
     graph_builder.add_edge("tools", "chatbot")
-    graph_builder.add_edge("chatbot", END)
-    graph_builder.add_edge("warning_bot", END)
 
     graph_builder.set_entry_point("trimmer")
 
@@ -267,7 +267,7 @@ start_location = "entrance rune hall"
 game_manager.initalize_agent(agent_name, start_location=start_location) 
 
 # Настройка конфигурации для запуска
-run_config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name}
+run_config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name, "generated_mode": True}
 
 # Создание графа взаимодействия с игроком
 graph = create_graph(
