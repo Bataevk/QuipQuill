@@ -9,7 +9,8 @@ import re
 import yaml
 import logging
 from typing import Dict, Any
-
+from langchain.schema import AIMessage
+from typing import Union
 
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -102,3 +103,33 @@ def load_config(config_path: str) -> Dict[str, Any]:
   except Exception as e:
       logging.error(f"Неожиданная ошибка при загрузке config файла {config_path}: {e}", exc_info=True)
       raise ValueError(f"Ошибка при чтении файла конфигурации {config_path}") from e
+
+
+def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
+    """
+    Удаляет обертку ```json ... ``` или просто ``` ... ``` из содержимого AI-сообщения и возвращает новое AI-сообщение.
+    Также чистит от лишних пробелов и заменяет кавычки на стандартные.
+    """
+    stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
+    # Для думающих моделей удалим все блоки <think>...</think> вместе с тегами где бы он не был
+    if "<think>" in stripped_content:
+        stripped_content = re.sub(r'<think>.*?</think>', '', stripped_content, flags=re.DOTALL).strip()
+    
+    stripped_content = stripped_content.replace('“', '"').replace('”', '"')
+    stripped_content = stripped_content.replace('‘', "'").replace('’', "'")
+
+    
+    if stripped_content.startswith("```json"):
+        stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
+
+    if stripped_content.startswith("```"):
+        stripped_content = stripped_content[3:].strip() # Убираем обертку в начале (Если первый случай не сработал)
+
+    if stripped_content.endswith("```"):
+        stripped_content = stripped_content[:-3].strip()  # Убираем обертку в конце
+
+    # Проверяем, что содержимое не пустое
+    ai_message.content = stripped_content if stripped_content else "{}"  # Если пустое, возвращаем пустой JSON
+    
+    # Возвращаем новое AI-сообщение с очищенным содержимым
+    return ai_message 

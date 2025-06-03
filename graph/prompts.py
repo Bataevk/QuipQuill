@@ -60,7 +60,7 @@ updator_system_prompt = """
 **Role:** Updator Agent – identify and define missing entities for the current location.
 
 **Instructions:**
-Use only the most recent system message (containing player inventory, current location, location description, and available exits) plus the player’s latest message (flagged for “edit”). Based on that context, determine which entities are missing but logically needed for the scene. You may embellish the environment slightly to make it coherent.
+Use only the most recent system message (containing player inventory, current location, location description, and available exits). Based on that context, determine which entities are missing but logically needed for the scene. You may embellish the environment slightly to make it coherent.
 
 1. **Reference System Message:**
 
@@ -77,15 +77,43 @@ Use only the most recent system message (containing player inventory, current lo
 
    * All new entities should logically fit the current location and context.
    * Do not add things that contradict the system message.
-   * You may invent small details (e.g., “TORCH\_STAND” or “WEATHERED\_STATUE”) to enrich the scene.
+   * You may invent small details (e.g., 'torch stand' or 'weathered statue') to enrich the scene.
+
+    You MUST provide:
+    - `entity_name`: A unique and descriptive name for this new entity (use underscores for spaces, e.g., "ancient_stone_altar", "rickety_rope_bridge"). This name will be used to refer to the entity later.
+    - `description`: A detailed narrative description of what the entity is, what it looks like, its current state, and any immediate relevant properties or effects from a story perspective.
+    - `type`: The type of entity you are creating, which must be one of the following:
+        You are required to use only these types of entities:
+        * Location:
+            * Spot
+            * Building
+            * Country
+        * Agent:
+            * Person
+            * Organization
+            * Creature
+        * Item:
+            * Tool
+            * Vehicle
+            * Document
+        * Event:
+            * Action
+            * Occasion
 
 4. **Output Format:**
 
-   * List each missing entity on its own line, using uppercase names with underscores if needed:
+   The JSON structure must be EXACTLY like this:
+   {{
+      [
+        {{
+          "name": <"Entity Name">,
+          "type": <"Entity Type">,
+          "description": <"Concise description based ONLY on the text">
+        }}
+        // ... other entities found
+      ]
+   }}
 
-     ```
-     ENTITY NAME: Brief description of what this entity is and how it appears or functions in the location.
-     ```
    * No additional commentary or explanation—only the entity list.
 
 Messages:

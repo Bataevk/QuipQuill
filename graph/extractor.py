@@ -15,7 +15,7 @@ from langchain_openai import ChatOpenAI
 from langchain.output_parsers.json import SimpleJsonOutputParser
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document, AIMessage
+from langchain.schema import Document
 from langchain_core.runnables import RunnableLambda
 from langchain_core.exceptions import OutputParserException
 
@@ -37,37 +37,10 @@ nltk.download('wordnet')
 load_dotenv()
 
 
-
+from utils import _strip_json_string
 
 # --- Функции ---
-def _strip_json_string(ai_message: Union[AIMessage, str]) -> str:
-    """
-    Удаляет обертку ```json ... ``` или просто ``` ... ``` из содержимого AI-сообщения и возвращает новое AI-сообщение.
-    Также чистит от лишних пробелов и заменяет кавычки на стандартные.
-    """
-    stripped_content = ai_message.content.strip()  # Убираем пробелы в начале и конце
-    # Для думающих моделей удалим все блоки <think>...</think> вместе с тегами где бы он не был
-    if "<think>" in stripped_content:
-        stripped_content = re.sub(r'<think>.*?</think>', '', stripped_content, flags=re.DOTALL).strip()
-    
-    stripped_content = stripped_content.replace('“', '"').replace('”', '"')
-    stripped_content = stripped_content.replace('‘', "'").replace('’', "'")
 
-    
-    if stripped_content.startswith("```json"):
-        stripped_content = stripped_content[7:].strip()  # Убираем обертку в начале
-
-    if stripped_content.startswith("```"):
-        stripped_content = stripped_content[3:].strip() # Убираем обертку в начале (Если первый случай не сработал)
-
-    if stripped_content.endswith("```"):
-        stripped_content = stripped_content[:-3].strip()  # Убираем обертку в конце
-
-    # Проверяем, что содержимое не пустое
-    ai_message.content = stripped_content if stripped_content else "{}"  # Если пустое, возвращаем пустой JSON
-    
-    # Возвращаем новое AI-сообщение с очищенным содержимым
-    return ai_message 
 
 
 def _get_similarity(name1: str, name2: str) -> float:
@@ -381,7 +354,7 @@ class GraphExtractor:
         entity = {}
         if isinstance(ent, dict):
             entity["name"] = preprocess_text(ent[self.json_naming['entities']['name']])
-            entity["type"] = preprocess_text(ent[self.json_naming['entities']['type']]) if ent.get(self.json_naming['entities']['type']) else default_type
+            entity["type"] = preprocess_text(ent[self.json_naming['entities']['type']]).upper() if ent.get(self.json_naming['entities']['type']) else default_type
             entity["description"] = remove_tokens(ent[self.json_naming['entities']['description']]) if ent.get(self.json_naming['entities']['description']) else ""
         return entity
     

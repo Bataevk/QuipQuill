@@ -5,6 +5,8 @@ from my_dataclasses import Entity, Relationship
 from DelRelDBMod import DelRelDBM
 from typing import List
 
+from utils import preprocess_text, remove_tokens
+
 class Manager:
     """
     Manager class to manage the game state and interactions with the dynamic and static databases.
@@ -215,9 +217,9 @@ class Manager:
 
         # ДОБАВЛЯЕМ В СПИСОК УДАЛЕННЫХ СВЯЗЕЙ
         if has_r_l:
-            self.del_rel_db.add_deleted_relationship(Relationship(source=agent_location[0].name, target=item_name, type="LOCATED_IN"))
+            self.del_rel_db.add_deleted_relationship(Relationship(source=agent_location[0].name, target=item_name, type="HAS_ITEM"))
         if has_r_h:
-            self.del_rel_db.add_deleted_relationship(Relationship(source=item_name, target=agent_location[0].name, type="HAS_ITEM"))
+            self.del_rel_db.add_deleted_relationship(Relationship(source=item_name, target=agent_location[0].name, type="LOCATED_IN"))
 
         return f"Item '{item_name}' has been successfully added to AGENT - '{agent_name}' inventory.\nIMPORTANT: Check the description of the item needs to be edited? (you can to use `edit_entity` to do it).\nCurrent item description: {item.description}\n'"
     
@@ -255,11 +257,11 @@ class Manager:
         # Удаляем связь между агентом и предметом
         self.dynamic_database.graph_db.delete_relationship(agent_name, item_name, "HAS_ITEM")
 
-        # Добавляем связь между предметом и текущим местоположением агента
-        has_r_l = self.del_rel_db.has_deleted_relationship(Relationship(source=item_name, target=current_location[0].name, type="LOCATED_IN"))
-        has_r_h = self.del_rel_db.has_deleted_relationship(Relationship(source=item_name, target=current_location[0].name, type="HAS_ITEM"))
-
         # Проверяем в списке удаленных, на наличие связи между предметом и текущим местоположением агента
+        has_r_l = self.del_rel_db.has_deleted_relationship(Relationship(source=item_name, target=current_location[0].name, type="LOCATED_IN"))
+        has_r_h = self.del_rel_db.has_deleted_relationship(Relationship(source=current_location[0].name, target= item_name, type="HAS_ITEM"))
+
+        # Удаялем связь между предметом и текущим местоположением агента
         if has_r_l:
             # УДАЛЯЕМ ИЗ СПИСКА УДАЛЕННЫХ СВЯЗЕЙ
             self.del_rel_db.remove_deleted_relationship(Relationship(source=item_name, target=current_location[0].name, type="LOCATED_IN"))
@@ -380,7 +382,7 @@ class Manager:
         """
         Adds a new entity to the dynamic graph.
         """
-        entity = Entity(name=name.lower(), description=description, type=type.upper())
+        entity = Entity(name=preprocess_text(name), description=remove_tokens(description), type=preprocess_text(type).upper())
         if not isinstance(entity, Entity):
             return "Invalid entity. Please provide an instance of Entity."
 
@@ -399,6 +401,10 @@ class Manager:
         
         # Если сущность не существует, добавляем ее
         self.dynamic_database.upsert_entity(entity)
+
+        # Добавляем связь между локацией и entity
+        self.dynamic_database.add_relationship(Relationship(entity.name, location, "LOCATED_IN", f'{entity.name} located in {location}'))
+
         return f"Entity '{entity.name}' added to the dynamic graph."
 
     def get_all_locations(self) -> str:

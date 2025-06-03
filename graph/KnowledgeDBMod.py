@@ -304,7 +304,7 @@ class KnowledgeDB:
             return
         
         try:
-            self.graph_db.add_relationship(rel.source, rel.target, rel.type, rel.description)
+            self.graph_db.add_relationship(rel.source, rel.target, rel.description, rel.type)
         except Exception as e:
             logging.error(f"Ошибка при добавлении связи '{rel}': {e}", exc_info=True)
     

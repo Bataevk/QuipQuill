@@ -15,12 +15,15 @@ from langgraph.graph.message import add_messages
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import BaseMessage
+from langchain_core.runnables import RunnableLambda
+from langchain.output_parsers.json import SimpleJsonOutputParser
 from typing_extensions import TypedDict
 from typing import Annotated
 import logging
 from dotenv import load_dotenv
 import os
 import random
+import json
 
 # from langmem.short_term import SummarizationNode
 # from langchain_core.messages.utils import count_tokens_approximately
@@ -40,7 +43,7 @@ from manager import Manager as gm
 from prompts import warning_templates, validator_system_prompt, updator_system_prompt
 
 # INIT CONFIG .yaml
-from utils import load_config
+from utils import load_config, _strip_json_string
 
 
 # -----------------------------------------------------------------------------------------------------------
@@ -126,7 +129,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     llm_agent, model = get_master_agent(system_prompt ,tools=tools, provider=llm_provider) 
 
     validator_agent = PromptTemplate.from_template(validator_system_prompt) | model
-    updator_agent = PromptTemplate.from_template(updator_system_prompt) | model
+    updator_agent = PromptTemplate.from_template(updator_system_prompt) | model | RunnableLambda(_strip_json_string) | SimpleJsonOutputParser()
 
 
     # Общее сосотояние для графа
@@ -162,6 +165,10 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
         if not config['configurable'].get('generated_mode', False):
             # Если режим генерации не включен, добавляем сообщение с текущим состоянием агента
             return 'passed'
+    
+        if type(state["messages"][-2]).__name__ == "SystemMessage":
+            logging.debug("Всегда пропускаем запрос от системы! " + state["messages"][-2].content)
+            return 'passed'
 
         result = validator_agent.invoke(state["messages"]).content.strip().lower()
         if 'passed' in result:
@@ -174,11 +181,17 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     def updator(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обновления состояния игры."""
         Gm: gm = config['configurable']['gm']
-        string_entities = list(map( lambda string: string.split(":"), updator_agent.invoke(state["messages"]).content.strip().split('\n')))
+        messages = state["messages"][:-5] if len(state['messages']) >= 5 else state["messages"]
+        entities = updator_agent.invoke(messages)
+        logging.debug(f"[Agent:Updator]: Extracted JSON: \n {entities}")
         return {'messages':[ 
-            {"role": "system", "content": "[Agent:Updator]:\n" + \
-            Gm.add_entity(e.strip().lower(), d.strip(), "ITEM")}
-            for e, d in string_entities if e]}  # Фильтруем пустые строки
+                {"role": "system", "content": "[Agent:Updator]:\n" + \
+                    "\n".join([
+                        Gm.add_entity(e['name'].strip().lower(), e['description'].strip(), e.get('type', "ADDED_ITEM"))
+                        for e in entities if e and e.get("name") and e.get("description")
+                    ])
+                }
+            ]}  # Фильтруем пустые строки
 
     def warning_bot(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для предупреждения игрока о нарушении правил игры."""
@@ -189,6 +202,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     # Создаем главного агента
     def chatbot(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обработки сообщений от игрока."""
+        logging.debug(state["messages"])
 
         return {"messages": [llm_agent.invoke(state["messages"])]}
     
@@ -245,54 +259,65 @@ def stream_graph_updates(graph, config, user_input: str, role: str = "user"):
         #     print("Assistant:", value["messages"][-1].content)
 
 # -----------------------------------------------------------------------------------------------------------
-# Инициализация конфигурации
-app_config = load_config("./config.yaml")
-# -----------------------------------------------------------------------------------------------------------
-# Загрузка переменных окружения из .env файла
-load_dotenv()
+if __name__ == "__main__":
+
+    # Инициализация конфигурации
+    app_config = load_config("./config.yaml")
+    # -----------------------------------------------------------------------------------------------------------
+    # Загрузка переменных окружения из .env файла
+    load_dotenv()
 
 
-# -----------------------------------------------------------------------------------------------------------
-# Импортируем менеджер игры
-game_manager = gm(
-    load=False
-)
+    # -----------------------------------------------------------------------------------------------------------
+    # Импортируем менеджер игры
+    game_manager = gm(
+        load=False
+    )
 
-game_manager.restart()  # Перезапускаем менеджер игры
+    game_manager.restart()  # Перезапускаем менеджер игры
 
-agent_name = "player" 
-start_location = "entrance rune hall"
+    agent_name = "player" 
+    start_location = "entrance rune hall"
 
-# Инициализация агента в динамическом графе
-game_manager.initalize_agent(agent_name, start_location=start_location) 
+    # Инициализация агента в динамическом графе
+    game_manager.initalize_agent(agent_name, start_location=start_location) 
 
-# Настройка конфигурации для запуска
-run_config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name, "generated_mode": True}
+    # Настройка конфигурации для запуска
+    run_config = {"configurable": {"thread_id": "1"}, 'gm': game_manager, "agent_name": agent_name, "generated_mode": True}
 
-# Создание графа взаимодействия с игроком
-graph = create_graph(
-    app_config=app_config, 
-)
+    # Создание графа взаимодействия с игроком
+    graph = create_graph(
+        app_config=app_config, 
+    )
 
-# Start chat
-print("Welcome to the text-based RPG! Type 'quit', 'q' or 'exit' to end the game.")
+    # Start chat
+    print("Welcome to the text-based RPG! Type 'quit', 'q' or 'exit' to end the game.")
 
-# Start message
+    # Start message
 
-init_message = {'role': 'system', 'content': 'You need to welcome the player!'}
+    init_message = {'role': 'system', 'content': 'You need to welcome the player!'}
 
-stream_graph_updates(graph, run_config, init_message['content'], role=init_message['role'])
+    stream_graph_updates(graph, run_config, init_message['content'], role=init_message['role'])
 
-while True:
-    user_input = input("User: ")
-    if user_input.lower() in ["quit", "exit", "q"]:
-        print("Goodbye!")
-        break
+    while True:
+        user_input = input("User: ")
+        if user_input.lower() in ["quit", "exit", "q"]:
+            print("Goodbye!")
+            break
 
-    stream_graph_updates(graph, run_config, user_input)
-    game_manager.update()
+        stream_graph_updates(graph, run_config, user_input)
+        game_manager.update()
 
 
 
-snapshot = graph.get_state(run_config)
-print("Snapshot:", snapshot)
+    snapshot = graph.get_state(run_config)
+    print("Snapshot:", snapshot)
+
+    # СОХРАНЯЕМ СООБЩЕНИЯ
+    from datetime import date
+
+    current_date = date.today()
+    # Save messages to log
+    with open('./logs/MESSAGES.log', 'w', encoding="utf-8") as f:
+        for m in snapshot.values["messages"]:
+            f.write(f"{current_date} - {type(m).__name__} - {m.content}\n")
