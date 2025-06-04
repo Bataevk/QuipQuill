@@ -19,7 +19,6 @@ def get_toolpack():
         describe_entity,
         edit_entity,
         search_about,
-        add_new_entity_to_game,
         update_user_agent
     ]
 
@@ -149,50 +148,6 @@ def edit_entity(entity_name: str, description: str, config: RunnableConfig) -> s
         return 'Game manager not initialized.'
     
     return gm.edit_entity(entity_name, description)
-
-@tool
-def add_new_entity_to_game(entity_name: str, description: str, type: str, config: RunnableConfig) -> str:
-    """
-    Adds a new entity to the current player location.
-
-    Use this to introduce a NEW, previously non-existent entity into the game world when the story you are narrating requires it, or when the player's actions plausibly result in the creation of something entirely new. This tool makes the entity exist in the game world.
-
-    This could be:
-    - A unique item the player crafts, discovers, or that appears due to an event (e.g., "glowing_shard_from_meteorite", "makeshift_splint", "enchanted_dust_pouch").
-    - A new character or creature that appears or is summoned (e.g., "shadow_wolf_conjured", "lost_child_hiding", "ethereal_guardian").
-    - A distinct environmental feature, magical effect, or interactable object that manifests or is created (e.g., "rune_etched_on_wall", "temporal_rift_crackling", "barricade_of_debris").
-
-    You MUST provide:
-    - `entity_name`: A unique and descriptive name for this new entity (use underscores for spaces, e.g., "ancient_stone_altar", "rickety_rope_bridge"). This name will be used to refer to the entity later.
-    - `description`: A detailed narrative description of what the entity is, what it looks like, its current state, and any immediate relevant properties or effects from a story perspective.
-    - `type`: The type of entity you are creating, which must be one of the following:
-        You are required to use only these types of entities:
-        * Location:
-            * Spot
-            * Building
-            * Country
-        * Agent:
-            * Person
-            * Organization
-            * Creature
-        * Item:
-            * Tool
-            * Vehicle
-            * Document
-        * Event:
-            * Action
-            * Occasion
-    IMPORTANT:
-    - Use this ONLY for creating genuinely new things that are not part of the pre-defined game world, known item list, or existing characters.
-    - Do NOT use this to add a standard, pre-existing item type to the player's inventory (use `add_item_to_inventory` for that, which handles items from a known list).
-    - Do NOT use this to change or update an already existing entity (use `edit_entity` for that).
-    - After successfully using `add_entity` to create something (e.g., a new item on the ground), if the player then wants to pick it up, you would typically follow up with `add_item_to_inventory("newly_created_item_name")`.
-    """
-    gm = config.get("configurable",{}).get('gm', None)
-    if not gm:
-        return 'Game manager not initialized.'
-    
-    return gm.add_entity(entity_name, description, type)
 
 @tool
 def update_user_agent(
