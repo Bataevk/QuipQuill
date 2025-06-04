@@ -160,7 +160,7 @@ class GraphExtractor:
             for filename in os.listdir(files_dir):
                 file_path = os.path.join(files_dir, filename)
                 loader = None
-                if filename.endswith(".txt"):
+                if filename.endswith(".txt") or filename.endswith(".md"):
                     loader = TextLoader(file_path, encoding='utf-8')
                 elif filename.endswith(".docx"):
                     loader = Docx2txtLoader(file_path)
