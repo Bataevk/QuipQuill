@@ -7,6 +7,12 @@ llm:
   request_timeout: 600 # Таймаут для одного запроса к LLM в секундах
   max_tokens: null # null означает отсутствие лимита со стороны клиента
 
+agentgraph:
+  prompt_mode: lite
+  generated_mode: True # Позволяет системе добавлять новые сущности в игру в момент общения с игроком на основе сообщений чата если True
+  provider: google_genai # По-умолчанию 'openai' (в этом случае за модель берет RAG_LLM_MODEL из окружения), но поддерживает и 'google_genai', 
+  load_entities: False # Параметр отвечающий за построения графа знаний из текстовых документов
+
 prompts:
   json_fields:
     entities: 

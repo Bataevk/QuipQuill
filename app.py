@@ -171,7 +171,7 @@ def configure_game():
             "configurable": {"thread_id": thread_id_str},
             'gm': game_manager_instance, # Передаем экземпляр менеджера игры
             "agent_name": agent_name,
-            "generated_mode": True
+            "generated_mode": app_config_global.get('agentgraph',{}).get("generated_mode", False)
         }
 
         game_states[thread_id_str] = {
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     # Для "продакшена" debug=False и используйте production-grade сервер типа Gunicorn или uWSGI
     # Запуск с debug=True удобен для разработки.
     # host='0.0.0.0' делает сервер доступным извне (например, по IP в локальной сети)
-    game_manager_instance = gm(load=False)
+    game_manager_instance: gm = gm(load=app_config_global.get('agentgraph',{}).get("load_entities",False))
     graph_instance = create_graph(app_config=app_config_global)
 
     app.run(host='0.0.0.0', port=5000, debug=False)

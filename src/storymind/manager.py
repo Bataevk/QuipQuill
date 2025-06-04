@@ -382,7 +382,7 @@ class Manager:
         """
         Adds a new entity to the dynamic graph.
         """
-        entity = Entity(name=preprocess_text(name), description=remove_tokens(description), type=preprocess_text(type).upper())
+        entity = Entity(name=name.replace("_"," ").lower() , description=remove_tokens(description), type=preprocess_text(type).upper())
         if not isinstance(entity, Entity):
             return "Invalid entity. Please provide an instance of Entity."
 

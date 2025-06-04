@@ -99,9 +99,11 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
         logging.critical("System prompt not found in config.yaml. Please check your configuration file. Will use default system prompt instead.")
         system_prompt = "You are a Game Master (GM) for a text-based role-playing game. You are forbidden to deviate from the state of the game and you are obliged to navigate only on the information available to you."
 
+    graph_config = app_config.get('agentgraph',{})
+
     # Инициализация LLM с инструментами
     tools = get_toolpack()  
-    llm_agent, model = get_master_agent(system_prompt ,tools=tools, provider=llm_provider) 
+    llm_agent, model = get_master_agent(system_prompt ,tools=tools, provider= graph_config['provider'] if 'provider' in graph_config else llm_provider) 
 
     validator_agent = PromptTemplate.from_template(validator_system_prompt) | model
     updator_agent = PromptTemplate.from_template(updator_system_prompt) | model | RunnableLambda(_strip_json_string) | SimpleJsonOutputParser()
