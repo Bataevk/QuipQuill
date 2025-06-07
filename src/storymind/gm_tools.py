@@ -19,7 +19,7 @@ def get_toolpack():
         describe_entity,
         edit_entity,
         search_about,
-        update_user_agent
+        update_player_descripriprion
     ]
 
 @tool
@@ -150,16 +150,16 @@ def edit_entity(entity_name: str, description: str, config: RunnableConfig) -> s
     return gm.edit_entity(entity_name, description)
 
 @tool
-def update_user_agent(
-    destination: str,
+def update_player_descripriprion(
+    description: str,
     config: RunnableConfig
 ) -> str:
     """
-    Updates the state of the user agent in the game.
-    This tool is used to modify the user agent's state based on the current game context.
+    Updates the description of the user agent in the game.
+    This tool is used to modify the user agent's description based on the current context.
     """
     gm = config.get("configurable",{}).get('gm', None)
     if not gm:
         return 'Game manager not initialized.'
     
-    return gm.edit_entity(gm.agent_name, destination)
+    return gm.edit_entity(gm.agent_name, description)

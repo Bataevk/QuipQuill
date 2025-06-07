@@ -128,11 +128,10 @@ def save_messages_to_log(thread_id: str, graph_instance, run_config_instance):
 
         with open(log_file_path, 'w', encoding="utf-8") as f:
             for m in messages_to_log:
-                if hasattr(m, 'role') and hasattr(m, 'content'):
-                    role = m.role
+                if hasattr(m, 'content'):
                     content = m.content
-                    msg_type = type(m).__name__ # HumanMessage, AIMessage, SystemMessage, ToolMessage
-                    f.write(f"{current_date_str} - {msg_type} ({role}) - {content}\n")
+                    role = type(m).__name__ # HumanMessage, AIMessage, SystemMessage, ToolMessage
+                    f.write(f"{current_date_str} - {role} - {content}\n")
 
         logging.info(f"Сообщения для thread_id {thread_id} сохранены в {log_file_path}")
 

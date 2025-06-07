@@ -112,6 +112,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     # Общее сосотояние для графа
     class State(TypedDict):
         messages: Annotated[list, add_messages]
+        # current_player_state: BaseMessage
     
     def _trim_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
         """Функция для обрезки сообщений в состоянии."""
@@ -131,23 +132,28 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
 
     def trimmer(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обрезки сообщений в состоянии."""
-                # Add message with game state
-        state["messages"] = _trim_messages(state["messages"])
+        # Оптимизируем, чтобы не захламлять историю чата лишними сообщениями
+        # Добавляем сообщение с состоянием агента (БУДЕТ ПЕРЕНЕСЕН В ОТДЕЛЬНЫ УЗЕЛ В ДАЛЬНЕЙШЕМ)
+        return {
+            'messages': _trim_messages(state["messages"]),
+            # "current_player_state": _get_agent_state_message(config)
+            }
+        
 
     def validator(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для валидации сообщений от игрока."""
-        # Добавляем сообщение с состоянием агента
-        state["messages"].append(_get_agent_state_message(config))
+        config['configurable']['gm'].state["current_player_state"] = _get_agent_state_message(config)
 
         if not config['configurable'].get('generated_mode', False):
             # Если режим генерации не включен, добавляем сообщение с текущим состоянием агента
             return 'passed'
     
-        if type(state["messages"][-2]).__name__ == "SystemMessage":
-            logging.debug("Всегда пропускаем запрос от системы! " + state["messages"][-2].content)
+        if type(state["messages"][-1]).__name__ == "SystemMessage":
+            logging.debug("Всегда пропускаем запрос от системы! " + state["messages"][-1].content)
             return 'passed'
 
-        result = validator_agent.invoke(state["messages"]).content.strip().lower()
+        # Invoke + rag current state
+        result = validator_agent.invoke(state["messages"] + [config['configurable']['gm'].state["current_player_state"]]).content.strip().lower()
         if 'passed' in result:
             return 'passed'
         if 'failed' in result:
@@ -158,13 +164,13 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     def updator(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обновления состояния игры."""
         Gm: gm = config['configurable']['gm']
-        messages = state["messages"][:-5] if len(state['messages']) >= 5 else state["messages"]
-        entities = updator_agent.invoke(messages)
+        # messages = state["messages"][:-5] if len(state['messages']) >= 5 else state["messages"]
+        entities = updator_agent.invoke(state['messages'] + [config['configurable']['gm'].state["current_player_state"]])
         logging.debug(f"[Agent:Updator]: Extracted JSON: \n {entities}")
         return {'messages':[ 
                 {"role": "system", "content": "[Agent:Updator]:\n" + \
                     "\n".join([
-                        Gm.add_entity(e['name'].strip().lower(), e['description'].strip(), e.get('type', "ADDED_ITEM"))
+                        Gm.add_entity(e['name'].strip().lower(), e['description'].strip(), e.get('type', "ADDED_ITEM"), rel_type=e.get("relationship_type"))
                         for e in entities if e and e.get("name") and e.get("description")
                     ])
                 }
@@ -179,9 +185,7 @@ def create_graph(app_config, llm_provider = 'google_genai', max_tokens_trim = 20
     # Создаем главного агента
     def chatbot(state: State, config: RunnableConfig) -> Command[State]:
         """Функция для обработки сообщений от игрока."""
-        logging.debug(state["messages"])
-
-        return {"messages": [llm_agent.invoke(state["messages"])]}
+        return {"messages": [llm_agent.invoke(state["messages"] + [config['configurable']['gm'].state["current_player_state"]])]}
     
 
 

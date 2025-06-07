@@ -139,7 +139,8 @@ class Manager:
         locations, inventory = self.dynamic_database.get_agent_state(agent_name)
         if not locations and not inventory:
             return f"AGENT - '{agent_name}' has no known state."
-        state_description = f"AGENT - '{agent_name}' current state:\n"
+        player_entity = self.dynamic_database.graph_db.get_node_by_id(agent_name)
+        state_description = f"AGENT - '{agent_name}': '{player_entity.description if player_entity.description != 'NOT DELETE' else 'without description'}' \nCurrent state:\n"
         state_description += f"Current location(s): {', '.join([location.name for location in locations])}\n" if locations else "No known locations.\n"
         if inventory:
             str_inventory = ',\n'.join(list(map( lambda e: f"name: {e.name} - decription: {e.description}", inventory)))
@@ -173,13 +174,14 @@ class Manager:
 
         
         item_name = item_name.lower()
-        if not self.static_database.graph_db.has_node(item_name):
-            # Проверяем, существует ли предмет в статической базе данных
-            return f"Item '{item_name}' does not exist in the static database."
-        
-        if not self.dynamic_database.graph_db.has_node(item_name):
+
+        item = self.dynamic_database.graph_db.get_node_by_id(item_name)
+        if not item:
             # Если предмет не существует в динамической базе, добавляем его
             item = self.static_database.graph_db.get_node_by_id(item_name)
+            if not item:
+                # Проверяем, существует ли предмет в статической базе данных
+                return f"Item '{item_name}' does not exist in the static database."
             self.dynamic_database.upsert_entity(item)
         
         agent_name = agent_name.lower()
@@ -203,8 +205,8 @@ class Manager:
         if not agent_location:
             return f"AGENT - '{agent_name}' has no known location to add the item '{item_name}' to their inventory."
         
-        has_r_l = self.static_database.graph_db.has_relationship(item_name, agent_location[0].name, "LOCATED_IN")
-        has_r_h = self.static_database.graph_db.has_relationship(agent_location[0].name, item_name, "HAS_ITEM")
+        has_r_l = self.dynamic_database.graph_db.has_relationship(item_name, agent_location[0].name, "LOCATED_IN") or self.static_database.graph_db.has_relationship(item_name, agent_location[0].name, "LOCATED_IN")
+        has_r_h = self.dynamic_database.graph_db.has_relationship(agent_location[0].name, item_name, "HAS_ITEM") or self.static_database.graph_db.has_relationship(agent_location[0].name, item_name, "HAS_ITEM")
         if not (agent_location and  (has_r_l or has_r_h)):
             return f"Item '{item_name}' is currently located in another location and cannot be added to the inventory."
 
@@ -357,17 +359,16 @@ class Manager:
         agent_name = agent_name.lower()  # Ensure agent name is in lowercase for consistency
         new_location = new_location.lower()  # Ensure new location is in lowercase for consistency
         
-        # Проверяем, существует ли новая локация
-        if not self.static_database.graph_db.has_node(new_location):
-            return f"Location '{new_location}' does not exist in the static database."
         
         if not self.dynamic_database.graph_db.has_node(agent_name):
             return f"AGENT - '{agent_name}' does not exist in the dynamic graph."
         
-        
         # Проверяем, существует ли новая локация в динамическом графе
         if not self.dynamic_database.graph_db.has_node(new_location):
             # Если новая локация не существует в динамической базе, добавляем ее
+            # Проверяем, существует ли новая локация в статической базе
+            if not self.static_database.graph_db.has_node(new_location):
+                return f"Location '{new_location}' does not exist in the static database."
             self.dynamic_database.upsert_entity(self.static_database.graph_db.get_node_by_id(new_location))
         
         # Удаляем старую локацию игрока
@@ -378,10 +379,13 @@ class Manager:
         
         return f"AGENT - '{agent_name}' moved to {new_location}."
 
-    def add_entity(self, name, description, type, location = None) -> str:
+    def add_entity(self, name, description, type, location = None, rel_type="LOCATED_IN") -> str:
         """
         Adds a new entity to the dynamic graph.
         """
+        if not rel_type:
+            rel_type = "LOCATED_IN"
+
         entity = Entity(name=name.replace("_"," ").lower() , description=remove_tokens(description), type=preprocess_text(type).upper())
         if not isinstance(entity, Entity):
             return "Invalid entity. Please provide an instance of Entity."
@@ -403,7 +407,7 @@ class Manager:
         self.dynamic_database.upsert_entity(entity)
 
         # Добавляем связь между локацией и entity
-        self.dynamic_database.add_relationship(Relationship(entity.name, location, "LOCATED_IN", f'{entity.name} located in {location}'))
+        self.dynamic_database.add_relationship(Relationship(entity.name, location, rel_type, f'{entity.name} {rel_type.lower().replace("_"," ")} {location}'))
 
         return f"Entity '{entity.name}' added to the dynamic graph."
 

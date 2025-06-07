@@ -96,9 +96,6 @@ Use only the most recent system message (containing player inventory, current lo
             * Tool
             * Vehicle
             * Document
-        * Event:
-            * Action
-            * Occasion
 
 4. **Output Format:**
 
@@ -108,7 +105,8 @@ Use only the most recent system message (containing player inventory, current lo
         {{
           "name": <"Entity Name">,
           "type": <"Entity Type">,
-          "description": <"Concise description based ONLY on the text">
+          "description": <"Concise description based ONLY on the text">,
+          "relationship_type": <Choose the type of entity relationship with the current location of the player: `LOCATED_IN` or `LEADS_TO`>
         }}
         // ... other entities found
       ]
