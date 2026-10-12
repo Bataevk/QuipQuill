@@ -22,7 +22,7 @@
 |---|---|---|---|
 | **0** | **Основа репозитория** | | |
 | 0.1 | Каркас монорепозитория | ✅ | 1 |
-| 0.2 | Инфраструктура разработки | — | 1 |
+| 0.2 | Инфраструктура разработки | ✅ | 1 |
 | **1** | **Builder (Python): граф истории → `.qqstory`** | | |
 | 1.1 | Перенос экстрактора из `main` | — | 1 |
 | 1.2 | Экспорт в SQLite + эмбеддинги | — | 1 |
@@ -90,8 +90,8 @@ graph LR
 - **Читать:** [architecture/overview.md](../architecture/overview.md), [architecture/protocol.md](../architecture/protocol.md).
 - **Сделать:**
   - `docker-compose.yml` в корне: PostgreSQL 17, RabbitMQ 4 с management UI, тома, healthcheck.
-  - `cloud/`: проект `uv` (Python 3.13), FastAPI, `pydantic-settings`, `/health`, ruff + pytest, структура пакетов (`api/`, `core/`, `queue/`, `llm/`, `db/`).
-  - Скрипты `make`/`just` или `package.json`-скрипты: `dev:infra`, `dev:cloud`, `test:cloud`.
+  - `cloud/`: проект `uv` (Python 3.13), FastAPI, `pydantic-settings`, `/health`, ruff + pytest, структура пакетов (`api/`, `core/`, `mq/`, `llm/`, `db/`).
+  - `Makefile` в корне: `infra-up`, `infra-down`, `cloud-dev`, `cloud-test`, `cloud-lint`.
 - **Готово, когда:** `docker compose up -d` поднимает оба сервиса со статусом healthy; `uv run fastapi dev` отдаёт `/health` = 200; `uv run pytest` и `uv run ruff check` зелёные.
 
 ---

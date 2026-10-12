@@ -9,7 +9,7 @@
 | Xcode | ✅ 27.0, `xcode-select` указывает на Xcode.app |
 | iOS Simulator runtime | ❌ **не установлен** — Xcode → Settings → Components → iOS |
 | Android Studio | ❌ не установлен (нужен для Android-сборок) |
-| Docker Desktop | ✅ 29.5 |
+| Docker Desktop | ✅ 29.5 (Postgres 17.11, RabbitMQ 4.3.6 в compose) |
 | `apps/mobile` | ✅ Expo SDK 57.0.28, RN 0.86.3, `expo-dev-client`, `@op-engineering/op-sqlite` 18.2 |
 
 ## Важно
@@ -30,9 +30,11 @@ npx tsc --noEmit            # проверка типов
 npx expo lint               # линтер
 npx expo-doctor             # диагностика зависимостей
 
-# бэкенд (после этапа 0.2, из корня)
-docker compose up -d        # Postgres + RabbitMQ
-cd cloud && uv run fastapi dev
+# бэкенд (из корня; список целей — make help)
+make infra-up               # Postgres :5432 + RabbitMQ :5672/:15672, ждёт healthy
+make cloud-dev              # API на http://127.0.0.1:8000 (/health, /docs)
+make cloud-test && make cloud-lint
+make infra-down             # остановить (данные в volumes сохраняются)
 
 # builder (после этапа 1.1)
 cd builder && uv run builder --help

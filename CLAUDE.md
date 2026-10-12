@@ -42,9 +42,12 @@ npx expo install <pkg>      # вместо npm install <pkg>
 npx expo run:ios            # dev-сборка (Expo Go не подходит: op-sqlite нативный)
 npx tsc --noEmit && npx expo lint
 
-# cloud / builder (после этапов 0.2 / 1.1)
-docker compose up -d
-cd cloud && uv run pytest && uv run ruff check
+# cloud (из корня; make help — все цели)
+make infra-up               # Postgres + RabbitMQ
+make cloud-dev              # FastAPI на :8000
+make cloud-test && make cloud-lint
+
+# builder (после этапа 1.1)
 cd builder && uv run pytest
 ```
 

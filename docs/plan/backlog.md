@@ -34,3 +34,4 @@
 
 - (0.1) npm 11 предупреждает, что postinstall `unrs-resolver` (зависимость eslint-config-expo) не одобрен в `allowScripts`. Линтер работает и без него; если начнутся ошибки резолвера импортов — `npm install-scripts approve unrs-resolver`.
 - (0.1) Иконка и сплэш — заглушки Expo; заменить в 6.3. Веб-зависимости (`react-dom`, `react-native-web`) оставлены, веб-сборка пока не цель.
+- (0.2) Starlette объявил `httpx` для `TestClient` устаревшим и требует `httpx2` — добавлен в dev-зависимости cloud. При выборе HTTP-клиента для OpenRouter (2.3) учесть это: SDK Anthropic 1.x тоже на `httpx2`.
