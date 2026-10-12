@@ -1,4 +1,35 @@
-.*/  
-.*
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Python
 __pycache__/
-/logs
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node (apps have their own .gitignore as well)
+node_modules/
+
+# Runtime output
+/logs/
+*.log
+
+# Local databases (saves, scratch). Built stories (*.qqstory) are committed on purpose.
+*.db
+*.sqlite
+*.sqlite3
