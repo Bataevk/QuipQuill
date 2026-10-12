@@ -47,8 +47,9 @@ make infra-up               # Postgres + RabbitMQ
 make cloud-dev              # FastAPI на :8000
 make cloud-test && make cloud-lint
 
-# builder (после этапа 1.1)
-cd builder && uv run pytest
+# builder (из builder/)
+uv run builder extract <папка_с_лором> -o graph.json
+uv run pytest && uv run ruff check
 ```
 
 Известные ловушки окружения: см. раздел «Важно» в [dev-setup](docs/notes/dev-setup.md) (запуск из корня, полноширинный `＠`, `npm audit fix --force`).

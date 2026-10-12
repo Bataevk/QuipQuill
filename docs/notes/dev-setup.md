@@ -36,8 +36,9 @@ make cloud-dev              # API на http://127.0.0.1:8000 (/health, /docs)
 make cloud-test && make cloud-lint
 make infra-down             # остановить (данные в volumes сохраняются)
 
-# builder (после этапа 1.1)
-cd builder && uv run builder --help
+# builder (из builder/; нужен OPENROUTER_API_KEY в builder/.env)
+uv run builder extract <папка_с_лором> -o graph.json
+uv run pytest && uv run ruff check
 ```
 
 Отладка: React Native DevTools — клавиша `j` в терминале Metro; меню разработчика — `Cmd+D` в iOS-симуляторе; RabbitMQ UI — http://localhost:15672.

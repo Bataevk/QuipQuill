@@ -1,4 +1,5 @@
-.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-test cloud-lint cloud-fmt
+.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-test cloud-lint cloud-fmt \
+	builder-test builder-lint builder-fmt
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -26,3 +27,12 @@ cloud-lint: ## Lint and check formatting of cloud
 
 cloud-fmt: ## Auto-fix lint issues and format cloud
 	cd cloud && uv run ruff check --fix && uv run ruff format
+
+builder-test: ## Run builder tests (no network)
+	cd builder && uv run pytest
+
+builder-lint: ## Lint and check formatting of builder
+	cd builder && uv run ruff check && uv run ruff format --check
+
+builder-fmt: ## Auto-fix lint issues and format builder
+	cd builder && uv run ruff check --fix && uv run ruff format
