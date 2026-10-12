@@ -7,10 +7,16 @@ import logging
 import sys
 from pathlib import Path
 
+from quipquill_builder import storyfile
 from quipquill_builder.config import Settings
+from quipquill_builder.embeddings import OpenRouterEmbedder
+from quipquill_builder.export import ExportError, export_story
 from quipquill_builder.extractor import ExtractionError, ExtractionParams, GraphExtractor
 from quipquill_builder.llm import OpenRouterChatClient
+from quipquill_builder.meta_gen import draft_meta
+from quipquill_builder.models import Graph
 from quipquill_builder.text import load_documents
+from quipquill_builder.validate import Issue, has_errors, validate
 
 
 def build_parser(settings: Settings) -> argparse.ArgumentParser:
@@ -27,7 +33,41 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     extract.add_argument("--chunk-overlap", type=int, default=settings.chunk_overlap)
     extract.add_argument("--merge-threshold", type=float, default=settings.merge_threshold)
     extract.add_argument("--concurrency", type=int, default=settings.max_concurrency)
+
+    export = commands.add_parser("export", help="graph.json → .qqstory (with embeddings)")
+    export.add_argument("graph", type=Path, help="graph.json from `extract`")
+    export.add_argument("-o", "--output", type=Path, required=True, help="path to .qqstory")
+    export.add_argument("--title", help="story title (default: output file name)")
+    export.add_argument("--start", help="start location: name or id (default: first location)")
+    export.add_argument("--language", default="en")
+    export.add_argument("--embed-model", default=settings.embed_model)
+
+    check = commands.add_parser("validate", help="check that a .qqstory is playable")
+    check.add_argument("story", type=Path)
+    check.add_argument(
+        "--draft", action="store_true", help="treat empty world_summary/constraints/style as OK"
+    )
+
+    meta = commands.add_parser("meta", help="draft or edit world_summary, world_constraints, style")
+    meta.add_argument("story", type=Path)
+    meta.add_argument("--show", action="store_true", help="print meta and exit")
+    meta.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="set a meta value by hand (repeatable)",
+    )
+    meta.add_argument("--force", action="store_true", help="redraft keys that are already set")
+    meta.add_argument("--model", default=settings.extract_model)
     return parser
+
+
+def print_issues(issues: list[Issue]) -> None:
+    for issue in issues:
+        print(issue)
+    errors = sum(issue.level == "error" for issue in issues)
+    print(f"{errors} errors, {len(issues) - errors} warnings")
 
 
 def run_extract(args: argparse.Namespace, settings: Settings) -> int:
@@ -68,6 +108,77 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def run_export(args: argparse.Namespace, settings: Settings) -> int:
+    graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
+    embedder = OpenRouterEmbedder(settings, args.embed_model)
+    title = args.title or args.output.stem.replace("-", " ").replace("_", " ").title()
+    try:
+        issues = asyncio.run(
+            export_story(
+                graph,
+                args.output,
+                embedder,
+                title=title,
+                start=args.start,
+                language=args.language,
+            )
+        )
+    except ExportError as error:
+        logging.error("%s", error)
+        return 1
+    print_issues(issues)
+    if has_errors(issues):
+        print("Export aborted: fix the graph and run again. Nothing was written.")
+        return 1
+    print(f"Wrote {args.output}. Next: `builder meta {args.output}` to draft the world texts.")
+    return 0
+
+
+def run_validate(args: argparse.Namespace) -> int:
+    if not args.story.is_file():
+        raise FileNotFoundError(f"Story file not found: {args.story}")
+    with storyfile.connect(args.story) as conn:
+        issues = validate(conn, require_authored_meta=not args.draft)
+    print_issues(issues)
+    return 1 if has_errors(issues) else 0
+
+
+def run_meta(args: argparse.Namespace, settings: Settings) -> int:
+    if not args.story.is_file():
+        raise FileNotFoundError(f"Story file not found: {args.story}")
+    with storyfile.connect(args.story) as conn:
+        current = storyfile.read_meta(conn)
+        if args.show:
+            for key in sorted(current):
+                print(f"{key}: {current[key]}")
+            return 0
+
+        if args.set:
+            updates = {}
+            for item in args.set:
+                key, sep, value = item.partition("=")
+                if not sep or not key.strip():
+                    logging.error("--set expects KEY=VALUE, got %r", item)
+                    return 1
+                updates[key.strip()] = value
+            storyfile.set_meta(conn, updates)
+            print(f"Updated: {', '.join(updates)}")
+            return 0
+
+        todo = [k for k in storyfile.AUTHORED_META if args.force or not current.get(k, "").strip()]
+        if not todo:
+            print("World texts are already set; use --force to redraft or --set to edit.")
+            return 0
+        draft = asyncio.run(
+            draft_meta(OpenRouterChatClient(settings, args.model), conn, current.get("title", ""))
+        )
+        storyfile.set_meta(conn, {key: draft[key] for key in todo})
+    for key in todo:
+        print(f"--- {key}\n{draft[key]}\n")
+    print("Draft saved. Edit with: builder meta <story> --set style='...'")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     settings = Settings()
     args = build_parser(settings).parse_args(argv)
@@ -78,9 +189,16 @@ def main(argv: list[str] | None = None) -> int:
     # The OpenAI SDK logs every HTTP request at INFO; keep the output readable.
     logging.getLogger("httpx2").setLevel(logging.WARNING)
     try:
-        if args.command == "extract":
-            return run_extract(args, settings)
-    except (FileNotFoundError, RuntimeError) as error:
+        match args.command:
+            case "extract":
+                return run_extract(args, settings)
+            case "export":
+                return run_export(args, settings)
+            case "validate":
+                return run_validate(args)
+            case "meta":
+                return run_meta(args, settings)
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
         logging.error("%s", error)
         return 1
     return 2

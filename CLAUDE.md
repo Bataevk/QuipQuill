@@ -49,6 +49,8 @@ make cloud-test && make cloud-lint
 
 # builder (из builder/)
 uv run builder extract <папка_с_лором> -o graph.json
+uv run builder export graph.json -o story.qqstory --start "<локация>"
+uv run builder meta story.qqstory && uv run builder validate story.qqstory
 uv run pytest && uv run ruff check
 ```
 

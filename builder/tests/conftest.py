@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from quipquill_builder import prompts
+from quipquill_builder.models import Entity, Graph, Relationship
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -101,3 +102,54 @@ def fake_client() -> FakeChatClient:
             "Torchlight Corridor**": json.dumps(CORRIDOR_REPLY),
         }
     )
+
+
+class FakeEmbedder:
+    """Deterministic 8-dimensional vectors derived from the text hash."""
+
+    def __init__(self, model: str = "fake/embed", dim: int = 8) -> None:
+        self.model = model
+        self.dim = dim
+        self.calls = 0
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        return [
+            [((hash(text) >> (i * 4)) % 1000) / 1000 for i in range(self.dim)] for text in texts
+        ]
+
+
+def story_graph() -> Graph:
+    """A small extracted graph that exercises every normalization rule."""
+    E, R = Entity, Relationship
+    return Graph(
+        entities=[
+            E("The Entrance Rune Hall", "Building", "A vaulted hall lit by glowing runes."),
+            E("copper torch", "Tool", "Shines 5m."),
+            E("Torchlight Corridor", "Building", "A long soot-blackened corridor."),
+            E("Skeleton Guardian", "Creature", "HP 12, atk 3, def 2."),
+            E("rusty key", "Tool", "Opens simple locks."),
+            E("Whispering Woods", "OTHER", ""),
+            E("Collapsed Shaft", "Spot", "A pit with a rope ladder."),
+        ],
+        relationships=[
+            R("The Entrance Rune Hall", "copper torch", "HAS_ITEM", "What to take"),
+            R("The Entrance Rune Hall", "Torchlight Corridor", "LEADS_TO", "North"),
+            R("Torchlight Corridor", "Skeleton Guardian", "HAS_AGENT", "slumbers here"),
+            R("Skeleton Guardian", "rusty key", "HAS_ITEM", "on its belt"),
+            R("Torchlight Corridor", "Whispering Woods", "LEADS_TO", "East"),
+            R("Torchlight Corridor", "Collapsed Shaft", "LEADS_TO", "a one-way drop"),
+            R("Collapsed Shaft", "The Entrance Rune Hall", "LEADS_TO", "rope ladder up"),
+        ],
+        meta={"extract_model": "fake/model"},
+    )
+
+
+@pytest.fixture
+def graph() -> Graph:
+    return story_graph()
+
+
+@pytest.fixture
+def fake_embedder() -> FakeEmbedder:
+    return FakeEmbedder()

@@ -134,6 +134,19 @@ Output only the result.
 
 SUMMARIZATION_USER = "Descriptions to summarize:\n{text}"
 
+# Drafts the authored story meta (see meta_gen.py).
+META_SYSTEM = """\
+You are a story editor preparing a text adventure world for an AI game master.
+From the list of world entities you receive, write three short fields. Use only what the entities state or clearly imply; do not invent major lore.
+
+Return ONLY a JSON object:
+{
+  "world_summary": "1-3 short paragraphs: what this world is, where the story takes place, what is at stake.",
+  "world_constraints": "Bullet-style plain text: era and technology level, magic (if any) and its limits, which peoples/races exist or would be out of place, anything a newly created player character must fit.",
+  "style": "2-4 sentences on tone, genre and narration style (e.g. 'dark fantasy, terse second-person narration, slow-building dread')."
+}
+"""
+
 # Field names the extraction prompt asks for (the legacy `json_fields` mapping).
 ENTITY_FIELDS = {"name": "name", "type": "type", "description": "description"}
 RELATIONSHIP_FIELDS = {

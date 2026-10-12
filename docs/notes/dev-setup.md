@@ -38,6 +38,8 @@ make infra-down             # остановить (данные в volumes со
 
 # builder (из builder/; нужен OPENROUTER_API_KEY в builder/.env)
 uv run builder extract <папка_с_лором> -o graph.json
+uv run builder export graph.json -o story.qqstory --start "<локация>"
+uv run builder meta story.qqstory && uv run builder validate story.qqstory
 uv run pytest && uv run ruff check
 ```
 
