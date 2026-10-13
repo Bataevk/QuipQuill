@@ -15,6 +15,17 @@
 
 **Проверить в этапе 2.3:** работает ли кэширование промпта через OpenRouter для Anthropic (`cache_control`, поле cache read в usage) и как передать effort.
 
+## OpenRouter: проверено вживую (2026-10-13)
+
+| Факт | Как проверено |
+|---|---|
+| Haiku 5.5 sync обслуживают: google-vertex/global, claude-on-aws, azure/global, anthropic, amazon-bedrock, + региональные vertex/bedrock/azure (дороже на 10%). Все поддерживают `reasoning`, `reasoning_effort`, `tools`, `response_format` | `GET /api/v1/models/anthropic/claude-haiku-5.5/endpoints` |
+| `anthropic/claude-haiku-5.5:batch` — $0.05 / $0.25 за 1M, обслуживает только провайдер `anthropic` | то же для `:batch` |
+| Вызов с `provider.only = [amazon-bedrock, google-vertex/global]`, `allow_fallbacks: false`, `reasoning.effort = low` — работает, ответ за ~1 с через Google, `reasoning_tokens = 0`; в `usage` приходит `cost` | живой запрос |
+| Batch API: `POST /api/v1/batches` → `202 validating`, затем `GET /api/v1/batches/:id` до `completed`; результаты — в самом объекте batch. В ответе `model` раскрывается в снапшот `anthropic/claude-haiku-5.5-20261007`. **Пробный batch из одного запроса был в статусе `in_progress` больше 25 минут** | живой запрос |
+| Эмбеддинги на OpenRouter: 33 модели; `openai/text-embedding-3-small` — $0.02 за 1M (OpenAI, Azure); есть `:batch` | `GET /api/v1/embeddings/models` |
+| `google/gemini-embedding-2` на Vertex доступен только со слагом `google-vertex` (регион выбирает OpenRouter); с `google-vertex/global` — 404. Поддерживает `dimensions` | живой запрос (вариант не выбран) |
+
 ## Мобильный стек (проверено 2026-10-12)
 
 | Факт | Источник |

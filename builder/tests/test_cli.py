@@ -13,7 +13,7 @@ def test_extract_writes_graph_json(
     lore_dir: Path,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(cli, "OpenRouterChatClient", lambda settings, model: fake_client)
+    monkeypatch.setattr(cli, "OpenRouterBatchClient", lambda settings, model: fake_client)
     output = tmp_path / "out" / "graph.json"
 
     code = cli.main(["extract", str(lore_dir), "-o", str(output), "--chunk-size", "600"])

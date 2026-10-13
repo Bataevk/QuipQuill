@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     max_retries: int = 2
     # OpenRouter unified reasoning control; None leaves the provider default.
     reasoning_effort: Literal["low", "medium", "high"] | None = "low"
+    # Sync chat calls only go to providers that do not log prompts (owner's requirement).
+    # Batch requests run on Anthropic's :batch endpoint and ignore this list.
+    provider_only: list[str] = ["amazon-bedrock", "google-vertex/global"]
+
+    # Graph building uses OpenRouter's Batch API by default (50% price, minutes to hours).
+    use_batch: bool = True
+    batch_poll_interval: float = 30.0
+    batch_timeout: float = 6 * 3600.0
 
     chunk_size: int = 2000
     chunk_overlap: int = 200

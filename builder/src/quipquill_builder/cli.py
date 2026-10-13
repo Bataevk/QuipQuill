@@ -9,10 +9,10 @@ from pathlib import Path
 
 from quipquill_builder import storyfile
 from quipquill_builder.config import Settings
-from quipquill_builder.embeddings import OpenRouterEmbedder
+from quipquill_builder.embeddings import OpenRouterBatchEmbedder, OpenRouterEmbedder
 from quipquill_builder.export import ExportError, export_story
 from quipquill_builder.extractor import ExtractionError, ExtractionParams, GraphExtractor
-from quipquill_builder.llm import OpenRouterChatClient
+from quipquill_builder.llm import OpenRouterBatchClient, OpenRouterChatClient
 from quipquill_builder.meta_gen import draft_meta
 from quipquill_builder.models import Graph
 from quipquill_builder.text import load_documents
@@ -33,6 +33,12 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     extract.add_argument("--chunk-overlap", type=int, default=settings.chunk_overlap)
     extract.add_argument("--merge-threshold", type=float, default=settings.merge_threshold)
     extract.add_argument("--concurrency", type=int, default=settings.max_concurrency)
+    extract.add_argument(
+        "--sync",
+        action="store_true",
+        default=not settings.use_batch,
+        help="regular calls via the allowed providers instead of the Batch API (faster, 2x price)",
+    )
 
     export = commands.add_parser("export", help="graph.json → .qqstory (with embeddings)")
     export.add_argument("graph", type=Path, help="graph.json from `extract`")
@@ -41,6 +47,12 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     export.add_argument("--start", help="start location: name or id (default: first location)")
     export.add_argument("--language", default="en")
     export.add_argument("--embed-model", default=settings.embed_model)
+    export.add_argument(
+        "--sync",
+        action="store_true",
+        default=not settings.use_batch,
+        help="direct embeddings calls instead of the Batch API",
+    )
 
     check = commands.add_parser("validate", help="check that a .qqstory is playable")
     check.add_argument("story", type=Path)
@@ -75,12 +87,14 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
     if not documents:
         logging.error("No .md/.txt files in %s", args.input_dir)
         return 1
-    extractor_client = OpenRouterChatClient(settings, args.model)
+    client_type = OpenRouterChatClient if args.sync else OpenRouterBatchClient
+    extractor_client = client_type(settings, args.model)
     summarizer_client = (
-        OpenRouterChatClient(settings, args.summarize_model)
+        client_type(settings, args.summarize_model)
         if args.summarize_model and args.summarize_model != args.model
         else extractor_client
     )
+    logging.info("Mode: %s", "sync" if args.sync else "batch (may take minutes)")
     extractor = GraphExtractor(
         extractor_client,
         summarizer_client,
@@ -110,7 +124,8 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
 
 def run_export(args: argparse.Namespace, settings: Settings) -> int:
     graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
-    embedder = OpenRouterEmbedder(settings, args.embed_model)
+    embedder_type = OpenRouterEmbedder if args.sync else OpenRouterBatchEmbedder
+    embedder = embedder_type(settings, args.embed_model)
     title = args.title or args.output.stem.replace("-", " ").replace("_", " ").title()
     try:
         issues = asyncio.run(

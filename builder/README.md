@@ -2,7 +2,15 @@
 
 Офлайн-сборщик историй: лор (текст) → граф (LLM-экстрактор) → `.qqstory` (SQLite по схеме [`schema/story.sql`](../schema/story.sql) + эмбеддинги + meta).
 
-Стек: Python 3.13, uv, `openai` (OpenAI-совместимый клиент к OpenRouter), `rapidfuzz`, `pydantic-settings`.
+Стек: Python 3.13, uv, `openai` (OpenAI-совместимый клиент к OpenRouter), `httpx2` (Batch API), `rapidfuzz`, `pydantic-settings`.
+
+## Модели и провайдеры
+
+- Чат: `anthropic/claude-haiku-5.5`, `reasoning.effort = low`, `temperature` не передаётся.
+- **Batch по умолчанию** для `extract` (куски и сводки описаний) и для эмбеддингов в `export`: [Batch API OpenRouter](https://openrouter.ai/docs/projects/docs/batch-quickstart), −50% цены, результат через минуты–часы (окно 24 ч). Batch-вызовы Haiku идут на endpoint Anthropic `:batch`, провайдер не указывается. Флаг `--sync` переключает на обычные вызовы.
+- Обычные (sync) вызовы чата идут **только** через `amazon-bedrock` и `google-vertex/global` с `allow_fallbacks: false` — эти провайдеры не сохраняют промпты (`PROVIDER_ONLY`). `builder meta` — всегда sync.
+- Эмбеддинги: `openai/text-embedding-3-small`, 1536 измерений, без ограничения провайдера.
+- Если batch не уложился в `BATCH_TIMEOUT`, задача продолжает выполняться на стороне OpenRouter; повторите позже или запустите с `--sync`.
 
 ## Использование
 

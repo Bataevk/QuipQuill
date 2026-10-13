@@ -8,14 +8,13 @@ relationship endpoints to canonical entities.
 import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any
 
 from rapidfuzz import fuzz, process
 
 from quipquill_builder import prompts
-from quipquill_builder.llm import ChatClient
+from quipquill_builder.llm import BulkChatClient, ChatClient, Prompt
 from quipquill_builder.models import Entity, Graph, Relationship
 from quipquill_builder.text import (
     Document,
@@ -29,8 +28,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TYPE = "OTHER"
 DESCRIPTION_SEPARATOR = "\n"
-
-T = TypeVar("T")
 
 
 class ExtractionError(RuntimeError):
@@ -79,8 +76,11 @@ class GraphExtractor:
             raise ExtractionError("No text to process")
         logger.info("Extracting from %d chunks of %d documents", len(chunks), len(documents))
 
-        results = await self._bounded(self._process_chunk, chunks)
-        valid = [r for r in results if r is not None]
+        replies = await self._complete_all(
+            self._extractor,
+            [(prompts.EXTRACTION_SYSTEM, prompts.EXTRACTION_USER.format(text=c)) for c in chunks],
+        )
+        valid = [r for r in map(_parse_chunk_reply, replies) if r is not None]
         if not valid:
             raise ExtractionError("Every chunk failed to extract; see log for details")
 
@@ -93,7 +93,7 @@ class GraphExtractor:
         )
 
         merged = _merge_entities(raw_entities, self._params.merge_threshold)
-        descriptions = await self._bounded(self._summarize, merged)
+        descriptions = await self._summarize_all(merged)
         entities = [
             Entity(name=m.name, type=m.type, description=d)
             for m, d in zip(merged, descriptions, strict=True)
@@ -115,44 +115,59 @@ class GraphExtractor:
             },
         )
 
-    async def _bounded(self, fn: Callable[[T], Awaitable[Any]], items: list[T]) -> list[Any]:
+    async def _complete_all(
+        self, client: ChatClient, requests: list[Prompt]
+    ) -> list[str | Exception]:
+        """One provider batch when the client supports it, otherwise bounded parallel calls."""
+        if isinstance(client, BulkChatClient):
+            return await client.complete_many(requests)
         semaphore = asyncio.Semaphore(self._params.max_concurrency)
 
-        async def run(item: T) -> Any:
+        async def run(system: str, user: str) -> str | Exception:
             async with semaphore:
-                return await fn(item)
+                try:
+                    return await client.complete(system, user)
+                except Exception as error:
+                    logger.exception("LLM call failed")
+                    return error
 
-        return await asyncio.gather(*(run(item) for item in items))
+        return await asyncio.gather(*(run(system, user) for system, user in requests))
 
-    async def _process_chunk(self, chunk: str) -> dict[str, Any] | None:
-        try:
-            reply = await self._extractor.complete(
-                prompts.EXTRACTION_SYSTEM, prompts.EXTRACTION_USER.format(text=chunk)
-            )
-            data = parse_json_payload(reply)
-        except json.JSONDecodeError as error:
-            logger.error("Chunk skipped: reply is not valid JSON (%s)", error)
-            return None
-        except Exception:
-            logger.exception("Chunk skipped: extraction call failed")
-            return None
-        if not isinstance(data, dict) or "entities" not in data:
-            logger.warning("Chunk skipped: reply has no 'entities' key")
-            return None
-        return data
+    async def _summarize_all(self, merged: list[_MergedEntity]) -> list[str]:
+        """Merged entities with several descriptions get one summary each; others pass through."""
+        result = [DESCRIPTION_SEPARATOR.join(m.descriptions) for m in merged]
+        todo = [i for i, m in enumerate(merged) if len(m.descriptions) > 1]
+        if not todo:
+            return result
+        logger.info("Summarizing descriptions of %d merged entities", len(todo))
+        replies = await self._complete_all(
+            self._summarizer,
+            [
+                (prompts.SUMMARIZATION_SYSTEM, prompts.SUMMARIZATION_USER.format(text=result[i]))
+                for i in todo
+            ],
+        )
+        for i, reply in zip(todo, replies, strict=True):
+            if isinstance(reply, Exception):
+                logger.error("Summary failed for '%s'; keeping joined text", merged[i].name)
+                continue
+            result[i] = remove_special_tokens(reply).strip() or result[i]
+        return result
 
-    async def _summarize(self, entity: _MergedEntity) -> str:
-        if len(entity.descriptions) <= 1:
-            return entity.descriptions[0] if entity.descriptions else ""
-        fallback = DESCRIPTION_SEPARATOR.join(entity.descriptions)
-        try:
-            summary = await self._summarizer.complete(
-                prompts.SUMMARIZATION_SYSTEM, prompts.SUMMARIZATION_USER.format(text=fallback)
-            )
-        except Exception:
-            logger.exception("Summary failed for '%s'; keeping joined descriptions", entity.name)
-            return fallback
-        return remove_special_tokens(summary).strip() or fallback
+
+def _parse_chunk_reply(reply: str | Exception) -> dict[str, Any] | None:
+    if isinstance(reply, Exception):
+        logger.error("Chunk skipped: extraction call failed (%s)", reply)
+        return None
+    try:
+        data = parse_json_payload(reply)
+    except json.JSONDecodeError as error:
+        logger.error("Chunk skipped: reply is not valid JSON (%s)", error)
+        return None
+    if not isinstance(data, dict) or "entities" not in data:
+        logger.warning("Chunk skipped: reply has no 'entities' key")
+        return None
+    return data
 
 
 def _field(item: dict[str, Any], *keys: str) -> str:

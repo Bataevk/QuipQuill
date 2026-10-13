@@ -25,7 +25,7 @@ def graph_file(graph: Graph, tmp_path: Path) -> Path:
 @pytest.fixture
 def patched(monkeypatch: pytest.MonkeyPatch) -> FakeChatClient:
     client = FakeChatClient({"Entities:": json.dumps(DRAFT)})
-    monkeypatch.setattr(cli, "OpenRouterEmbedder", lambda settings, model: FakeEmbedder())
+    monkeypatch.setattr(cli, "OpenRouterBatchEmbedder", lambda settings, model: FakeEmbedder())
     monkeypatch.setattr(cli, "OpenRouterChatClient", lambda settings, model: client)
     return client
 

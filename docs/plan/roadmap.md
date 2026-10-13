@@ -26,7 +26,7 @@
 | **1** | **Builder (Python): граф истории → `.qqstory`** | | |
 | 1.1 | Перенос экстрактора из `main` | ✅ | 1 |
 | 1.2 | Экспорт в SQLite + эмбеддинги | ✅ | 1 |
-| 1.3 | Демо-история | — | 2 |
+| 1.3 | Демо-история | ▶ | 2 |
 | **2** | **Cloud (FastAPI): авторизация, очередь, шлюз LLM** | | |
 | 2.1 | Postgres и авторизация | — | 1 |
 | 2.2 | Очередь RabbitMQ и WebSocket | — | 2 |
@@ -140,6 +140,7 @@ graph LR
 - **Сделать:**
   - Воркер: команда → стриминговый chat completions OpenRouter (с инструментами) → события `delta`, `tool_call`, `done` (собранное сообщение + `usage`).
   - Модель, `max_tokens` и `effort` выбирает **сервер** по `tier` и `purpose`, а не клиент.
+  - Провайдеры для игровых вызовов — только `amazon-bedrock` и `google-vertex/global`, `allow_fallbacks: false` (ADR 16).
   - Перед запросом — проверка лимитов, после — запись в `usage_events`; таймауты; `cancel`.
   - `POST /embeddings` (батч).
   - **Проверить**, проходит ли кэширование промпта через OpenRouter (`cache_read` в usage) и как передаются effort и thinking для Haiku 5.5; итог записать в [notes/research.md](../notes/research.md).
