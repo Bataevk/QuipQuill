@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://quipquill:quipquill@localhost:5432/quipquill"
     rabbitmq_url: str = "amqp://quipquill:quipquill@localhost:5672/"
     queue_prefix: str = "qq.dev"
+    mq_connect_timeout: float = 10.0
+    # Workers run inside the API process (ADR 18); False leaves only the API and dispatcher.
+    run_workers: bool = True
+    worker_concurrency: int = 4
+    # Stage 2.2 ships an echo handler; the OpenRouter handler arrives in stage 2.3.
+    llm_handler: Literal["echo"] = "echo"
+    echo_delay_seconds: float = 0.05
+    ws_heartbeat_interval: float = 2.0
+    # How long in-flight and finished generations are kept for `resume`.
+    generation_ttl_seconds: float = 900.0
 
     jwt_secret: SecretStr = SecretStr(DEV_JWT_SECRET)
     access_token_ttl_seconds: int = 15 * 60

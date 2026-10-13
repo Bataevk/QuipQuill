@@ -2,7 +2,7 @@
 
 Тонкий бэкенд QuipQuill: авторизация, шлюз к LLM и эмбеддингам (OpenRouter), очередь RabbitMQ + WebSocket. Игровой логики здесь нет. Протокол: [docs/architecture/protocol.md](../docs/architecture/protocol.md).
 
-Стек: Python 3.13, uv, FastAPI, pydantic-settings, SQLAlchemy 2 + asyncpg + Alembic, PyJWT, pwdlib (argon2), PostgreSQL 17, RabbitMQ 4.
+Стек: Python 3.13, uv, FastAPI, pydantic-settings, SQLAlchemy 2 + asyncpg + Alembic, PyJWT, pwdlib (argon2), aio-pika, PostgreSQL 17, RabbitMQ 4.
 
 ## Запуск (из корня репозитория)
 
@@ -33,13 +33,31 @@ Email + пароль, регистрация только по инвайт-ко
 
 Настройки читаются из переменных окружения и `cloud/.env` (шаблон — `.env.example`). Значения по умолчанию подходят для локальной инфраструктуры из `docker-compose.yml`. При `ENV=prod` сервис не стартует со стандартным `JWT_SECRET`.
 
+## WebSocket и очереди
+
+`ws://<host>/ws?token=<access JWT>` — контракт в [protocol.md](../docs/architecture/protocol.md).
+
+```mermaid
+graph LR
+  C[клиент] -- llm.request --> WS[WS-сессия] -- publish --> CMD[(qq.commands)]
+  CMD --> W[воркеры ×4] -- события --> EVT[(qq.events)]
+  EVT --> D[диспетчер] -- по user+session --> WS -- status/delta/done --> C
+```
+
+- Всё в одном процессе (ADR 18): API, пул воркеров (`WORKER_CONCURRENCY`) и один диспетчер; поэтому сейчас поддерживается **один экземпляр API**.
+- Сессия адресуется парой (пользователь из JWT, `sessionId`) — чужую сессию не подсмотреть.
+- `resume` отдаёт текст текущих генераций (`replay`) и повторяет `done`, завершённые за последние `GENERATION_TTL_SECONDS`.
+- Битая команда в очереди → `reject` без повтора; ошибка обработчика → событие `error` (`provider_error`) и `ack`.
+- Нет RabbitMQ при старте → REST работает, `/ws` закрывается с кодом 1013.
+- Обработчик в 2.2 — `EchoHandler`: стримит последний текст пользователя по словам (`!fail` — проверка ошибки). В 2.3 его заменит воркер OpenRouter.
+
 ## Структура `src/quipquill_cloud/`
 
 | Пакет | Что | Этап |
 |---|---|---|
 | `main.py` | `create_app()`, подключение роутеров | 0.2 |
 | `core/` | конфигурация (`Settings`), `security.py` — пароли, JWT, refresh-токены | 0.2, 2.1 |
-| `api/` | HTTP-роуты: `health`, `auth`, `me`, `deps` (текущий пользователь); дальше `embeddings`, WS | 0.2+ |
+| `api/` | `health`, `auth`, `me`, `ws` (WebSocket), `deps` (текущий пользователь); дальше `embeddings` | 0.2+ |
 | `db/` | модели SQLAlchemy 2 (async, asyncpg), сессии; миграции — `cloud/migrations/` | 2.1 |
-| `mq/` | очереди RabbitMQ, диспетчер WS (не `queue`, чтобы не путать со stdlib) | 2.2 |
+| `mq/` | `schemas` (протокол), `broker` (RabbitMQ), `worker` (команды → события, отмена), `dispatcher` (доставка, буфер для resume). Не `queue`, чтобы не путать со stdlib | 2.2 |
 | `llm/` | воркер OpenRouter, эмбеддинги | 2.3 |

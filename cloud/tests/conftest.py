@@ -1,11 +1,14 @@
 """Test fixtures. DB tests run against `quipquill_test` in the compose Postgres (make infra-up)."""
 
 import asyncio
+import faulthandler
 import os
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import aio_pika
 import asyncpg
 import pytest
 from alembic import command
@@ -21,6 +24,10 @@ TEST_DATABASE_URL = os.environ.get(
     "postgresql+asyncpg://quipquill:quipquill@localhost:5432/quipquill_test",
 )
 INVITE = "TEST-INVITE"
+RABBITMQ_URL = os.environ.get("TEST_RABBITMQ_URL", "amqp://quipquill:quipquill@localhost:5672/")
+# Each test run gets its own queues so it never interferes with a running dev server.
+QUEUE_PREFIX = f"qq.test.{uuid.uuid4().hex[:8]}"
+HANG_TIMEOUT_SECONDS = 60
 
 
 def _dsn(url: str) -> str:
@@ -62,6 +69,31 @@ def migrated_db() -> str:
     return TEST_DATABASE_URL
 
 
+@pytest.fixture(autouse=True)
+def _fail_on_hang() -> Iterator[None]:
+    """WebSocket receives have no timeout; dump stacks and exit instead of hanging forever."""
+    faulthandler.dump_traceback_later(HANG_TIMEOUT_SECONDS, exit=True)
+    yield
+    faulthandler.cancel_dump_traceback_later()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _delete_test_queues() -> Iterator[None]:
+    yield
+
+    async def delete() -> None:
+        try:
+            connection = await aio_pika.connect(RABBITMQ_URL, timeout=5)
+        except Exception:
+            return
+        async with connection:
+            channel = await connection.channel()
+            for name in (f"{QUEUE_PREFIX}.commands", f"{QUEUE_PREFIX}.events"):
+                await channel.queue_delete(name)
+
+    asyncio.run(delete())
+
+
 @pytest.fixture
 def settings(migrated_db: str) -> Settings:
     db_run("TRUNCATE users, refresh_tokens, usage_events RESTART IDENTITY CASCADE")
@@ -71,6 +103,10 @@ def settings(migrated_db: str) -> Settings:
         database_url=migrated_db,
         jwt_secret="test-secret-that-is-at-least-32-bytes-long",
         invite_codes=[INVITE],
+        rabbitmq_url=RABBITMQ_URL,
+        queue_prefix=QUEUE_PREFIX,
+        echo_delay_seconds=0.01,
+        ws_heartbeat_interval=0.2,
     )
 
 
