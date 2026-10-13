@@ -39,6 +39,11 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
         default=not settings.use_batch,
         help="regular calls via the allowed providers instead of the Batch API (faster, 2x price)",
     )
+    extract.add_argument(
+        "--resume-batch",
+        metavar="ID",
+        help="wait for an already submitted extraction batch instead of submitting a new one",
+    )
 
     export = commands.add_parser("export", help="graph.json → .qqstory (with embeddings)")
     export.add_argument("graph", type=Path, help="graph.json from `extract`")
@@ -87,10 +92,17 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
     if not documents:
         logging.error("No .md/.txt files in %s", args.input_dir)
         return 1
-    client_type = OpenRouterChatClient if args.sync else OpenRouterBatchClient
-    extractor_client = client_type(settings, args.model)
+    if args.sync:
+        if args.resume_batch:
+            logging.error("--resume-batch cannot be combined with --sync")
+            return 1
+        extractor_client = OpenRouterChatClient(settings, args.model)
+        make_summarizer = OpenRouterChatClient
+    else:
+        extractor_client = OpenRouterBatchClient(settings, args.model, resume_id=args.resume_batch)
+        make_summarizer = OpenRouterBatchClient
     summarizer_client = (
-        client_type(settings, args.summarize_model)
+        make_summarizer(settings, args.summarize_model)
         if args.summarize_model and args.summarize_model != args.model
         else extractor_client
     )

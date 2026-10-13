@@ -158,3 +158,57 @@ def test_batch_embedder_splits_into_requests_of_64() -> None:
     assert submitted["endpoint"] == "/v1/embeddings"
     assert [len(r["body"]["input"]) for r in submitted["requests"]] == [64, 36]
     assert [v[0] for v in vectors] == [float(n) for n in range(1, 101)]
+
+
+def test_batch_tolerates_not_found_right_after_submit() -> None:
+    api = FakeBatchApi(polls_before_done=0)
+    not_found = {"left": 2}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.method == "GET" and not_found["left"]:
+            not_found["left"] -= 1
+            return httpx2.Response(404, json={"error": "not found"})
+        return api.handler(request)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    client = OpenRouterBatchClient(
+        SETTINGS, "m", transport=httpx2.MockTransport(handler), sleep=no_sleep
+    )
+    assert asyncio.run(client.complete_many([("s", "hello")])) == ["R:hello"]
+    assert not_found["left"] == 0
+
+
+def test_resume_attaches_without_submitting() -> None:
+    api = FakeBatchApi(polls_before_done=0)
+    # Pretend the batch was submitted by an earlier run.
+    api.submitted = {
+        "requests": [{"custom_id": "r0", "body": {"messages": [{}, {"content": "a"}]}}]
+    }
+    posts = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.method == "POST":
+            posts.append(request)
+        return api.handler(request)
+
+    client = OpenRouterBatchClient(
+        SETTINGS, "m", resume_id="batch-1", transport=httpx2.MockTransport(handler)
+    )
+    assert asyncio.run(client.complete_many([("s", "a")])) == ["R:a"]
+    assert posts == []
+
+
+def test_resume_rejects_batch_for_different_input() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            json={"id": "b", "status": "completed", "request_counts": {"total": 5}, "results": []},
+        )
+
+    client = OpenRouterBatchClient(
+        SETTINGS, "m", resume_id="b", transport=httpx2.MockTransport(handler)
+    )
+    with pytest.raises(BatchError, match="expected 1"):
+        asyncio.run(client.complete_many([("s", "a")]))

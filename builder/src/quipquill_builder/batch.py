@@ -17,6 +17,9 @@ from quipquill_builder.config import Settings
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("completed", "failed", "expired", "cancelled")
+# A freshly submitted batch can return 404 on GET for a short while (observed live).
+NOT_FOUND_GRACE_SECONDS = 120.0
+NOT_FOUND_RETRY_SECONDS = 5.0
 
 
 class BatchError(RuntimeError):
@@ -43,9 +46,18 @@ class BatchRunner:
         self._sleep = sleep
 
     async def run(
-        self, endpoint: str, model: str, bodies: list[dict[str, Any]]
+        self,
+        endpoint: str,
+        model: str,
+        bodies: list[dict[str, Any]],
+        *,
+        resume_id: str | None = None,
     ) -> list[dict[str, Any] | Exception]:
-        """Response body for each request (in order), or the error for that request."""
+        """Response body for each request (in order), or the error for that request.
+
+        `resume_id` attaches to a batch submitted earlier with the same requests instead of
+        submitting (and paying for) a new one.
+        """
         if not bodies:
             return []
         payload = {
@@ -60,12 +72,25 @@ class BatchRunner:
             timeout=self._settings.request_timeout,
             transport=self._transport,
         ) as http:
-            response = await http.post("/batches", json=payload)
-            if response.status_code != 202:
-                raise BatchError(f"Batch submit failed: {response.status_code} {response.text}")
-            batch_id = response.json()["id"]
-            logger.info("Batch %s submitted: %d requests to %s", batch_id, len(bodies), endpoint)
+            if resume_id:
+                batch_id = resume_id
+                logger.info("Resuming batch %s (%d requests expected)", batch_id, len(bodies))
+            else:
+                response = await http.post("/batches", json=payload)
+                if response.status_code != 202:
+                    raise BatchError(f"Batch submit failed: {response.status_code} {response.text}")
+                batch_id = response.json()["id"]
+                logger.info(
+                    "Batch %s submitted: %d requests to %s", batch_id, len(bodies), endpoint
+                )
             batch = await self._wait(http, batch_id)
+
+        total = (batch.get("request_counts") or {}).get("total")
+        if total is not None and total != len(bodies):
+            raise BatchError(
+                f"Batch {batch_id} has {total} requests, expected {len(bodies)}: "
+                "it was submitted for different input"
+            )
 
         if batch["status"] != "completed":
             raise BatchError(f"Batch {batch_id} ended as {batch['status']}: {batch.get('error')}")
@@ -76,16 +101,19 @@ class BatchRunner:
         started = time.monotonic()
         while True:
             response = await http.get(f"/batches/{batch_id}")
+            elapsed = time.monotonic() - started
+            if response.status_code == 404 and elapsed < NOT_FOUND_GRACE_SECONDS:
+                await self._sleep(NOT_FOUND_RETRY_SECONDS)
+                continue
             response.raise_for_status()
             batch = response.json()
             status = batch.get("status")
             if status in TERMINAL_STATUSES:
                 return batch
-            elapsed = time.monotonic() - started
             if elapsed > self._settings.batch_timeout:
                 raise BatchError(
                     f"Batch {batch_id} still {status} after {elapsed:.0f}s; "
-                    "it keeps running on OpenRouter — retry later or use --sync"
+                    "it keeps running on OpenRouter and can be resumed by its id"
                 )
             logger.info(
                 "Batch %s: %s %s (%.0fs)", batch_id, status, batch.get("request_counts"), elapsed

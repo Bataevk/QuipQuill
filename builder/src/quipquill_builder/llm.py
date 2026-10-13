@@ -76,10 +76,18 @@ class OpenRouterChatClient:
 class OpenRouterBatchClient:
     """Chat completions through the Batch API (see batch.py): one job for all prompts."""
 
-    def __init__(self, settings: Settings, model: str, **runner_options: Any) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        model: str,
+        *,
+        resume_id: str | None = None,
+        **runner_options: Any,
+    ) -> None:
         self.model = model
         self._settings = settings
         self._runner = BatchRunner(settings, **runner_options)
+        self._resume_id = resume_id  # used by the first complete_many() call only
 
     async def complete(self, system: str, user: str) -> str:
         (result,) = await self.complete_many([(system, user)])
@@ -89,7 +97,10 @@ class OpenRouterBatchClient:
 
     async def complete_many(self, prompts: list[Prompt]) -> list[str | Exception]:
         bodies = [_request_body(self._settings, system, user) for system, user in prompts]
-        results = await self._runner.run("/v1/chat/completions", self.model, bodies)
+        resume_id, self._resume_id = self._resume_id, None
+        results = await self._runner.run(
+            "/v1/chat/completions", self.model, bodies, resume_id=resume_id
+        )
         return [_completion_text(result) for result in results]
 
 
