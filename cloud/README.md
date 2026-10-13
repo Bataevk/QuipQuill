@@ -14,6 +14,8 @@ make cloud-test     # тесты; БД-тесты используют базу 
 make cloud-lint
 ```
 
+Весь бэкенд в контейнерах (образ `cloud/Dockerfile`, ~430 МБ): `make app-up` — Postgres, RabbitMQ, одноразовый `migrate` (`alembic upgrade head`) и `cloud` на **http://localhost:8080** (`ENV=prod`, JSON-логи; секреты из `cloud/.env`). `make app-logs`, `make app-down`.
+
 Новая миграция после изменения моделей: `cd cloud && uv run alembic revision --autogenerate -m "<что>"`, затем проверить файл в `migrations/versions/`.
 
 ## Авторизация
@@ -61,12 +63,24 @@ graph LR
 - `POST /embeddings` — только `EMBED_MODEL` (text-embedding-3-small).
 - Живые тесты (стоят доли цента): `make cloud-test-live` — ключ берётся из `cloud/.env`.
 
+## Эксплуатация
+
+| Эндпоинт | 200 | 503 |
+|---|---|---|
+| `GET /health` | процесс жив | — |
+| `GET /health/db` | `SELECT 1` прошёл | БД недоступна |
+| `GET /health/mq` | брокер ответил (пассивное объявление очереди) | брокер не подключён или не отвечает |
+| `GET /health/llm` | OpenRouter и ключ работают (`GET /api/v1/key`, бесплатно); `degraded`, если кредита < $0.50 | OpenRouter недоступен или ключ невалиден |
+
+- **Логи** — одна строка JSON на событие (`LOG_FORMAT=json`), к каждой строке добавляются `requestId`, `sessionId`, `userId` из контекста; `X-Request-ID` принимается и возвращается в ответе.
+- **Лимиты от злоупотреблений** (поверх дневного $0.05): 30 запросов к модели / эмбеддингам в минуту на пользователя, всплеск до 10 (token bucket в памяти); тело HTTP ≤ 1 МБ (413); `llm.request` ≤ ~95K токенов (оценка по символам) и ≤ 32 инструментов. Отказы: `rate_limited` (повторяемо), `request_too_large`, `too_many_tools`.
+
 ## Структура `src/quipquill_cloud/`
 
 | Пакет | Что | Этап |
 |---|---|---|
 | `main.py` | `create_app()`, подключение роутеров | 0.2 |
-| `core/` | конфигурация (`Settings`), `security.py` — пароли, JWT, refresh-токены | 0.2, 2.1 |
+| `core/` | `config` (`Settings`), `security` (пароли, JWT, refresh), `logs` (JSON-логи с контекстом), `ratelimit` | 0.2–2.4 |
 | `api/` | `health`, `auth`, `me`, `ws` (WebSocket), `embeddings`, `deps` (текущий пользователь) | 0.2+ |
 | `db/` | модели SQLAlchemy 2 (async, asyncpg), сессии; миграции — `cloud/migrations/` | 2.1 |
 | `mq/` | `schemas` (протокол), `broker` (RabbitMQ), `worker` (команды → события, отмена), `dispatcher` (доставка, буфер для resume). Не `queue`, чтобы не путать со stdlib | 2.2 |

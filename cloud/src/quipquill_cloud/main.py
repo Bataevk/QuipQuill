@@ -1,13 +1,17 @@
 import logging
-from collections.abc import AsyncIterator
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 
 from quipquill_cloud import __version__
 from quipquill_cloud.api import auth, embeddings, health, me, ws
+from quipquill_cloud.core import logs
 from quipquill_cloud.core.config import Settings, get_settings
+from quipquill_cloud.core.ratelimit import RateLimiter
 from quipquill_cloud.db.session import make_engine, make_sessionmaker
 from quipquill_cloud.llm.handler import OpenRouterHandler
 from quipquill_cloud.mq.broker import Broker
@@ -59,6 +63,10 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        logs.configure(settings.log_level, settings.log_format)
+        app.state.rate_limiter = RateLimiter(
+            settings.rate_limit_per_minute, settings.rate_limit_burst
+        )
         engine = make_engine(settings.database_url)
         app.state.sessionmaker = make_sessionmaker(engine)
         app.state.llm_client = llm_client or _llm_client(settings)
@@ -73,6 +81,23 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
 
     app = FastAPI(title="QuipQuill Cloud", version=__version__, lifespan=lifespan)
     app.dependency_overrides[get_settings] = lambda: settings
+    app.state.settings = settings
+
+    @app.middleware("http")
+    async def request_context(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """X-Request-ID in and out (log correlation) and a cap on the request body size."""
+        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        logs.request_id.set(rid[:64])
+        length = request.headers.get("content-length")
+        if length and length.isdigit() and int(length) > settings.max_http_body_bytes:
+            response: Response = JSONResponse({"detail": "request_too_large"}, status_code=413)
+        else:
+            response = await call_next(request)
+        response.headers["X-Request-ID"] = rid[:64]
+        return response
+
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(me.router)

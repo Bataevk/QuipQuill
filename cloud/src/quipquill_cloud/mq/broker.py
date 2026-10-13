@@ -1,5 +1,6 @@
 """RabbitMQ topology: two durable queues for the whole app (commands in, events out)."""
 
+import asyncio
 import logging
 
 import aio_pika
@@ -29,6 +30,15 @@ class Broker:
         for name in (broker.commands_queue, broker.events_queue):
             await broker._publish_channel.declare_queue(name, durable=True)
         return broker
+
+    async def ping(self, wait_seconds: float) -> bool:
+        """A real round trip to the broker (a robust connection hides outages while it retries)."""
+        try:
+            async with asyncio.timeout(wait_seconds):
+                await self._publish_channel.declare_queue(self.commands_queue, passive=True)
+        except Exception:
+            return False
+        return True
 
     async def publish_command(self, command: Command) -> None:
         await self._publish(self.commands_queue, command.model_dump_json(by_alias=True).encode())

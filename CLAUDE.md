@@ -46,6 +46,8 @@ npx tsc --noEmit && npx expo lint
 make infra-up               # Postgres + RabbitMQ
 make cloud-dev              # FastAPI на :8000
 make cloud-test && make cloud-lint
+make cloud-test-live        # живые вызовы OpenRouter (доли цента)
+make app-up                 # весь бэкенд в Docker на :8080
 
 # builder (из builder/)
 uv run builder extract <папка_с_лором> -o graph.json

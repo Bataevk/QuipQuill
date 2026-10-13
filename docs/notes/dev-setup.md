@@ -35,6 +35,8 @@ make infra-up               # Postgres :5432 + RabbitMQ :5672/:15672, ждёт h
 make cloud-dev              # API на http://127.0.0.1:8000 (/health, /docs)
 make cloud-test && make cloud-lint
 make infra-down             # остановить (данные в volumes сохраняются)
+make app-up                 # весь бэкенд в контейнерах на :8080 (нужен cloud/.env)
+make cloud-test-live        # живые тесты OpenRouter
 
 # builder (из builder/; нужен OPENROUTER_API_KEY в builder/.env)
 uv run builder extract <папка_с_лором> -o graph.json

@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     env: Literal["dev", "test", "prod"] = "dev"
+    log_level: str = "info"
+    # "text" reads well in a terminal; containers use "json" (docker-compose.yml).
+    log_format: Literal["text", "json"] = "text"
+
+    # Abuse limits on top of the daily spend cap (owner, 2026-10-14).
+    rate_limit_per_minute: float = 30
+    rate_limit_burst: int = 10
+    max_http_body_bytes: int = 1_000_000
+    # Rough guard (chars / 4) keeping a request under Haiku's 100K-token price step.
+    max_request_tokens: int = 95_000
+    max_tools: int = 32
 
     database_url: str = "postgresql+asyncpg://quipquill:quipquill@localhost:5432/quipquill"
     rabbitmq_url: str = "amqp://quipquill:quipquill@localhost:5672/"

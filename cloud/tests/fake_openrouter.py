@@ -130,6 +130,14 @@ class FakeOpenRouter:
         self.requests: list[dict[str, Any]] = []
         self.chat = _Chat(self)
         self.embeddings = _Embeddings(self)
+        self.key_info: dict[str, Any] = {"data": {"limit": 5, "limit_remaining": 4.9}}
+        self.key_error: Exception | None = None
+
+    async def get(self, path: str, *, cast_to: Any) -> Any:
+        assert path == "/key"
+        if self.key_error is not None:
+            raise self.key_error
+        return self.key_info
 
     async def close(self) -> None:
         return None

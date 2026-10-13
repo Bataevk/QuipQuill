@@ -1,4 +1,4 @@
-.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-migrate cloud-test cloud-test-live cloud-lint cloud-fmt \
+.PHONY: help infra-up infra-down infra-logs infra-ps app-up app-down app-logs cloud-dev cloud-migrate cloud-test cloud-test-live cloud-lint cloud-fmt \
 	builder-test builder-lint builder-fmt
 
 help: ## List targets
@@ -15,6 +15,15 @@ infra-logs: ## Follow infrastructure logs
 
 infra-ps: ## Show infrastructure status
 	docker compose ps
+
+app-up: ## Build and start the whole backend in containers (API on :8080)
+	docker compose --profile app up -d --build --wait
+
+app-down: ## Stop the containerized backend (data volumes are kept)
+	docker compose --profile app down
+
+app-logs: ## Follow the cloud container logs (JSON)
+	docker compose logs -f cloud
 
 cloud-dev: ## Run the cloud API with auto-reload on :8000
 	cd cloud && uv run fastapi dev

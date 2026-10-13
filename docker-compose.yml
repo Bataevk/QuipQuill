@@ -1,5 +1,6 @@
-# Local infrastructure for development: `make infra-up`.
-# Credentials here are for local use only; real ones live in cloud/.env on servers.
+# Local infrastructure: `make infra-up` (Postgres + RabbitMQ for running cloud on the host).
+# Whole backend in containers: `make app-up` (adds the `app` profile: migrate + cloud).
+# Infrastructure credentials here are for local use only; secrets come from cloud/.env.
 name: quipquill
 
 services:
@@ -35,6 +36,39 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  migrate:
+    profiles: ["app"]
+    build: ./cloud
+    image: quipquill-cloud:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quipquill:quipquill@postgres:5432/quipquill
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  cloud:
+    profiles: ["app"]
+    build: ./cloud
+    image: quipquill-cloud:dev
+    env_file:
+      - path: cloud/.env      # JWT_SECRET, OPENROUTER_API_KEY, INVITE_CODES
+        required: true
+    environment:
+      ENV: prod               # refuses to start with a weak JWT secret or no OpenRouter key
+      LOG_FORMAT: json
+      DATABASE_URL: postgresql+asyncpg://quipquill:quipquill@postgres:5432/quipquill
+      RABBITMQ_URL: amqp://quipquill:quipquill@rabbitmq:5672/
+      QUEUE_PREFIX: qq.app    # separate from a dev server on the host (qq.dev)
+    ports:
+      - "8080:8000"           # host 8080, so it can run next to `make cloud-dev` on 8000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres-data:

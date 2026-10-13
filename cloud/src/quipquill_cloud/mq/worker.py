@@ -13,6 +13,7 @@ from typing import Any, Protocol
 from aio_pika.abc import AbstractIncomingMessage
 from pydantic import ValidationError
 
+from quipquill_cloud.core import logs as log_context
 from quipquill_cloud.mq.schemas import Command, Event, error_event
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,9 @@ class CommandWorker:
             return
 
         request = command.request
+        log_context.request_id.set(request.request_id)
+        log_context.session_id.set(request.session_id)
+        log_context.user_id.set(command.user_id)
         try:
             await self.handle(command)
         except Exception:

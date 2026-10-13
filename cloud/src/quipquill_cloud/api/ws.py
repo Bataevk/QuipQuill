@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from quipquill_cloud.core import logs
 from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.core.security import InvalidToken, decode_access_token
 from quipquill_cloud.db.models import User
@@ -78,6 +79,7 @@ async def websocket_endpoint(
         return
 
     await websocket.accept()
+    logs.user_id.set(str(user.id))
     conn = Connection(websocket, user)
     heartbeat = asyncio.create_task(_heartbeat(conn, settings.ws_heartbeat_interval))
     try:
@@ -107,6 +109,20 @@ async def _handle_client_message(conn: Connection, raw: str) -> None:
 
     match message:
         case LlmRequest():
+            logs.request_id.set(message.request_id)
+            logs.session_id.set(message.session_id)
+            refusal = _refuse(conn, message, state.settings)
+            if refusal is not None:
+                await conn.send(
+                    error_event(
+                        refusal,
+                        request_id=message.request_id,
+                        session_id=message.session_id,
+                        channel=message.channel,
+                        retryable=refusal == "rate_limited",
+                    )
+                )
+                return
             key = (conn.user_id, message.session_id)
             if key not in conn.sessions:
                 await state.dispatcher.subscribe(key, conn, replay=False)
@@ -135,6 +151,18 @@ async def _handle_client_message(conn: Connection, raw: str) -> None:
             state.cancels.cancel(conn.user_id, message.request_id)
         case Ping():
             await conn.send(Event(type="heartbeat"))
+
+
+def _refuse(conn: Connection, message: LlmRequest, settings: Settings) -> str | None:
+    """A reason to reject the request before it reaches the queue, or None."""
+    if len(message.tools or []) > settings.max_tools:
+        return "too_many_tools"
+    approx_tokens = len(json.dumps(message.messages, ensure_ascii=False)) // 4
+    if approx_tokens > settings.max_request_tokens:
+        return "request_too_large"
+    if not conn.websocket.app.state.rate_limiter.allow(conn.user_id):
+        return "rate_limited"
+    return None
 
 
 async def _heartbeat(conn: Connection, interval: float) -> None:
