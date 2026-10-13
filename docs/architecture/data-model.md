@@ -143,15 +143,19 @@ CREATE TABLE saves   ( id TEXT PRIMARY KEY, story_id TEXT, character_id TEXT, pa
 
 ## PostgreSQL (cloud)
 
-```sql
-users          (id uuid PK, email citext UNIQUE, password_hash text, tier text DEFAULT 'free',
-                created_at timestamptz)
-refresh_tokens (id uuid PK, user_id uuid FK, token_hash text, expires_at timestamptz,
-                revoked_at timestamptz NULL)
-usage_events   (id bigserial PK, user_id uuid FK, request_id text, session_id text,
-                purpose text, model text, input_tokens int, output_tokens int,
-                cache_read_tokens int, cost_usd numeric(12,6), created_at timestamptz)
--- лимиты: агрегат usage_events за сутки по user_id против конфигурации тарифа
-```
+Модели — [`cloud/src/quipquill_cloud/db/models.py`](../../cloud/src/quipquill_cloud/db/models.py), миграции — `cloud/migrations/` (Alembic).
 
-Миграции — Alembic (этап 2.1).
+```sql
+users          (id uuid PK, email varchar(320) UNIQUE  -- хранится в нижнем регистре
+                , password_hash text                    -- argon2id
+                , tier varchar(16) DEFAULT 'free' CHECK (tier IN ('free','pro','max'))
+                , created_at timestamptz)
+refresh_tokens (id uuid PK, user_id uuid FK → users ON DELETE CASCADE (index),
+                token_hash varchar(64) UNIQUE           -- SHA-256, сам токен не хранится
+                , expires_at timestamptz, revoked_at timestamptz NULL, created_at timestamptz)
+usage_events   (id bigserial PK, user_id uuid FK → users ON DELETE CASCADE, request_id, session_id,
+                purpose, model, input_tokens, output_tokens, cache_read_tokens,
+                cost_usd numeric(12,6), created_at timestamptz;
+                INDEX (user_id, created_at))
+-- лимиты (2.3): сумма usage_events за UTC-сутки по user_id против конфигурации тарифа
+```

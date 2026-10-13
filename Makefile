@@ -1,4 +1,4 @@
-.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-test cloud-lint cloud-fmt \
+.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-migrate cloud-test cloud-lint cloud-fmt \
 	builder-test builder-lint builder-fmt
 
 help: ## List targets
@@ -19,7 +19,10 @@ infra-ps: ## Show infrastructure status
 cloud-dev: ## Run the cloud API with auto-reload on :8000
 	cd cloud && uv run fastapi dev
 
-cloud-test: ## Run cloud tests
+cloud-migrate: ## Apply database migrations (alembic upgrade head)
+	cd cloud && uv run alembic upgrade head
+
+cloud-test: ## Run cloud tests (needs make infra-up; uses the quipquill_test database)
 	cd cloud && uv run pytest
 
 cloud-lint: ## Lint and check formatting of cloud

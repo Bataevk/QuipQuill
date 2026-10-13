@@ -91,4 +91,4 @@ graph LR
 
 ## Авторизация (REST)
 
-`POST /auth/register`, `POST /auth/login` → `{access, refresh}`; `POST /auth/refresh`; `GET /me` → `{id, email, tier, limits, usedToday}`.
+`POST /auth/register` `{email, password, invite_code}`, `POST /auth/login` → `{access_token, refresh_token, token_type, expires_in}`; `POST /auth/refresh` `{refresh_token}` (ротация); `GET /me` → `{id, email, tier, created_at, usage_today}` (лимиты тарифа — с этапа 2.3). Подробности — [cloud/README.md](../../cloud/README.md#авторизация).

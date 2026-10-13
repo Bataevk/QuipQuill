@@ -4,7 +4,9 @@ from typing import Literal
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEV_JWT_SECRET = "change-me"
+# HS256 needs a key of at least 32 bytes (RFC 7518 §3.2).
+MIN_JWT_SECRET_BYTES = 32
+DEV_JWT_SECRET = "dev-only-insecure-jwt-secret-change-me"
 
 
 class Settings(BaseSettings):
@@ -19,6 +21,10 @@ class Settings(BaseSettings):
     queue_prefix: str = "qq.dev"
 
     jwt_secret: SecretStr = SecretStr(DEV_JWT_SECRET)
+    access_token_ttl_seconds: int = 15 * 60
+    refresh_token_ttl_days: int = 30
+    # Registration requires one of these codes (JSON list in env); empty = registration closed.
+    invite_codes: list[str] = []
 
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -27,8 +33,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_real_secrets_in_prod(self) -> "Settings":
-        if self.env == "prod" and self.jwt_secret.get_secret_value() == DEV_JWT_SECRET:
-            raise ValueError("JWT_SECRET must be set to a real secret when ENV=prod")
+        secret = self.jwt_secret.get_secret_value()
+        if self.env == "prod" and (
+            secret == DEV_JWT_SECRET or len(secret.encode()) < MIN_JWT_SECRET_BYTES
+        ):
+            raise ValueError(
+                f"JWT_SECRET must be a real secret of at least {MIN_JWT_SECRET_BYTES} bytes "
+                "when ENV=prod"
+            )
         return self
 
 

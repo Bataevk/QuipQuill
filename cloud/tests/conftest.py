@@ -1,0 +1,80 @@
+"""Test fixtures. DB tests run against `quipquill_test` in the compose Postgres (make infra-up)."""
+
+import asyncio
+import os
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import asyncpg
+import pytest
+from alembic import command
+from alembic.config import Config
+from fastapi.testclient import TestClient
+
+from quipquill_cloud.core.config import Settings
+from quipquill_cloud.main import create_app
+
+CLOUD_DIR = Path(__file__).resolve().parents[1]
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://quipquill:quipquill@localhost:5432/quipquill_test",
+)
+INVITE = "TEST-INVITE"
+
+
+def _dsn(url: str) -> str:
+    return url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+def db_run(sql: str, *args: Any) -> list[asyncpg.Record]:
+    async def run() -> list[asyncpg.Record]:
+        conn = await asyncpg.connect(_dsn(TEST_DATABASE_URL))
+        try:
+            return await conn.fetch(sql, *args)
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+async def _ensure_database() -> None:
+    admin_dsn = _dsn(TEST_DATABASE_URL).rsplit("/", 1)[0] + "/postgres"
+    name = TEST_DATABASE_URL.rsplit("/", 1)[1]
+    conn = await asyncpg.connect(admin_dsn)
+    try:
+        if not await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", name):
+            await conn.execute(f'CREATE DATABASE "{name}"')
+    finally:
+        await conn.close()
+
+
+@pytest.fixture(scope="session")
+def migrated_db() -> str:
+    try:
+        asyncio.run(_ensure_database())
+    except (OSError, asyncpg.PostgresError) as error:
+        pytest.fail(f"Postgres is not reachable ({error}); start it with `make infra-up`")
+    config = Config(str(CLOUD_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(CLOUD_DIR / "migrations"))
+    config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    command.upgrade(config, "head")
+    return TEST_DATABASE_URL
+
+
+@pytest.fixture
+def settings(migrated_db: str) -> Settings:
+    db_run("TRUNCATE users, refresh_tokens, usage_events RESTART IDENTITY CASCADE")
+    return Settings(
+        _env_file=None,
+        env="test",
+        database_url=migrated_db,
+        jwt_secret="test-secret-that-is-at-least-32-bytes-long",
+        invite_codes=[INVITE],
+    )
+
+
+@pytest.fixture
+def client(settings: Settings) -> Iterator[TestClient]:
+    with TestClient(create_app(settings)) as test_client:
+        yield test_client

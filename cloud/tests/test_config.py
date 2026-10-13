@@ -16,7 +16,12 @@ def test_prod_rejects_default_jwt_secret() -> None:
         Settings(_env_file=None, env="prod")
 
 
+def test_prod_rejects_short_jwt_secret() -> None:
+    with pytest.raises(ValidationError, match="32 bytes"):
+        Settings(_env_file=None, env="prod", jwt_secret="too-short")
+
+
 def test_prod_accepts_real_jwt_secret() -> None:
-    settings = Settings(_env_file=None, env="prod", jwt_secret="a-real-secret")
+    settings = Settings(_env_file=None, env="prod", jwt_secret="x" * 32)
 
     assert settings.env == "prod"
