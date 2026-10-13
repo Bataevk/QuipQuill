@@ -26,6 +26,16 @@
 | Эмбеддинги на OpenRouter: 33 модели; `openai/text-embedding-3-small` — $0.02 за 1M (OpenAI, Azure); есть `:batch` | `GET /api/v1/embeddings/models` |
 | `google/gemini-embedding-2` на Vertex доступен только со слагом `google-vertex` (регион выбирает OpenRouter); с `google-vertex/global` — 404. Поддерживает `dimensions` | живой запрос (вариант не выбран) |
 
+## OpenRouter для игровых вызовов (2026-10-14)
+
+| Факт | Как проверено |
+|---|---|
+| Стрим: OpenAI-формат; `tool_calls` приходят дельтами по `index` (`id` и имя — в первой, аргументы — кусками); `finish_reason` `tool_calls`/`stop`; `usage` с `cost` — в последнем чанке (с `stream_options.include_usage`) | сырые чанки |
+| Кэш промпта (системный промпт ~2 600 токенов с `cache_control`): **Bedrock** — 2-й вызов `cached_tokens=2603`, $0.00003 вместо $0.00033; **Vertex global** — каждый вызов `cache_write` (+25%), чтение не гарантировано; **без `cache_control`** кэша нет нигде | живые запросы |
+| `provider.only` = оба без `order` → OpenRouter выбрал Google, кэш прочитан лишь на 4-м вызове; с `order` Bedrock первым — со 2-го | живые запросы |
+| `reasoning.effort` low/medium для Haiku 5.5 принимается; на простых запросах `reasoning_tokens = 0` | живые запросы |
+| Эмбеддинги `openai/text-embedding-3-small`: 1536 измерений, `usage.cost` в ответе (≈ $0.00000012 за 2 строки) | живой запрос |
+
 ## Сборка демо-истории (2026-10-14)
 
 | Факт | Как проверено |

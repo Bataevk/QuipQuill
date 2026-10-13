@@ -1,4 +1,4 @@
-.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-migrate cloud-test cloud-lint cloud-fmt \
+.PHONY: help infra-up infra-down infra-logs infra-ps cloud-dev cloud-migrate cloud-test cloud-test-live cloud-lint cloud-fmt \
 	builder-test builder-lint builder-fmt
 
 help: ## List targets
@@ -24,6 +24,9 @@ cloud-migrate: ## Apply database migrations (alembic upgrade head)
 
 cloud-test: ## Run cloud tests (needs make infra-up; uses the quipquill_test database)
 	cd cloud && uv run pytest
+
+cloud-test-live: ## Live OpenRouter tests (cost money; key from cloud/.env)
+	cd cloud && OPENROUTER_API_KEY=$$(grep '^OPENROUTER_API_KEY=' .env | cut -d= -f2) uv run pytest -m integration -v
 
 cloud-lint: ## Lint and check formatting of cloud
 	cd cloud && uv run ruff check && uv run ruff format --check

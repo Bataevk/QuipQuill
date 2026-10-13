@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from quipquill_cloud.api.deps import CurrentUser
 from quipquill_cloud.db.models import UsageEvent
 from quipquill_cloud.db.session import get_session
+from quipquill_cloud.llm.policy import tier
+from quipquill_cloud.llm.usage import utc_day_start
 
 router = APIRouter(tags=["account"])
 
@@ -24,17 +26,22 @@ class UsageToday(BaseModel):
     cost_usd: Decimal
 
 
+class Limits(BaseModel):
+    daily_cost_usd: Decimal | None  # None = not limited; the day is the UTC day
+
+
 class Me(BaseModel):
     id: uuid.UUID
     email: str
     tier: str
     created_at: datetime
-    usage_today: UsageToday  # UTC day; per-tier limits are added in stage 2.3
+    usage_today: UsageToday
+    limits: Limits
 
 
 @router.get("/me")
 async def me(user: CurrentUser, session: Annotated[AsyncSession, Depends(get_session)]) -> Me:
-    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = utc_day_start()
     row = (
         await session.execute(
             select(
@@ -56,4 +63,5 @@ async def me(user: CurrentUser, session: Annotated[AsyncSession, Depends(get_ses
             output_tokens=row[2],
             cost_usd=Decimal(row[3]).quantize(COST_QUANTUM),
         ),
+        limits=Limits(daily_cost_usd=tier(user.tier).daily_cost_usd),
     )

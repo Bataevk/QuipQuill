@@ -57,9 +57,9 @@ graph LR
 { "v":1, "type":"tool_call", "requestId":"…", "sessionId":"…", "channel":"gm",
   "call": { "id":"call_1", "name":"move", "arguments":"{\"to\":\"loc:tavern\"}" } }
 { "v":1, "type":"done",      "requestId":"…", "sessionId":"…", "channel":"gm",
-  "message": { "role":"assistant", "content":"…", "tool_calls":[…] },   // итог, источник истины
-  "finishReason":"stop|tool_calls|length",
-  "usage": { "input":1234, "output":210, "cacheRead":900, "costUsd":0.00023 } }
+  "message": { "role":"assistant", "content":"…" | null, "tool_calls":[…] },   // итог, источник истины
+  "finishReason":"stop|tool_calls|length|cancelled",
+  "usage": { "input":1234, "output":210, "cacheRead":900, "cacheWrite":0, "costUsd":0.00023 } }
 { "v":1, "type":"error",     "requestId":"…", "sessionId":"…", "code":"limit_exceeded|provider_error|timeout|bad_request",
   "statusKey":"error.limit", "retryable":false }
 { "v":1, "type":"replay",    "requestId":"…", "sessionId":"…", "channel":"gm", "text":"<весь накопленный текст>" }
@@ -75,7 +75,10 @@ graph LR
 - Невалидное сообщение клиента → `error` с `code: "bad_request"` (слишком большое — `message_too_large`), сокет **не** закрывается.
 - `cancel` останавливает генерацию между дельтами: приходит `done` с `finishReason: "cancelled"` и тем текстом, что успел сгенерироваться.
 - `heartbeat` приходит, только пока в подписанных сессиях идёт генерация и сокет молчал дольше интервала (по умолчанию 2 с); `ping` → `heartbeat` всегда.
-- Коды `error`: `bad_request`, `message_too_large`, `queue_unavailable`, `provider_error`; дальше добавятся `limit_exceeded`, `timeout`.
+- Коды `error`: `bad_request` (в т.ч. провайдер отверг запрос), `message_too_large`, `queue_unavailable`, `provider_error` (повторяемо), `timeout` (повторяемо), `limit_exceeded` (дневной лимит тарифа; приходит **без** `status`, модель не вызывается).
+- Порядок событий генерации: `status` → `delta`* → `tool_call`* (все вызовы — после текста, каждый целиком) → `done`; либо один `error`.
+- `messages`, `tools`, `responseFormat` передаются провайдеру как есть (формат OpenAI). Точки кэширования ставит **клиент**: `cache_control: {type: "ephemeral"}` на content-part в конце стабильной части промпта (Haiku 5.5 кэширует префиксы от 512 токенов).
+- Модель, `max_tokens` и effort выбирает сервер по `purpose` и тарифу ([llm/policy.py](../../cloud/src/quipquill_cloud/llm/policy.py)): `gm` — effort medium, 2000; `npc` — low, 800; `guard` — low, 200; `summary`/`character` — low, 1500.
 - `statusKey` — ключ строки интерфейса (локализация на клиенте), `error.<code>`.
 
 ## Буфер активной генерации и resume
@@ -93,7 +96,7 @@ graph LR
 
 ## Эмбеддинги (REST)
 
-`POST /embeddings` `{ "model": "<из meta.embed_model>", "input": ["…", "…"] }` → `{ "vectors": [[…], …], "usage": {…} }`. Модель проверяется по белому списку на сервере.
+`POST /embeddings` (Bearer) `{ "model": "openai/text-embedding-3-small", "input": ["…", …] }` (≤ 64 строк по ≤ 8000 символов) → `{ "model", "vectors": [[…], …] (в порядке input), "usage": {"input", "costUsd"} }`. Другая модель → 400 `model_not_allowed`; превышен дневной лимит → 429 `limit_exceeded`; ошибка провайдера → 502. Расход пишется в `usage_events` (`purpose = "embed"`).
 
 ## Авторизация (REST)
 

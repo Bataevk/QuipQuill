@@ -8,7 +8,7 @@ def test_dev_defaults_load_without_env_file() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.env == "dev"
-    assert settings.llm_model_free == "anthropic/claude-haiku-5.5"
+    assert settings.provider_order == ["amazon-bedrock", "google-vertex/global"]
 
 
 def test_prod_rejects_default_jwt_secret() -> None:
@@ -21,7 +21,14 @@ def test_prod_rejects_short_jwt_secret() -> None:
         Settings(_env_file=None, env="prod", jwt_secret="too-short")
 
 
-def test_prod_accepts_real_jwt_secret() -> None:
-    settings = Settings(_env_file=None, env="prod", jwt_secret="x" * 32)
+def test_prod_requires_openrouter_key() -> None:
+    with pytest.raises(ValidationError, match="OPENROUTER_API_KEY"):
+        Settings(_env_file=None, env="prod", jwt_secret="x" * 32)
+
+
+def test_prod_accepts_real_secrets() -> None:
+    settings = Settings(
+        _env_file=None, env="prod", jwt_secret="x" * 32, openrouter_api_key="sk-or-test"
+    )
 
     assert settings.env == "prod"

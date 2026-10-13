@@ -1,0 +1,42 @@
+"""What the server sends to the model. The client never chooses model, effort or max_tokens."""
+
+from dataclasses import dataclass
+from decimal import Decimal
+
+HAIKU = "anthropic/claude-haiku-5.5"
+
+
+@dataclass(frozen=True)
+class CallParams:
+    effort: str
+    max_tokens: int
+
+
+# Owner's decision (2026-10-14): the game master thinks at "medium", everything else at "low".
+PURPOSES: dict[str, CallParams] = {
+    "gm": CallParams(effort="medium", max_tokens=2000),
+    "npc": CallParams(effort="low", max_tokens=800),
+    "guard": CallParams(effort="low", max_tokens=200),
+    "summary": CallParams(effort="low", max_tokens=1500),
+    "character": CallParams(effort="low", max_tokens=1500),
+}
+
+
+@dataclass(frozen=True)
+class Tier:
+    model: str
+    # Spend cap per UTC day in USD (OpenRouter's reported cost); None = not limited.
+    daily_cost_usd: Decimal | None
+
+
+# Prototype: everyone is on "free" (Haiku 5.5, $0.05/day). Models and caps for pro/max are a
+# product decision for later (backlog); until then they behave like free.
+TIERS: dict[str, Tier] = {
+    "free": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
+    "pro": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
+    "max": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
+}
+
+
+def tier(name: str) -> Tier:
+    return TIERS.get(name, TIERS["free"])

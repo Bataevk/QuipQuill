@@ -105,6 +105,7 @@ def settings(migrated_db: str) -> Settings:
         invite_codes=[INVITE],
         rabbitmq_url=RABBITMQ_URL,
         queue_prefix=QUEUE_PREFIX,
+        llm_handler="echo",
         echo_delay_seconds=0.01,
         ws_heartbeat_interval=0.2,
     )

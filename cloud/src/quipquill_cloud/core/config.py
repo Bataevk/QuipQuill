@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     # Workers run inside the API process (ADR 18); False leaves only the API and dispatcher.
     run_workers: bool = True
     worker_concurrency: int = 4
-    # Stage 2.2 ships an echo handler; the OpenRouter handler arrives in stage 2.3.
-    llm_handler: Literal["echo"] = "echo"
+    # "openrouter" calls the model; "echo" streams the user text back (tests, offline dev).
+    llm_handler: Literal["openrouter", "echo"] = "openrouter"
     echo_delay_seconds: float = 0.05
+    llm_timeout_seconds: float = 120.0
     ws_heartbeat_interval: float = 2.0
     # How long in-flight and finished generations are kept for `resume`.
     generation_ttl_seconds: float = 900.0
@@ -38,7 +39,9 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model_free: str = "anthropic/claude-haiku-5.5"
+    # Game calls: only providers that do not log prompts, Bedrock first (its cache works),
+    # Vertex as the fallback (ADR 16, ADR 20).
+    provider_order: list[str] = ["amazon-bedrock", "google-vertex/global"]
     embed_model: str = "openai/text-embedding-3-small"
 
     @model_validator(mode="after")
@@ -51,6 +54,8 @@ class Settings(BaseSettings):
                 f"JWT_SECRET must be a real secret of at least {MIN_JWT_SECRET_BYTES} bytes "
                 "when ENV=prod"
             )
+        if self.env == "prod" and self.llm_handler == "openrouter" and not self.openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is required when ENV=prod")
         return self
 
 
