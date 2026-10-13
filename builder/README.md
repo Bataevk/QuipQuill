@@ -20,6 +20,8 @@ cp .env.example .env                 # вписать OPENROUTER_API_KEY
 
 # 1. лор → граф
 uv run builder extract ../stories/<id>/lore -o ../stories/<id>/graph.json
+# 1.5. ручные правки графа (воспроизводимо, см. ниже)
+uv run builder curate ../stories/<id>/graph.json ../stories/<id>/curation.toml -o ../stories/<id>/graph.curated.json
 # 2. граф → файл истории (эмбеддинги считаются здесь)
 uv run builder export ../stories/<id>/graph.json -o ../stories/<id>/<id>.qqstory \
     --title "The Rune Halls" --start "The Entrance Rune Hall"
@@ -42,6 +44,12 @@ uv run pytest && uv run ruff check   # тесты без сети
 3. Похожие имена склеиваются (нормализация + `rapidfuzz.fuzz.ratio` ≥ 0.85). Имя сохраняется в исходном виде.
 4. Если у сущности несколько описаний, они сводятся одним вызовом LLM.
 5. Концы связей приводятся к каноническим именам; сущность, упомянутая только в связи, добавляется с типом `OTHER` и пустым описанием.
+
+Персонажи и существа (Person, Creature) извлекаются и склеиваются **без сжатия** — отдельным промптом (`PERSONA_MERGE_SYSTEM`): знания, тайны и манера речи NPC нужны мастеру и `ask`.
+
+## Ручные правки: `curate`
+
+Файл `stories/<id>/curation.toml` (формат — docstring `curation.py`): `[merge]` дубликатов, `[drop]` мусора, `[retype]`, `[describe]`, `[props]` (например `{ fixed = true }` — нельзя взять), `[[drop_relation]]`, `[[add_relation]]`. Строгий режим: правило, не нашедшее сущность или связь, — ошибка (так видно, что после повторного извлечения имена поменялись). Пример — [stories/brass-vault/curation.toml](../stories/brass-vault/curation.toml).
 
 Формат `graph.json`: `{version: 1, meta, entities: [{name, type, description}], relationships: [{source, target, type, description}]}`. Связи ссылаются на сущности по `name`; стабильные ID появляются при экспорте.
 

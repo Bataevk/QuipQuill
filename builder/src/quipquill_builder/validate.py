@@ -98,12 +98,14 @@ def validate(
             warning("unplaced_item", f"{eid} ('{name}') is not located anywhere")
 
     if start in locations:
-        reachable = _reachable(start, exits)
+        inside = {eid: places for eid, places in placed.items() if eid in locations}
+        reachable = _reachable(start, exits, inside)
         unreachable = sorted(locations - reachable)
         if unreachable:
             error(
                 "unreachable",
-                f"locations not reachable from {start} via LEADS_TO: {', '.join(unreachable)}",
+                f"locations not reachable from {start} via LEADS_TO "
+                f"(or as part of a reachable place): {', '.join(unreachable)}",
             )
 
     # --- embeddings
@@ -112,14 +114,20 @@ def validate(
     return issues
 
 
-def _reachable(start: str, exits: dict[str, set[str]]) -> set[str]:
+def _reachable(start: str, exits: dict[str, set[str]], inside: dict[str, list[str]]) -> set[str]:
+    """Places reachable by paths, plus places that are part of a reachable place (ADR 19)."""
     seen, stack = {start}, [start]
-    while stack:
-        for nxt in exits.get(stack.pop(), ()):
-            if nxt not in seen:
-                seen.add(nxt)
-                stack.append(nxt)
-    return seen
+    while True:
+        while stack:
+            for nxt in exits.get(stack.pop(), ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        parts = [p for p, parents in inside.items() if p not in seen and seen & set(parents)]
+        if not parts:
+            return seen
+        seen.update(parts)
+        stack.extend(parts)
 
 
 def _check_embeddings(conn: sqlite3.Connection, meta: dict[str, str], ids) -> list[Issue]:

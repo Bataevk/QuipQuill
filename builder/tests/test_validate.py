@@ -111,3 +111,17 @@ def test_draft_mode_downgrades_authored_meta(make) -> None:
     conn = make([loc("loc:a")], [], style="")
     issues = validate(conn, check_embeddings=False, require_authored_meta=False)
     assert [(i.level, i.code) for i in issues] == [("warning", "meta_missing")]
+
+
+def test_place_inside_a_reachable_place_counts_as_reachable(make) -> None:
+    conn = make(
+        [loc("loc:a"), loc("loc:b"), loc("loc:back-room"), loc("loc:nowhere")],
+        [
+            StoryRelation("loc:a", "loc:b", "LEADS_TO"),
+            StoryRelation("loc:back-room", "loc:b", "LOCATED_IN"),
+        ],
+    )
+    issues = validate(conn, check_embeddings=False)
+    unreachable = next(i.message for i in issues if i.code == "unreachable")
+    assert "loc:nowhere" in unreachable
+    assert "loc:back-room" not in unreachable

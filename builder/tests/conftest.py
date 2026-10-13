@@ -81,12 +81,20 @@ class FakeChatClient:
 
     async def complete(self, system: str, user: str) -> str:
         self.calls.append((system, user))
-        if system == prompts.SUMMARIZATION_SYSTEM:
+        if system in (prompts.SUMMARIZATION_SYSTEM, prompts.PERSONA_MERGE_SYSTEM):
             return "Summary: " + " ".join(user.splitlines()[1:])
         for marker, reply in self.replies.items():
             if marker in user:
                 return reply
         raise AssertionError(f"Unexpected chunk: {user[:80]!r}")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Tests never read builder/.env (real key, local switches) and never reach the network."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("OPENROUTER_API_KEY", "USE_BATCH", "PROVIDER_ONLY", "EXTRACT_MODEL"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture

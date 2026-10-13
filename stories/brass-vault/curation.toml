@@ -1,0 +1,194 @@
+# Manual fixes for the extracted graph of "The Brass Vault".
+#
+# Tied to the committed graph.json: re-extraction renames entities (the LLM words them a little
+# differently each run) and `builder curate` will list every rule that no longer matches.
+#
+# Apply (from builder/):
+#   uv run builder curate ../stories/brass-vault/graph.json ../stories/brass-vault/curation.toml \
+#       -o ../stories/brass-vault/graph.curated.json
+# Format: builder/src/quipquill_builder/curation.py
+
+# --- Near-duplicates the fuzzy merge missed (different wording for the same thing) ---------------
+[merge]
+"The Rusty Gear Tavern" = ["Back room of The Rusty Gear Tavern", "Back room"]
+"Grand Hall of the Ashcombe Mercantile Bank" = ["Grand Hall", "ballroom"]
+"Ashcombe Mercantile Bank" = ["the bank", "Ashcombe bank"]
+"Director's Office" = ["Office"]
+"Boiler Undercroft" = ["boiler room"]
+"brass punch card" = ["director's brass punch card", "punched brass card"]
+"wall safe" = ["small wall safe"]
+"tuning fork of blued steel" = ["tuning fork"]
+"grappling hook with coil of silk rope" = ["grappling hook"]
+"hand-drawn plan" = ["bank plan"]
+"pneumatic post terminal" = ["terminal behind the head teller's desk"]
+"pneumatic post" = ["pneumatic tubes"]
+"rusted iron hatch" = ["iron hatch"]
+
+# --- Noise: world-level mentions, backstory, the player ------------------------------------------
+[drop]
+entities = [
+    "Vellmoor",                         # the whole city; lives in world_summary
+    "The player",                       # the player character is created at session start
+    "The Crew",
+    "guard",                            # generic "most guards carry truncheons"
+    "messenger boys",
+    "airship",
+    "Mags Holloway's former airship",
+    "revolver",
+    "pepperbox pistol",
+    "clockwork automaton",              # the general idea; Sentinel Unit Seven is the real one
+    "steam surge",                      # a mechanic, kept in Bertha's and the Sentinel's personas
+    "Admiralty patrol ship",            # Juno's knowledge, not part of the scene
+]
+
+[retype]
+"brass punch card" = "Tool"
+"grated drain" = "Tool"
+"rusted iron hatch" = "Tool"
+"Royal Observatory" = "Organization"   # Horace's dream, not a place in the story
+
+# --- Things that cannot be picked up (the GM's take tool refuses `fixed` entities) ----------------
+[props]
+"Orrery Lock" = { fixed = true }
+"great round door" = { fixed = true }
+"wall safe" = { fixed = true }
+"emergency chute" = { fixed = true }
+"pneumatic post terminal" = { fixed = true }
+"pneumatic post" = { fixed = true }
+"rusted iron hatch" = { fixed = true }
+"grated drain" = { fixed = true }
+"main pressure valve" = { fixed = true }
+"boiler number three" = { fixed = true }
+"alarm bell" = { fixed = true }
+"green lamp" = { fixed = true }
+"cage lift" = { fixed = true }
+"bronze plaque" = { fixed = true }
+"crate" = { fixed = true }
+"Wren's Promise" = { fixed = true }
+
+# --- Wrong relations ------------------------------------------------------------------------------
+# "reach Mooring Mast Nine" is the plan, not a door from the bank to the mast.
+[[drop_relation]]
+source = "Ashcombe Mercantile Bank"
+target = "Mooring Mast Nine"
+type = "LEADS_TO"
+
+# The alarm *rings in* the ballroom; the ballroom is not inside the vault antechamber.
+[[drop_relation]]
+source = "Grand Hall of the Ashcombe Mercantile Bank"
+target = "Orrery Vault Antechamber"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Orrery Lock"
+target = "Ashcombe Mercantile Bank"
+type = "LOCATED_IN"
+
+# Fixtures extracted as paths; the real paths between locations already exist.
+[[drop_relation]]
+source = "rusted iron hatch"
+target = "Old Sewer Culvert"
+type = "LEADS_TO"
+
+[[drop_relation]]
+source = "grated drain"
+target = "Old Sewer Culvert"
+type = "LEADS_TO"
+
+# People are in a specific room, not "in the bank" or "in the alley".
+[[drop_relation]]
+source = "Ashcombe Mercantile Bank"
+target = "Silas Ashcombe"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Ashcombe Mercantile Bank"
+target = "Horace Pell"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Brassworks Alley"
+target = "Tobias Fenn"
+type = "HAS_AGENT"
+
+# Tobias sells his tools (he holds them); they are not lying in the alley for free.
+[[drop_relation]]
+source = "Brassworks Alley"
+target = "lockpick set"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Brassworks Alley"
+target = "tuning fork of blued steel"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Brassworks Alley"
+target = "grappling hook with coil of silk rope"
+type = "HAS_ITEM"
+
+# The ledger is on the Clerks' Gallery shelf; Horace only knows its content.
+[[drop_relation]]
+source = "Horace Pell"
+target = "Founders' Ledger"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Founders' Ledger"
+target = "Orrery Lock"
+type = "HAS_ITEM"
+
+# The card is inside the safe; the office only contains the safe.
+[[drop_relation]]
+source = "Director's Office"
+target = "brass punch card"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "steam valve key"
+target = "brass punch card"
+type = "INTERACTS_WITH"
+
+# Pip has the calling card she lifted; Silas lost it long ago.
+[[drop_relation]]
+source = "Silas Ashcombe"
+target = "calling card"
+type = "HAS_ITEM"
+
+# Bertha's spare key is her secret: hidden on a nail behind boiler number three, not in her hands
+# and not lying in plain sight.
+[[drop_relation]]
+source = "Bertha Koss"
+target = "second steam valve key"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "second steam valve key"
+target = "Boiler Undercroft"
+type = "LOCATED_IN"
+
+# --- Missing relations ------------------------------------------------------------------------------
+
+[[add_relation]]
+source = "second steam valve key"
+target = "boiler number three"
+type = "LOCATED_IN"
+description = "hanging on a nail behind boiler number three — Bertha's secret"
+
+[[add_relation]]
+source = "Ashcombe Mercantile Bank"
+target = "Ashcombe Square"
+type = "LOCATED_IN"
+description = "the bank stands on the square; marble steps lead up to its Grand Hall"
+
+[[add_relation]]
+source = "main pressure valve"
+target = "Boiler Undercroft"
+type = "LOCATED_IN"
+description = "on the board of gauges and red valve wheels"
+
+[[add_relation]]
+source = "boiler number three"
+target = "Boiler Undercroft"
+type = "LOCATED_IN"
+description = "one of the three great boilers"

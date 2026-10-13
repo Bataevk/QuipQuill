@@ -143,7 +143,7 @@ class GraphExtractor:
         replies = await self._complete_all(
             self._summarizer,
             [
-                (prompts.SUMMARIZATION_SYSTEM, prompts.SUMMARIZATION_USER.format(text=result[i]))
+                (_merge_prompt(merged[i].type), prompts.SUMMARIZATION_USER.format(text=result[i]))
                 for i in todo
             ],
         )
@@ -153,6 +153,13 @@ class GraphExtractor:
                 continue
             result[i] = remove_special_tokens(reply).strip() or result[i]
         return result
+
+
+def _merge_prompt(entity_type: str) -> str:
+    """Characters keep every fact (they are role-played); everything else gets a short merge."""
+    if entity_type.strip().lower() in prompts.PERSONA_TYPES:
+        return prompts.PERSONA_MERGE_SYSTEM
+    return prompts.SUMMARIZATION_SYSTEM
 
 
 def _parse_chunk_reply(reply: str | Exception) -> dict[str, Any] | None:

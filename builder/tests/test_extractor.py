@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -77,3 +78,28 @@ def test_graph_round_trips_through_dict(fake_client: FakeChatClient, lore_dir: P
 
     assert data["version"] == 1
     assert Graph.from_dict(data) == graph
+
+
+def test_characters_are_merged_with_the_persona_prompt(lore_dir: Path) -> None:
+    from quipquill_builder import prompts
+
+    guardian = {"name": "Skeleton Guardian", "type": "Creature", "description": "HP 12."}
+    torch = {"name": "copper torch", "type": "Tool", "description": "Shines."}
+    client = FakeChatClient(
+        {
+            "The Entrance Rune Hall**": json.dumps({"entities": [guardian, torch]}),
+            "Torchlight Corridor**": json.dumps(
+                {
+                    "entities": [
+                        {**guardian, "description": "Knows the password."},
+                        {**torch, "description": "Copper."},
+                    ]
+                }
+            ),
+        }
+    )
+    extract(client, load_documents(lore_dir))
+
+    systems = {user.splitlines()[1]: system for system, user in client.calls if "summarize" in user}
+    assert systems["HP 12."] == prompts.PERSONA_MERGE_SYSTEM
+    assert systems["Shines."] == prompts.SUMMARIZATION_SYSTEM

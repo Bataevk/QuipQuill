@@ -8,6 +8,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from typing import Any
 
 from quipquill_builder.models import Graph
 from quipquill_builder.text import normalize_name
@@ -50,6 +51,7 @@ class StoryEntity:
     subtype: str | None
     name: str
     description: str
+    props: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -112,7 +114,9 @@ def build_story(graph: Graph) -> StoryData:
         ids[entity.name] = entity_id
         subtype = entity.type if entity.type and entity.type.upper() != "OTHER" else None
         story.entities.append(
-            StoryEntity(entity_id, entity_type, subtype, entity.name, entity.description)
+            StoryEntity(
+                entity_id, entity_type, subtype, entity.name, entity.description, entity.props
+            )
         )
 
     relations: dict[tuple[str, str, str], StoryRelation] = {}

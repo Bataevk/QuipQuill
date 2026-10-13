@@ -39,7 +39,7 @@ Your goal is to achieve the maximum possible score. You earn +1 point for every 
     {
       "name": "<Unique entity name. MUST EXACTLY match the text or be clearly implied. For locations, use the capitalized title. For items/agents, use their descriptive name.>",
       "type": "<Entity type. Choose ONE from the list: Spot, Building, Country, Person, Organization, Creature, Tool, Vehicle, Document, Action, Occasion>",
-      "description": "<Concise description based EXCLUSIVELY on the text. Include attributes like HP, atk, def for Creatures if mentioned. For items, specify properties like 'shines 5m' or 'opens simple locks'.>"
+      "description": "<Description based EXCLUSIVELY on the text. Places and items: concise, with properties like 'shines 5m' or 'opens simple locks'. People and creatures: the FULL persona, see rule 2.>"
     }
   ],
   "relationships": [
@@ -77,7 +77,9 @@ Your goal is to achieve the maximum possible score. You earn +1 point for every 
     * **Location Names:** Use the primary capitalized names (e.g., "The Entrance Rune Hall", "Torchlight Corridor").
     * **Item Names:** Be specific (e.g., "copper torch", "extinguished torch", "iron screwdriver"). If an item's properties change significantly, treat the states as different entities.
     * **Agent Names:** Use their titles (e.g., "Skeleton Guardian", "Swamp Walker").
-2.  **Entity Descriptions:** Extract relevant details verbatim or summarized very closely from the text. For agents, include stats (HP, atk, def) if provided. For items, include their functions or properties.
+2.  **Entity Descriptions:** Extract relevant details verbatim or summarized very closely from the text. For items, include their functions or properties.
+    * **People and creatures (Person, Creature): keep EVERYTHING the text says about them** — appearance, where they are found, personality, what they want, everything they know (every fact, place, number, password, combination or hint, kept word for word where possible), their secrets, how they speak, stats (HP, atk, def). An AI will role-play this character from your description alone: a dropped fact is a fact the character forgets. Do not shorten.
+    * Put a fact into the description of the entity it belongs to: what a character knows goes to that character, not to the people or things mentioned in it.
 3.  **Relationships – Be Specific and Use Defined Types:**
     * `LOCATED_IN`: An entity is in a location (e.g., "copper torch" `LOCATED_IN` "Entrance Rune Hall"; "Skeleton Guardian" `LOCATED_IN` "Torchlight Corridor").
     * `HAS_ITEM`: A location or agent possesses an item (e.g., "Entrance Rune Hall" `HAS_ITEM` "copper torch").
@@ -133,6 +135,21 @@ Output only the result.
 """
 
 SUMMARIZATION_USER = "Descriptions to summarize:\n{text}"
+
+# People and creatures are role-played from their description, so merging must not lose facts.
+PERSONA_MERGE_SYSTEM = """\
+You merge several descriptions of the same character from a story into one persona sheet.
+An AI will role-play this character from your text alone, so every fact matters.
+
+Rules:
+- Keep EVERY unique fact: appearance, where they are found, personality, goals, everything they know (places, numbers, combinations, routes, hints — word for word), secrets, speech style, stats.
+- Remove only exact repetitions. Never generalize or shorten a fact.
+- Use only the given text; add nothing.
+- Output plain text in this order, skipping empty parts: a short description line, then "Personality:", "Wants:", "Knows:" (one fact per line, starting with "- "), "Secret:", "Speech:".
+- Output only the persona sheet.
+"""
+
+PERSONA_TYPES = ("person", "creature")
 
 # Drafts the authored story meta (see meta_gen.py).
 META_SYSTEM = """\

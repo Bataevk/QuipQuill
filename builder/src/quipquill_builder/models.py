@@ -9,6 +9,8 @@ class Entity:
     name: str
     type: str = "OTHER"
     description: str = ""
+    # Free-form flags set during curation, e.g. {"fixed": true} for things that cannot be taken.
+    props: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

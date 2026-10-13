@@ -33,3 +33,6 @@ node_modules/
 *.db
 *.sqlite
 *.sqlite3
+
+# Intermediate graph after `builder curate` (derived from graph.json + curation.toml)
+stories/*/graph.curated.json

@@ -37,7 +37,7 @@ CREATE TABLE entities (
   subtype     TEXT,                  -- Spot | Building | Tool | Person ... (из экстрактора)
   name        TEXT NOT NULL,
   description TEXT NOT NULL,
-  props       TEXT NOT NULL DEFAULT '{}'  -- JSON: количество, флаги, персона NPC и т.п.
+  props       TEXT NOT NULL DEFAULT '{}'  -- JSON: {"fixed": true} — нельзя взять (ADR 19); позже количество и т.п.
 );
 
 CREATE TABLE relations (
@@ -67,6 +67,8 @@ CREATE TABLE embeddings (
 - Проход: `loc → LEADS_TO → loc`. Builder добавляет обратное ребро (с пустым описанием), если в описании прохода нет «one-way».
 - Эмбеддинги: `name` — имя, `desc` — «имя: описание» (только у описанных сущностей).
 - Дополнительный ключ meta `source_extract_model` — модель, которой извлекался граф.
+- Предмет может лежать **в другом предмете** (`brass punch card LOCATED_IN wall safe`, ключ за котлом) — инструменты мастера должны это учитывать (4.1).
+- Локация, которая `LOCATED_IN` достижимой локации, считается её частью (ADR 19).
 
 ## Сохранение партии (`saves/<id>.db`)
 

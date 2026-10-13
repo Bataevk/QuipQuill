@@ -1,0 +1,1896 @@
+{
+  "version": 1,
+  "meta": {
+    "extract_model": "anthropic/claude-haiku-5.5",
+    "summarize_model": "anthropic/claude-haiku-5.5",
+    "documents": [
+      "00-world.md",
+      "01-locations.md",
+      "02-characters.md"
+    ],
+    "chunks": 13,
+    "failed_chunks": 0
+  },
+  "entities": [
+    {
+      "name": "Vellmoor",
+      "type": "Spot",
+      "description": "Vellmoor is a harbor city of brass, soot and steam, built in terraces up a cold grey bay. Coal smoke hangs so thick over its rooftops that street gas lamps burn day and night. Airships drift above the smog between iron mooring masts, carrying tea, coal and secrets to the far colonies. The year is 1887 by the city's calendar.\n\nThere is no magic in Vellmoor, only engineering. Its people are all human. Clockwork automatons, pneumatic post tubes, steam boilers and difference engines are common. Anyone claiming supernatural powers is a fraud or a stage performer.\n\nMoney rules the city in practice. It is counted in crowns and pennies. A good meal costs two pennies, and an airship passage costs fifty crowns. Violence draws the watch quickly, so the best heists are the ones nobody notices until morning.\n\nAshcombe Square is the cleanest location in the city. Pip Quillon knows every pneumatic tube that runs through Vellmoor. Tobias Fenn is the quietest fence in the city.",
+      "props": {}
+    },
+    {
+      "name": "Ashcombe Mercantile Bank",
+      "type": "Building",
+      "description": "The bank holds the debts of half the shipyards and most airship captains. It seized the life's work of the late Professor Amara Quell after she died in debt to it. Tonight it hosts its annual Founders' Gala. Deep beneath it lies the Orrery Vault.\n\nA hand-drawn plan of the bank is pinned in the back room of The Rusty Gear Tavern. A forged gala invitation lets one guest through the front doors tonight.\n\nSilas Ashcombe directs the bank. According to his secret, it is nearly bankrupt.",
+      "props": {}
+    },
+    {
+      "name": "Silas Ashcombe",
+      "type": "Person",
+      "description": "Director of the Ashcombe Mercantile Bank; grandson of the founder and the most feared man on the bay. Silver-haired, wears a velvet evening coat and carries a gold pocket watch.\n\nPersonality:\n- Charming in public, cold in private.\n- Collects people's debts the way others collect stamps.\n\nWants:\n- A flawless gala.\n- A record price for the Clockheart at noon.\n\nKnows:\n- Greets guests until midnight in the Grand Hall of the Ashcombe Mercantile Bank.\n- The safe combination in his office is the founding year, 1823.\n- He carries no card on him tonight; the brass punch card is locked in the wall safe.\n- The vault alarm rings in the ballroom.\n- Seized Mags Holloway's airship over a single missed payment; she seeks revenge on him.\n- Pip Quillon once lifted a wallet from him and still has his calling card.\n- Constable Edda Rourke would love to see him ruined, because the bank evicted her mother's bakery.\n\nSecret:\n- The bank is nearly bankrupt; without the Admiralty sale it collapses within a month.\n\nSpeech:\n- Smooth and flattering; uses the listener's name too often; never says \"no\" directly.",
+      "props": {}
+    },
+    {
+      "name": "Orrery Vault",
+      "type": "Building",
+      "description": "Summary:\n\nA chamber under the Ashcombe Mercantile Bank is sealed by a brass orrery lock. It holds the Clockheart. The Crew plans to open this vault to take the Clockheart.\n\nThe vault lies behind a great round door, which opens once the Orrery Lock is solved. It is a small, silent room lined with velvet-covered shelves of deeds, bonds, and sealed boxes. On a pedestal under a glass dome, the Clockheart turns slowly. In one corner, a narrow emergency chute drops into darkness. It is one-way, too steep and slick to climb back up.",
+      "props": {}
+    },
+    {
+      "name": "Clockheart",
+      "type": "Tool",
+      "description": "Summary: The item is a fist-sized engine made of crystal and gold gears. It never stops turning and never needs winding. Professor Amara Quell invented it with secret help from Tobias Fenn. It is warm, heavy, and gives off a soft golden light and a ticking sound like a heartbeat. It turns under a glass dome on a pedestal in the Orrery Vault.\n\nSilas Ashcombe wants it sold at a record price at a private auction at noon tomorrow to the Admiralty. The crew plans to steal it tonight, the only night it can be taken, and carry it out of the city by airship. Mags Holloway secretly plans to return it to Professor Quell's daughter in the colonies instead of selling it.",
+      "props": {}
+    },
+    {
+      "name": "Professor Amara Quell",
+      "type": "Person",
+      "description": "Late inventor and professor of the Clockheart, a woman who died in debt.\n\nKnows:\n- She was the inventor of the Clockheart.\n- She died in debt to the Ashcombe Mercantile Bank, which seized her life's work.\n- She has a daughter in the colonies, to whom Mags Holloway plans to return the Clockheart.\n- Her apprentice was Tobias Fenn.\n\nSecret:\n- Tobias Fenn secretly helped her finish the Clockheart.",
+      "props": {}
+    },
+    {
+      "name": "Admiralty",
+      "type": "Organization",
+      "description": "Mags Holloway wants to keep the Clockheart away from an organization. That organization plans to buy the Clockheart at a private auction tomorrow at noon. They want it to build war-dreadnoughts that never land.",
+      "props": {}
+    },
+    {
+      "name": "Founders' Gala",
+      "type": "Occasion",
+      "description": "The Ashcombe Mercantile Bank's annual gala, held tonight. The doors are open to the rich, the guards are distracted by champagne, and the boilers run hot to warm the ballroom.",
+      "props": {}
+    },
+    {
+      "name": "airship",
+      "type": "Vehicle",
+      "description": "Airships drift above the smog between iron mooring masts. They carry tea, coal, and secrets to distant colonies. Many airship captains owe money to the bank.\n\nOne airship waits at Mooring Mast Nine to carry the Clockheart out of Vellmoor. Mags Holloway owned this airship. Silas Ashcombe seized it over a single missed payment.",
+      "props": {}
+    },
+    {
+      "name": "The Crew",
+      "type": "Organization",
+      "description": "The group planning and carrying out the heist in Vellmoor. Meets in the back room of The Rusty Gear Tavern. Led by Mags Holloway and includes the player.",
+      "props": {}
+    },
+    {
+      "name": "Mags Holloway",
+      "type": "Person",
+      "description": "A former airship captain in her fifties, broad-shouldered, in a captain's coat gone grey at the seams, with a brass hook where her left hand used to be. She lost her ship to the bank, plans the heist, and recruited the player. She waits in the back room of The Rusty Gear Tavern, behind the curtain, where the hand-drawn plan of the Ashcombe Mercantile Bank is pinned to the wall.\n\nPersonality: dry, patient, never raises her voice; treats the heist like sailing through a storm.\n\nWants: the Clockheart kept out of the Admiralty's hands; revenge on Silas Ashcombe, who seized her airship over a single missed payment.\n\nKnows:\n- The layout of the Ashcombe Mercantile Bank.\n- The Orrery Lock is set to \"the founding night\" but not the exact positions.\n- Captain Juno Vale will wait at Mooring Mast Nine only until dawn.\n- Pip Quillon knows the pneumatic tubes.\n- Tobias Fenn sells the right tools.\n- The plan: get into the bank, open the Orrery Vault, take the Clockheart, and reach Mooring Mast Nine before dawn, where an airship waits to carry it out of the city.\n- She lacks the skills the player was hired for.\n\nSecret: she plans to return the Clockheart to Professor Amara Quell's daughter in the colonies, not to sell it. She has told no one.\n\nSpeech: short sentences, sailing metaphors (\"trim your sails\", \"dead calm before the squall\").",
+      "props": {}
+    },
+    {
+      "name": "The player",
+      "type": "Person",
+      "description": "A freelance specialist new to Vellmoor, recruited by Mags Holloway for skills Mags does not have. Part of The Crew.",
+      "props": {}
+    },
+    {
+      "name": "The Rusty Gear Tavern",
+      "type": "Building",
+      "description": "A low, smoke-stained tavern at the bottom of Lamplight Row. Dockworkers drink bitter ale here under a ceiling of rusted gears salvaged from a wrecked airship. A curtain behind the bar hides the back room, where The Crew meets. A brass lantern hangs over the table, and a crate in the corner holds the crew's supplies. Mags Holloway waits in the back room with the plan of the bank pinned to the wall.",
+      "props": {}
+    },
+    {
+      "name": "Back room of The Rusty Gear Tavern",
+      "type": "Spot",
+      "description": "The back room where The Crew meets to plan the heist.",
+      "props": {}
+    },
+    {
+      "name": "the bank",
+      "type": "Building",
+      "description": "The bank took Mags Holloway's airship. The Crew plans to enter it for the heist. Mags knows its layout. It contains the Orrery Lock and a boiler room. The boiler room is reached via the Old Sewer Culvert. The bank owes overdue wages to the stokers who work under chief engineer Bertha Koss.",
+      "props": {}
+    },
+    {
+      "name": "Mooring Mast Nine",
+      "type": "Spot",
+      "description": "Descriptions:\n\n1. Destination where an airship waits to carry the Clockheart out of the city. The Crew aims to reach it before dawn.\n2. Destination for travel north along the bay road from Ashcombe Square.\n3. An iron mooring mast at the north end of the bay road, rising above the smog. A rattling cage lift climbs to the top platform. The wind is cold and smells of coal and salt. From here the whole city is a carpet of lamps.\n4. Mooring mast where Captain Juno Vale waits until dawn.\n5. Mast where Captain Juno Vale waits at the top. The Admiralty patrol ship passes the masts every two hours.",
+      "props": {}
+    },
+    {
+      "name": "Mags Holloway's former airship",
+      "type": "Vehicle",
+      "description": "Mags Holloway's airship, lost to the bank.",
+      "props": {}
+    },
+    {
+      "name": "city watch",
+      "type": "Organization",
+      "description": "The Vellmoor city watch. Underpaid. Some constables can be bribed; the honest ones are dangerous. Responds quickly to violence.",
+      "props": {}
+    },
+    {
+      "name": "guard",
+      "type": "Person",
+      "description": "Most guards in Vellmoor carry truncheons and whistles.",
+      "props": {}
+    },
+    {
+      "name": "truncheon",
+      "type": "Tool",
+      "description": "Carried by most guards in Vellmoor. Carried by Constable Edda Rourke while patrolling Ashcombe Square.",
+      "props": {}
+    },
+    {
+      "name": "whistle",
+      "type": "Tool",
+      "description": "Carried by most guards in Vellmoor. Carried by Constable Edda Rourke while patrolling Ashcombe Square.",
+      "props": {}
+    },
+    {
+      "name": "clockwork automaton",
+      "type": "Creature",
+      "description": "A clockwork machine that follows punched brass cards and obeys whoever presents the right card.\n\nPersonality:\n- Obedient to whoever presents the right card.\n- Can be confused by a strong surge of steam pressure in the building's pipes.\n\nKnows:\n- Pauses for a few seconds when a tuning fork of blued steel is struck near it and its humming reaches it.\n\nSpeech:\n- None recorded.",
+      "props": {}
+    },
+    {
+      "name": "punched brass card",
+      "type": "Document",
+      "description": "A card that clockwork automatons follow; an automaton obeys whoever presents the right card.",
+      "props": {}
+    },
+    {
+      "name": "revolver",
+      "type": "Tool",
+      "description": "A firearm that exists in Vellmoor but is loud and rare.",
+      "props": {}
+    },
+    {
+      "name": "pepperbox pistol",
+      "type": "Tool",
+      "description": "A firearm that exists in Vellmoor but is loud and rare.",
+      "props": {}
+    },
+    {
+      "name": "pneumatic post",
+      "type": "Tool",
+      "description": "Vellmoor has no radios. It relies on the pneumatic post and messenger boys.\n\nA pneumatic post box stands halfway up Lamplight Row. It has a dented brass mouth that swallows letters with a thump. A capsule posted there reaches the terminal behind the head teller's desk in the Grand Hall in under a minute.",
+      "props": {}
+    },
+    {
+      "name": "messenger boys",
+      "type": "Person",
+      "description": "Vellmoor's messengers, used alongside the pneumatic post since there are no radios.",
+      "props": {}
+    },
+    {
+      "name": "Back room",
+      "type": "Spot",
+      "description": "Hidden behind a curtain behind the bar of The Rusty Gear Tavern. Mags Holloway has pinned a hand-drawn plan of the Ashcombe Mercantile Bank to the wall here.",
+      "props": {}
+    },
+    {
+      "name": "Lamplight Row",
+      "type": "Spot",
+      "description": "A steep cobbled street with gas lamps that never go out. Steam hisses from pavement grates, and newspaper boys shout the evening edition. A rusted iron hatch near the gutter leads down to the Old Sewer Culvert. Halfway up, a pneumatic post box with a dented brass mouth swallows letters with a thump. A capsule from this box reaches the terminal in the Grand Hall in under a minute.\n\nTravel connects this street to Brassworks Alley (back through the archway) and Ashcombe Square (downhill).\n\nPip Quillon is usually found leaning on the post box here.",
+      "props": {}
+    },
+    {
+      "name": "Ashcombe Square",
+      "type": "Spot",
+      "description": "Summary of Destinations:\n\n- **Uphill from Lamplight Row:** A wide, white-stone square, the cleanest place in Vellmoor. Carriages unload guests in silk and furs before the bank. Constables patrol the edges with lanterns and whistles. Constable Edda Rourke patrols here with a lantern, truncheon, and whistle.\n- **Down the marble steps from the Grand Hall of the Ashcombe Mercantile Bank:** Reached from the bank's Grand Hall.\n- **South along the bay road from Mooring Mast Nine:** Reached by this route.",
+      "props": {}
+    },
+    {
+      "name": "Brassworks Alley",
+      "type": "Spot",
+      "description": "Reached through a narrow archway from Lamplight Row, this crooked alley holds workshops where the air tastes of hot metal. Sparks fly from a grinding wheel, and windows are crowded with clocks, springs, and half-built mechanical birds. Fenn's Clockworks stands at the end.",
+      "props": {}
+    },
+    {
+      "name": "Old Sewer Culvert",
+      "type": "Spot",
+      "description": "Summary:\n\n- A brick tunnel older than the city above, half-filled with black water. Rats watch from the ledges. Smugglers once used it, and their chalk marks still show the way. One branch climbs to the iron hatch on Lamplight Row. Another rises to a grated drain under the bank's boiler room.\n- The old sewer lies below the Boiler Undercroft. Reach it through the grated drain in the floor.\n- Going down the emergency chute from The Orrery Vault leads here. The chute is a one-way drop.\n- Going down the rusted iron hatch near the gutter on Lamplight Row leads here.",
+      "props": {}
+    },
+    {
+      "name": "Pip Quillon",
+      "type": "Person",
+      "description": "Fourteen-year-old runner and pickpocket in a cap two sizes too big, usually found on Lamplight Row leaning on the pneumatic post box.\n\nPersonality:\n- Cheeky, fast-talking, brave until things get loud, then gone.\n\nWants:\n- Enough money to rent a room for herself and her little brother.\n- Respect from the grown-ups.\n\nKnows:\n- Every pneumatic tube in Vellmoor.\n- A capsule posted on Lamplight Row reaches the terminal behind the head teller's desk in the Grand Hall in under a minute.\n- The iron hatch on Lamplight Row leads down to the Old Sewer Culvert, and the culvert reaches the bank's boiler room.\n- Constable Edda Rourke takes a tea break at half past eleven.\n\nSecret:\n- She once lifted a wallet from Silas Ashcombe himself and still has his calling card.\n\nSpeech:\n- Street slang, calls everyone \"guv\" or \"missus\", talks with her hands.",
+      "props": {}
+    },
+    {
+      "name": "brass lantern",
+      "type": "Tool",
+      "description": "Hangs over the table in The Rusty Gear Tavern. Shines a steady light for six hours.",
+      "props": {}
+    },
+    {
+      "name": "smoke canister",
+      "type": "Tool",
+      "description": "Fills a room with thick grey smoke for a minute.",
+      "props": {}
+    },
+    {
+      "name": "forged gala invitation",
+      "type": "Document",
+      "description": "Lets one guest through the Ashcombe Mercantile Bank's front doors tonight.",
+      "props": {}
+    },
+    {
+      "name": "crate",
+      "type": "Tool",
+      "description": "Sits in the corner of The Rusty Gear Tavern and holds the crew's supplies.",
+      "props": {}
+    },
+    {
+      "name": "hand-drawn plan",
+      "type": "Document",
+      "description": "A hand-drawn plan of the Ashcombe Mercantile Bank, pinned to the wall of the back room by Mags Holloway.",
+      "props": {}
+    },
+    {
+      "name": "discarded evening newspaper",
+      "type": "Document",
+      "description": "Tonight's headline: \"Clockheart to be Sold to the Admiralty at Noon\".",
+      "props": {}
+    },
+    {
+      "name": "rusted iron hatch",
+      "type": "Tool",
+      "description": "Rusted iron hatch near the gutter on Lamplight Row that leads down into the old sewers.",
+      "props": {}
+    },
+    {
+      "name": "Fenn's Clockworks",
+      "type": "Building",
+      "description": "A clockmaker's shop owned by Tobias Fenn stands at the end of Brassworks Alley. It is narrow. Its door bell plays three notes when the door opens.",
+      "props": {}
+    },
+    {
+      "name": "lockpick set",
+      "type": "Tool",
+      "description": "Opens simple locks and desk drawers. Costs three crowns.",
+      "props": {}
+    },
+    {
+      "name": "tuning fork of blued steel",
+      "type": "Tool",
+      "description": "A struck tuning fork near a clockwork automaton makes it pause for a few seconds. The fork's humming causes Sentinel Unit Seven to stop briefly.",
+      "props": {}
+    },
+    {
+      "name": "grappling hook with coil of silk rope",
+      "type": "Tool",
+      "description": "A grappling hook with a coil of silk rope.",
+      "props": {}
+    },
+    {
+      "name": "Tobias Fenn",
+      "type": "Person",
+      "description": "Elderly clockmaker and quiet fence, owner of Fenn's Clockworks in Brassworks Alley. Thin, with magnifying lenses clipped to his spectacles. Meet person at Brassworks Alley; seller of the right tools for the heist, according to Mags Holloway's knowledge.\n\nPersonality: polite, precise, pedantic about craftsmanship; despises cheap work and loud people.\n\nWants: payment up front (the tuning fork costs five crowns, the lockpick set three, the grappling hook two), or a favour he can call in later.\n\nKnows:\n- He helped build Sentinel Unit Seven twenty years ago.\n- A struck tuning fork of blued steel makes it pause for a few seconds.\n- A surge of steam pressure confuses it for a full minute.\n- The director's brass punch card makes it obey completely.\n\nSecret: He was Professor Amara Quell's apprentice and secretly helped her finish the Clockheart.\n\nSpeech: formal and slow, corrects grammar, compares people to badly made clocks.",
+      "props": {}
+    },
+    {
+      "name": "Founder's Clocktower",
+      "type": "Building",
+      "description": "Stands in the middle of Ashcombe Square. Its face shows not the time but the positions of the planets.",
+      "props": {}
+    },
+    {
+      "name": "bronze plaque",
+      "type": "Document",
+      "description": "Stands at the base of the Founder's Clocktower and reads: \"Founded on the night the Comet stood beside the Third Moon.\"",
+      "props": {}
+    },
+    {
+      "name": "Constable Edda Rourke",
+      "type": "Person",
+      "description": "Tall, weathered officer of the city watch who patrols Ashcombe Square with a lantern, a truncheon and a whistle. A constable who patrols the edge of the square with a lantern and whistle.\n\nPersonality: honest, stubborn, suspicious of anyone who smiles too much; cannot be bribed with money.\n\nWants: a quiet night; she would also love to see Silas Ashcombe ruined, because the bank evicted her mother's bakery.\n\nKnows:\n- Person to meet at Ashcombe Square.\n- Constable who takes a tea break at half past eleven, according to Pip Quillon.\n- The gala guest list is checked at the doors.\n- Carriages leave at midnight.\n- Something is wrong with the bank's books.\n\nSecret: she has been collecting evidence of the bank's fraud and lacks only the Founders' Ledger to prove it; she might look the other way for someone who brings it to her.\n\nSpeech: blunt, official (\"Move along\", \"State your business\"), softens only when talking about her mother.",
+      "props": {}
+    },
+    {
+      "name": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "Building",
+      "description": "Ashcombe Mercantile Bank: a marble-stepped hall reached from Ashcombe Square, where carriages unload guests.\n\nTonight the bank's public hall is a ballroom. Cut-glass chandeliers hang over a polished floor. A string quartet plays near the counters, and waiters carry trays of champagne. Portraits of three generations of Ashcombes line the walls. A sweeping staircase rises to the upper floor. A plain service door behind the counters leads down to the cellars. A pneumatic post terminal clanks behind the head teller's desk.\n\nReached by iron stairs up from the Boiler Undercroft.",
+      "props": {}
+    },
+    {
+      "name": "Clerks' Gallery",
+      "type": "Building",
+      "description": "Upper-floor gallery: Tall desks and green-shaded lamps fill the room where bank clerks copy ledgers by hand. Tonight it is nearly empty and very quiet, though music from the ballroom drifts up the stairs. Leather-bound ledgers line one wall. At the far end, a frosted-glass door bears the gold letters DIRECTOR.\n\nReached by passing back through the frosted-glass door from the Director's Office.\n\nHorace Pell works late here at his desk because he was not invited to the gala.",
+      "props": {}
+    },
+    {
+      "name": "Boiler Undercroft",
+      "type": "Spot",
+      "description": "Boiler Room\n\nReached by the service door and iron stairs from the Grand Hall of the Ashcombe Mercantile Bank. It is hot and loud. Three great boilers supply steam to the radiators, lifts, and vault machinery. Copper and iron pipes run across the ceiling. A board of pressure gauges and red valve wheels controls steam throughout the building. A heavy door marked \"VAULT — AUTHORISED ONLY\" leads deeper underground. A grated drain in the floor opens onto the old sewer below.\n\nChief engineer Bertha Koss oversees this area, which includes boiler number three. A steam surge here confuses automatons and rattles the ballroom radiators.\n\nBeneath the boiler room, reached through the grated drain, lies the area connected to the vault antechamber through the vault door.",
+      "props": {}
+    },
+    {
+      "name": "Director's Office",
+      "type": "Building",
+      "description": "The director's office is at the far end of the Clerks' Gallery, behind a frosted-glass door marked DIRECTOR. It is oak-paneled and smells of cigars and lamp oil. A painting of the original Ashcombe Bank hangs above the desk, and a small wall safe with a combination dial is behind it. The desk drawers are locked. A window overlooks the bay and the distant lights of the mooring masts.",
+      "props": {}
+    },
+    {
+      "name": "glass of champagne",
+      "type": "Tool",
+      "description": "Champagne served by waiters carrying silver trays in the Grand Hall; can be taken.",
+      "props": {}
+    },
+    {
+      "name": "silver serving tray",
+      "type": "Tool",
+      "description": "Silver tray used by waiters to carry champagne in the Grand Hall; can be taken.",
+      "props": {}
+    },
+    {
+      "name": "pneumatic post terminal",
+      "type": "Tool",
+      "description": "Clanks behind the head teller's desk in the Grand Hall of the Ashcombe Mercantile Bank.",
+      "props": {}
+    },
+    {
+      "name": "Founders' Ledger",
+      "type": "Document",
+      "description": "The bank's first ledger opens with an astronomical drawing of the founding night. It shows the Comet in the house of the Third Moon, the Iron Planet at its highest, and the Pale Planet hidden behind the Sun.\n\nConstable Edda Rourke lacks a document needed to prove the bank's fraud. She might overlook the fraud for anyone who brings it to her.\n\nHorace Pell knows the Orrery Lock positions from a ledger that sits on the shelf.",
+      "props": {}
+    },
+    {
+      "name": "Horace Pell",
+      "type": "Person",
+      "description": "Junior clerk, young and nervous, with ink-stained cuffs. Works late at his desk in the Clerks' Gallery because he was not invited to the gala. Met in the Clerks' Gallery.\n\nPersonality: anxious, bookish, desperate to be noticed; loves astronomy.\nWants: a way out of the bank; dreams of joining the Royal Observatory.\nKnows:\n- The Orrery Lock positions by heart from the Founders' Ledger: the Comet beside the Third Moon, the Iron Planet at its highest point, the Pale Planet hidden behind the Sun.\n- Where the Founders' Ledger sits on the shelf.\nSecret: has been forging small entries in the ledgers on Silas Ashcombe's orders and is terrified of being blamed.\nSpeech: stammers, over-explains, gets excited and fluent when talking about the stars.",
+      "props": {}
+    },
+    {
+      "name": "small wall safe",
+      "type": "Tool",
+      "description": "Small wall safe with a combination dial, hidden behind the painting of the original Ashcombe Bank in the Director's Office. The director's appointment book notes that the combination is \"the year of my grandfather's founding\" (1823).",
+      "props": {}
+    },
+    {
+      "name": "brass punch card",
+      "type": "Document",
+      "description": "The director's master card is hidden in the wall safe. Any automaton in the bank will obey it. Silas Ashcombe does not carry the card tonight.",
+      "props": {}
+    },
+    {
+      "name": "silver letter opener",
+      "type": "Tool",
+      "description": "A silver letter opener found in the Director's Office.",
+      "props": {}
+    },
+    {
+      "name": "director's appointment book",
+      "type": "Document",
+      "description": "Notes that the safe combination is \"the year of my grandfather's founding\" (1823).",
+      "props": {}
+    },
+    {
+      "name": "steam valve key",
+      "type": "Tool",
+      "description": "An iron key turns the main pressure valve. A sharp steam surge confuses every automaton in the building for a minute.",
+      "props": {}
+    },
+    {
+      "name": "oily rag",
+      "type": "Tool",
+      "description": "An oily rag found in the Boiler Undercroft.",
+      "props": {}
+    },
+    {
+      "name": "engineer's goggles",
+      "type": "Tool",
+      "description": "Engineer's goggles found in the Boiler Undercroft.",
+      "props": {}
+    },
+    {
+      "name": "Bertha Koss",
+      "type": "Person",
+      "description": "Chief engineer of the Boiler Undercroft: a stout woman with forearms like hams, soot on her face, and a wrench in her belt.\n\nPersonality:\n- Loud, funny, and proud of her boilers\n- Fiercely loyal to the stokers who work under her\n\nWants:\n- The overdue wages the bank owes her stokers\n- Would happily \"test the main valve\" tonight for anyone who promises to get them paid\n\nKnows:\n- The steam valve key turns the main pressure valve\n- A sharp surge confuses every automaton in the building for a minute and rattles the radiators in the ballroom\n- The grated drain in the floor leads to the Old Sewer Culvert\n\nSecret:\n- She keeps a second steam valve key on a nail behind boiler number three\n\nSpeech:\n- Booming; swears creatively by \"boilers and brimstone\"; laughs at danger",
+      "props": {}
+    },
+    {
+      "name": "Orrery Vault Antechamber",
+      "type": "Spot",
+      "description": "Orrery Vault: Reached through the vault door from the Boiler Undercroft. The door is marked VAULT — AUTHORISED ONLY. It is a round chamber of riveted brass, lit by a single green lamp. The Orrery Lock stands in its centre. The great round door is set into the far wall. Sentinel Unit Seven stands beside the door.\n\nGoing back through the great round door from the Orrery Vault leads to a location. That location contains the great round door to the vault, guarded by Sentinel Unit Seven.",
+      "props": {}
+    },
+    {
+      "name": "smuggler's chalk",
+      "type": "Tool",
+      "description": "Chalk used by smugglers; their chalk marks still show the way through the Old Sewer Culvert.",
+      "props": {}
+    },
+    {
+      "name": "rats",
+      "type": "Creature",
+      "description": "Watch from the ledges of the Old Sewer Culvert.",
+      "props": {}
+    },
+    {
+      "name": "iron hatch",
+      "type": "Building",
+      "description": "An iron hatch on Lamplight Row leads down to the Old Sewer Culvert. It can be reached by climbing the ladder from the culvert.",
+      "props": {}
+    },
+    {
+      "name": "grated drain",
+      "type": "Building",
+      "description": "A grated drain lies under the bank's boiler room. You can reach it by climbing up from the Old Sewer Culvert. The Boiler Undercroft has a grated drain in its floor, and it leads to the Old Sewer Culvert.",
+      "props": {}
+    },
+    {
+      "name": "green lamp",
+      "type": "Tool",
+      "description": "Single lamp that lights the Orrery Vault Antechamber.",
+      "props": {}
+    },
+    {
+      "name": "Orrery Lock",
+      "type": "Tool",
+      "description": "A brass model of the heavens, taller than a man, has a sun, three moons, the Iron Planet, the Pale Planet, and a silver comet on long jointed arms. Its bodies must be moved into the right positions to open the great round door. The correct positions are those of the night the bank was founded. A wrong setting rings an alarm bell in the ballroom above.\n\nThe lock on the bank is set to \"the founding night.\" Mags Holloway does not know its exact positions.\n\nThe lock's correct positions are: the Comet beside the Third Moon, the Iron Planet at its highest point, and the Pale Planet hidden behind the Sun.",
+      "props": {}
+    },
+    {
+      "name": "great round door",
+      "type": "Tool",
+      "description": "The round vault door is set into the far wall of the Orrery Vault Antechamber. It opens only when the Orrery Lock's bodies are in the right positions. Sentinel Unit Seven blocks the door unless a director's brass punch card is presented.",
+      "props": {}
+    },
+    {
+      "name": "Sentinel Unit Seven",
+      "type": "Creature",
+      "description": "A clockwork guard of brass and iron, seven feet tall, standing beside the great round door in the Orrery Vault Antechamber.\n\nPersonality:\n- Automaton built with Tobias Fenn's help twenty years ago.\n- Does not fight unless attacked.\n\nWants:\n- Challenges anyone who enters with the phrase \"PRESENT CARD.\"\n- Without the director's brass punch card, raises an alarm and blocks the vault door with its body.\n\nKnows:\n- Face is a smooth brass mask with two glowing green lenses.\n- A slot in its chest accepts punched brass cards.\n- The director's brass punch card makes it obey completely.\n- A struck tuning fork of blued steel makes it pause for a few seconds.\n- A surge of steam pressure confuses it for a full minute.\n- The steam surge comes from the Boiler Undercroft.\n\nSecret:\n- Weaknesses: the director's brass punch card, a struck tuning fork of blued steel, and a steam surge from the Boiler Undercroft.\n\nSpeech:\n- Speaks only in clipped capital phrases: \"PRESENT CARD,\" \"UNAUTHORISED,\" \"ALARM PROTOCOL ENGAGED,\" \"CARD ACCEPTED. AWAITING ORDERS.\"",
+      "props": {}
+    },
+    {
+      "name": "alarm bell",
+      "type": "Tool",
+      "description": "Bell in the ballroom above; rings when the Orrery Lock is set wrongly.",
+      "props": {}
+    },
+    {
+      "name": "ballroom",
+      "type": "Spot",
+      "description": "Three rooms are described:\n\n1. A room above the Orrery Vault Antechamber. The alarm bell rings here when set wrong.\n2. A room where the vault alarm rings.\n3. A room whose radiators are rattled by a sharp steam surge from the Boiler Undercroft.",
+      "props": {}
+    },
+    {
+      "name": "bundle of bearer bonds",
+      "type": "Document",
+      "description": "Worth two hundred crowns. Lies among the velvet-covered shelves of deeds, bonds and sealed boxes.",
+      "props": {}
+    },
+    {
+      "name": "emergency chute",
+      "type": "Tool",
+      "description": "A narrow emergency chute in the corner of The Orrery Vault that drops into darkness. It is a one-way drop, too steep and slick to climb back up.",
+      "props": {}
+    },
+    {
+      "name": "cage lift",
+      "type": "Tool",
+      "description": "A rattling cage lift at Mooring Mast Nine that climbs to the top platform.",
+      "props": {}
+    },
+    {
+      "name": "Wren's Promise",
+      "type": "Vehicle",
+      "description": "An airship sits on the top platform of Mooring Mast Nine. It strains at its ropes, and its engines idle. Captain Juno Vale commands it. The airship can outrun the Admiralty patrol ship only in fog.",
+      "props": {}
+    },
+    {
+      "name": "Captain Juno Vale",
+      "type": "Person",
+      "description": "Captain of the airship Wren's Promise, met at Mooring Mast Nine. Young captain who will wait at Mooring Mast Nine only until dawn, waiting at the top of the mast with goggles pushed up on her forehead and a pistol she has never fired.\n\nPersonality: reckless, cheerful, mercenary, secretly romantic about the sky.\n\nWants:\n- Fifty crowns for passage, paid on boarding.\n- She leaves at dawn whether the crew is aboard or not.\n\nKnows:\n- The Admiralty patrol ship passes the masts every two hours.\n- The Wren's Promise can outrun it only in fog.\n\nSecret: She owes the Ashcombe bank money too, and the bank has offered to cancel her debt if she reports any suspicious passengers tonight. She has not decided yet.\n\nSpeech: Airship slang (\"cast off\", \"full burn\"), teases everyone, turns serious about money.",
+      "props": {}
+    },
+    {
+      "name": "bank plan",
+      "type": "Document",
+      "description": "Plan of the bank, pinned to the wall in the back room of The Rusty Gear Tavern.",
+      "props": {}
+    },
+    {
+      "name": "pneumatic tubes",
+      "type": "Tool",
+      "description": "Pneumatic tube network in Vellmoor, known in full to Pip Quillon.",
+      "props": {}
+    },
+    {
+      "name": "Grand Hall",
+      "type": "Building",
+      "description": "The bank hall has a terminal behind the head teller's desk. Guests can reach it by capsule from the pneumatic post box on Lamplight Row in under a minute. Silas Ashcombe greets guests here until midnight.",
+      "props": {}
+    },
+    {
+      "name": "terminal behind the head teller's desk",
+      "type": "Tool",
+      "description": "Terminal in the Grand Hall behind the head teller's desk, reached by capsule from Lamplight Row in under a minute.",
+      "props": {}
+    },
+    {
+      "name": "boiler room",
+      "type": "Spot",
+      "description": "Boiler room of the bank, reached by the Old Sewer Culvert.",
+      "props": {}
+    },
+    {
+      "name": "calling card",
+      "type": "Document",
+      "description": "Calling card of Silas Ashcombe, still in the possession of Pip Quillon.",
+      "props": {}
+    },
+    {
+      "name": "tuning fork",
+      "type": "Tool",
+      "description": "Costs five crowns. A struck tuning fork of blued steel makes Sentinel Unit Seven pause for a few seconds.",
+      "props": {}
+    },
+    {
+      "name": "grappling hook",
+      "type": "Tool",
+      "description": "Costs two crowns.",
+      "props": {}
+    },
+    {
+      "name": "director's brass punch card",
+      "type": "Tool",
+      "description": "Brass punch card makes Sentinel Unit Seven obey completely. It is accepted through the slot in its chest.",
+      "props": {}
+    },
+    {
+      "name": "lantern",
+      "type": "Tool",
+      "description": "Carried by Constable Edda Rourke while patrolling Ashcombe Square.",
+      "props": {}
+    },
+    {
+      "name": "Office",
+      "type": "Building",
+      "description": "Silas Ashcombe's office, containing a safe whose combination is the founding year, 1823.",
+      "props": {}
+    },
+    {
+      "name": "wall safe",
+      "type": "Tool",
+      "description": "Safe in which the brass punch card is locked.",
+      "props": {}
+    },
+    {
+      "name": "Admiralty sale",
+      "type": "Occasion",
+      "description": "Sale without which the bank collapses within a month, according to Silas Ashcombe's secret.",
+      "props": {}
+    },
+    {
+      "name": "Royal Observatory",
+      "type": "Building",
+      "description": "Institution Horace Pell dreams of joining.",
+      "props": {}
+    },
+    {
+      "name": "main pressure valve",
+      "type": "Tool",
+      "description": "Valve turned by the steam valve key; Bertha Koss would 'test the main valve' for anyone who promises to get the stokers paid.",
+      "props": {}
+    },
+    {
+      "name": "second steam valve key",
+      "type": "Tool",
+      "description": "Secret second steam valve key kept by Bertha Koss on a nail behind boiler number three.",
+      "props": {}
+    },
+    {
+      "name": "boiler number three",
+      "type": "Tool",
+      "description": "Boiler in the Boiler Undercroft; behind it, on a nail, Bertha Koss keeps a second steam valve key.",
+      "props": {}
+    },
+    {
+      "name": "steam surge",
+      "type": "Occasion",
+      "description": "Sharp surge from the Boiler Undercroft that confuses every automaton in the building for a minute, rattles the ballroom radiators, and confuses Sentinel Unit Seven for a minute.",
+      "props": {}
+    },
+    {
+      "name": "Admiralty patrol ship",
+      "type": "Vehicle",
+      "description": "Patrol ship that passes the masts every two hours. Wren's Promise can outrun it only in fog.",
+      "props": {}
+    },
+    {
+      "name": "Ashcombe bank",
+      "type": "Organization",
+      "description": "Bank to which Captain Juno Vale owes money. Has offered to cancel her debt if she reports any suspicious passengers tonight.",
+      "props": {}
+    },
+    {
+      "name": "pistol",
+      "type": "Tool",
+      "description": "Pistol carried by Captain Juno Vale, which she has never fired.",
+      "props": {}
+    },
+    {
+      "name": "goggles",
+      "type": "Tool",
+      "description": "Goggles pushed up on Captain Juno Vale's forehead.",
+      "props": {}
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Ashcombe Mercantile Bank",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "The city is ruled in practice by money. The Ashcombe Mercantile Bank"
+    },
+    {
+      "source": "Orrery Vault",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "Deep under the bank lies the Orrery Vault"
+    },
+    {
+      "source": "Clockheart",
+      "target": "Orrery Vault",
+      "type": "LOCATED_IN",
+      "description": "Inside the vault rests the Clockheart"
+    },
+    {
+      "source": "Ashcombe Mercantile Bank",
+      "target": "Silas Ashcombe",
+      "type": "HAS_AGENT",
+      "description": "Its director, Silas Ashcombe"
+    },
+    {
+      "source": "Professor Amara Quell",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "INTERACTS_WITH",
+      "description": "died in debt to the bank, and the bank seized her life's work"
+    },
+    {
+      "source": "Professor Amara Quell",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "Its inventor, the late Professor Amara Quell"
+    },
+    {
+      "source": "Admiralty",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "sold at a private auction to the Admiralty"
+    },
+    {
+      "source": "Founders' Gala",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "the bank hosts its annual Founders' Gala"
+    },
+    {
+      "source": "airship",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "Above the smog, airships drift between iron mooring masts"
+    },
+    {
+      "source": "Back room of The Rusty Gear Tavern",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "The crew meets in the back room of The Rusty Gear Tavern"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "The crew meets in the back room of The Rusty Gear Tavern"
+    },
+    {
+      "source": "Back room of The Rusty Gear Tavern",
+      "target": "Mags Holloway",
+      "type": "HAS_AGENT",
+      "description": "The crew meets in the back room of The Rusty Gear Tavern"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "The player",
+      "type": "INTERACTS_WITH",
+      "description": "She has recruited the player"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "the bank",
+      "type": "INTERACTS_WITH",
+      "description": "a former airship captain who lost her ship to the bank"
+    },
+    {
+      "source": "Mags Holloway's former airship",
+      "target": "the bank",
+      "type": "INTERACTS_WITH",
+      "description": "lost her ship to the bank"
+    },
+    {
+      "source": "The Crew",
+      "target": "Mags Holloway",
+      "type": "HAS_AGENT",
+      "description": "The heist is planned by Mags Holloway"
+    },
+    {
+      "source": "The Crew",
+      "target": "The player",
+      "type": "HAS_AGENT",
+      "description": "She has recruited the player"
+    },
+    {
+      "source": "the bank",
+      "target": "Orrery Vault",
+      "type": "HAS_ITEM",
+      "description": "get into the bank, open the Orrery Vault"
+    },
+    {
+      "source": "Orrery Vault",
+      "target": "Clockheart",
+      "type": "HAS_ITEM",
+      "description": "open the Orrery Vault, take the Clockheart"
+    },
+    {
+      "source": "the bank",
+      "target": "Mooring Mast Nine",
+      "type": "LEADS_TO",
+      "description": "reach Mooring Mast Nine before dawn"
+    },
+    {
+      "source": "airship",
+      "target": "Mooring Mast Nine",
+      "type": "LOCATED_IN",
+      "description": "an airship waits to carry it out of the city"
+    },
+    {
+      "source": "Mooring Mast Nine",
+      "target": "airship",
+      "type": "HAS_ITEM",
+      "description": "where an airship waits to carry it out of the city"
+    },
+    {
+      "source": "airship",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "an airship waits to carry it out of the city"
+    },
+    {
+      "source": "city watch",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "Violence draws the watch quickly"
+    },
+    {
+      "source": "guard",
+      "target": "truncheon",
+      "type": "HAS_ITEM",
+      "description": "most guards carry truncheons and whistles"
+    },
+    {
+      "source": "guard",
+      "target": "whistle",
+      "type": "HAS_ITEM",
+      "description": "most guards carry truncheons and whistles"
+    },
+    {
+      "source": "guard",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "most guards carry truncheons and whistles"
+    },
+    {
+      "source": "clockwork automaton",
+      "target": "punched brass card",
+      "type": "INTERACTS_WITH",
+      "description": "Clockwork automatons follow punched brass cards"
+    },
+    {
+      "source": "clockwork automaton",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "Clockwork automatons follow punched brass cards"
+    },
+    {
+      "source": "revolver",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "revolvers and pepperbox pistols exist but are loud and rare"
+    },
+    {
+      "source": "pepperbox pistol",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "revolvers and pepperbox pistols exist but are loud and rare"
+    },
+    {
+      "source": "pneumatic post",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "There are no radios, only the pneumatic post and messenger boys"
+    },
+    {
+      "source": "messenger boys",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "There are no radios, only the pneumatic post and messenger boys"
+    },
+    {
+      "source": "Vellmoor",
+      "target": "city watch",
+      "type": "HAS_AGENT",
+      "description": "The city watch is underpaid"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "brass lantern",
+      "type": "HAS_ITEM",
+      "description": "What to take: brass lantern"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "smoke canister",
+      "type": "HAS_ITEM",
+      "description": "What to take: smoke canister"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "forged gala invitation",
+      "type": "HAS_ITEM",
+      "description": "What to take: forged gala invitation"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "Mags Holloway",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Mags Holloway"
+    },
+    {
+      "source": "brass lantern",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "A brass lantern hangs over the table"
+    },
+    {
+      "source": "crate",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "a crate in the corner holds the crew's supplies"
+    },
+    {
+      "source": "smoke canister",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "What to take: smoke canister"
+    },
+    {
+      "source": "forged gala invitation",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "What to take: forged gala invitation"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "Who to meet: Mags Holloway"
+    },
+    {
+      "source": "hand-drawn plan",
+      "target": "Back room",
+      "type": "LOCATED_IN",
+      "description": "Mags Holloway has pinned a hand-drawn plan"
+    },
+    {
+      "source": "Back room",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "a curtain hides the back room"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "hand-drawn plan",
+      "type": "INTERACTS_WITH",
+      "description": "Mags Holloway has pinned a hand-drawn plan"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "Lamplight Row",
+      "type": "LEADS_TO",
+      "description": "Up the stairs to the street → Lamplight Row"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "discarded evening newspaper",
+      "type": "HAS_ITEM",
+      "description": "What to take: discarded evening newspaper"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "Pip Quillon",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Pip Quillon"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "pneumatic post",
+      "type": "HAS_ITEM",
+      "description": "a pneumatic post box with a dented brass mouth"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "rusted iron hatch",
+      "type": "HAS_ITEM",
+      "description": "a rusted iron hatch near the gutter"
+    },
+    {
+      "source": "discarded evening newspaper",
+      "target": "Lamplight Row",
+      "type": "LOCATED_IN",
+      "description": "What to take: discarded evening newspaper"
+    },
+    {
+      "source": "Pip Quillon",
+      "target": "Lamplight Row",
+      "type": "LOCATED_IN",
+      "description": "Who to meet: Pip Quillon"
+    },
+    {
+      "source": "pneumatic post",
+      "target": "Lamplight Row",
+      "type": "LOCATED_IN",
+      "description": "Halfway up the street, a pneumatic post box"
+    },
+    {
+      "source": "rusted iron hatch",
+      "target": "Lamplight Row",
+      "type": "LOCATED_IN",
+      "description": "a rusted iron hatch near the gutter"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "The Rusty Gear Tavern",
+      "type": "LEADS_TO",
+      "description": "Down the stairs → The Rusty Gear Tavern"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "Ashcombe Square",
+      "type": "LEADS_TO",
+      "description": "Uphill → Ashcombe Square"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "Brassworks Alley",
+      "type": "LEADS_TO",
+      "description": "Through a narrow archway → Brassworks Alley"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "Old Sewer Culvert",
+      "type": "LEADS_TO",
+      "description": "Down the iron hatch → Old Sewer Culvert"
+    },
+    {
+      "source": "Fenn's Clockworks",
+      "target": "Brassworks Alley",
+      "type": "LOCATED_IN",
+      "description": "At the end of the alley stands Fenn's Clockworks"
+    },
+    {
+      "source": "Brassworks Alley",
+      "target": "Lamplight Row",
+      "type": "LEADS_TO",
+      "description": "Back through the archway → Lamplight Row"
+    },
+    {
+      "source": "Brassworks Alley",
+      "target": "lockpick set",
+      "type": "HAS_ITEM",
+      "description": "What to take: lockpick set"
+    },
+    {
+      "source": "Brassworks Alley",
+      "target": "tuning fork of blued steel",
+      "type": "HAS_ITEM",
+      "description": "What to take: tuning fork of blued steel"
+    },
+    {
+      "source": "Brassworks Alley",
+      "target": "grappling hook with coil of silk rope",
+      "type": "HAS_ITEM",
+      "description": "What to take: grappling hook with a coil of silk rope"
+    },
+    {
+      "source": "Brassworks Alley",
+      "target": "Tobias Fenn",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Tobias Fenn"
+    },
+    {
+      "source": "tuning fork of blued steel",
+      "target": "clockwork automaton",
+      "type": "INTERACTS_WITH",
+      "description": "when struck near a clockwork automaton, its humming makes the machine pause"
+    },
+    {
+      "source": "Ashcombe Square",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "the cleanest place in Vellmoor"
+    },
+    {
+      "source": "Founder's Clocktower",
+      "target": "Ashcombe Square",
+      "type": "LOCATED_IN",
+      "description": "In the middle of the square stands the Founder's Clocktower"
+    },
+    {
+      "source": "bronze plaque",
+      "target": "Founder's Clocktower",
+      "type": "LOCATED_IN",
+      "description": "A bronze plaque at its base"
+    },
+    {
+      "source": "Ashcombe Square",
+      "target": "Constable Edda Rourke",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Constable Edda Rourke"
+    },
+    {
+      "source": "Ashcombe Square",
+      "target": "Lamplight Row",
+      "type": "LEADS_TO",
+      "description": "Downhill → Lamplight Row"
+    },
+    {
+      "source": "Ashcombe Square",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LEADS_TO",
+      "description": "Up the marble steps → Grand Hall of the Ashcombe Mercantile Bank"
+    },
+    {
+      "source": "Ashcombe Square",
+      "target": "Mooring Mast Nine",
+      "type": "LEADS_TO",
+      "description": "North along the bay road → Mooring Mast Nine"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "glass of champagne",
+      "type": "HAS_ITEM",
+      "description": "What to take: glass of champagne"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "silver serving tray",
+      "type": "HAS_ITEM",
+      "description": "What to take: silver serving tray"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "pneumatic post terminal",
+      "type": "HAS_ITEM",
+      "description": "a pneumatic post terminal clanks behind the head teller's desk"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "Silas Ashcombe",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Silas Ashcombe (greeting his guests until midnight)"
+    },
+    {
+      "source": "glass of champagne",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "waiters carry silver trays of champagne"
+    },
+    {
+      "source": "silver serving tray",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "waiters carry silver trays of champagne"
+    },
+    {
+      "source": "pneumatic post terminal",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "clanks behind the head teller's desk"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "greeting his guests until midnight"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "Ashcombe Square",
+      "type": "LEADS_TO",
+      "description": "Down the marble steps → Ashcombe Square"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "Clerks' Gallery",
+      "type": "LEADS_TO",
+      "description": "Up the grand staircase → Clerks' Gallery"
+    },
+    {
+      "source": "Grand Hall of the Ashcombe Mercantile Bank",
+      "target": "Boiler Undercroft",
+      "type": "LEADS_TO",
+      "description": "Through the service door and down the iron stairs → Boiler Undercroft"
+    },
+    {
+      "source": "Clerks' Gallery",
+      "target": "Founders' Ledger",
+      "type": "HAS_ITEM",
+      "description": "What to take: Founders' Ledger"
+    },
+    {
+      "source": "Clerks' Gallery",
+      "target": "Horace Pell",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Horace Pell"
+    },
+    {
+      "source": "Clerks' Gallery",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LEADS_TO",
+      "description": "Down the grand staircase → Grand Hall of the Ashcombe Mercantile Bank"
+    },
+    {
+      "source": "Clerks' Gallery",
+      "target": "Director's Office",
+      "type": "LEADS_TO",
+      "description": "Through the frosted-glass door → Director's Office"
+    },
+    {
+      "source": "Founders' Ledger",
+      "target": "Clerks' Gallery",
+      "type": "LOCATED_IN",
+      "description": "What to take: Founders' Ledger"
+    },
+    {
+      "source": "Horace Pell",
+      "target": "Clerks' Gallery",
+      "type": "LOCATED_IN",
+      "description": "Who to meet: Horace Pell"
+    },
+    {
+      "source": "small wall safe",
+      "target": "Director's Office",
+      "type": "LOCATED_IN",
+      "description": "behind the painting is a small wall safe"
+    },
+    {
+      "source": "brass punch card",
+      "target": "small wall safe",
+      "type": "LOCATED_IN",
+      "description": "brass punch card (hidden in the wall safe"
+    },
+    {
+      "source": "silver letter opener",
+      "target": "Director's Office",
+      "type": "LOCATED_IN",
+      "description": "silver letter opener"
+    },
+    {
+      "source": "director's appointment book",
+      "target": "Director's Office",
+      "type": "LOCATED_IN",
+      "description": "director's appointment book (notes that the safe combination"
+    },
+    {
+      "source": "Director's Office",
+      "target": "brass punch card",
+      "type": "HAS_ITEM",
+      "description": "What to take: brass punch card"
+    },
+    {
+      "source": "Director's Office",
+      "target": "silver letter opener",
+      "type": "HAS_ITEM",
+      "description": "What to take: silver letter opener"
+    },
+    {
+      "source": "Director's Office",
+      "target": "director's appointment book",
+      "type": "HAS_ITEM",
+      "description": "What to take: director's appointment book"
+    },
+    {
+      "source": "Director's Office",
+      "target": "Clerks' Gallery",
+      "type": "LEADS_TO",
+      "description": "Back through the frosted-glass door → Clerks' Gallery"
+    },
+    {
+      "source": "steam valve key",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "steam valve key (an iron key that turns the main pressure valve"
+    },
+    {
+      "source": "oily rag",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "oily rag; engineer's goggles"
+    },
+    {
+      "source": "engineer's goggles",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "engineer's goggles"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "steam valve key",
+      "type": "HAS_ITEM",
+      "description": "What to take: steam valve key"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "oily rag",
+      "type": "HAS_ITEM",
+      "description": "What to take: steam valve key; oily rag"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "engineer's goggles",
+      "type": "HAS_ITEM",
+      "description": "What to take: steam valve key; engineer's goggles"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "Bertha Koss",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Bertha Koss"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "Grand Hall of the Ashcombe Mercantile Bank",
+      "type": "LEADS_TO",
+      "description": "Up the iron stairs → Grand Hall of the Ashcombe Mercantile Bank"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "Orrery Vault Antechamber",
+      "type": "LEADS_TO",
+      "description": "Through the vault door → Orrery Vault Antechamber"
+    },
+    {
+      "source": "Boiler Undercroft",
+      "target": "Old Sewer Culvert",
+      "type": "LEADS_TO",
+      "description": "Down through the floor drain → Old Sewer Culvert"
+    },
+    {
+      "source": "steam valve key",
+      "target": "brass punch card",
+      "type": "INTERACTS_WITH",
+      "description": "a sharp surge of steam confuses every automaton in the building for a minute"
+    },
+    {
+      "source": "smuggler's chalk",
+      "target": "Old Sewer Culvert",
+      "type": "LOCATED_IN",
+      "description": "Smugglers once used this tunnel, and their chalk marks still show the way"
+    },
+    {
+      "source": "Old Sewer Culvert",
+      "target": "smuggler's chalk",
+      "type": "HAS_ITEM",
+      "description": "What to take: smuggler's chalk"
+    },
+    {
+      "source": "rats",
+      "target": "Old Sewer Culvert",
+      "type": "LOCATED_IN",
+      "description": "Rats watch from the ledges"
+    },
+    {
+      "source": "Old Sewer Culvert",
+      "target": "rats",
+      "type": "HAS_AGENT",
+      "description": "Rats watch from the ledges"
+    },
+    {
+      "source": "Old Sewer Culvert",
+      "target": "Lamplight Row",
+      "type": "LEADS_TO",
+      "description": "Up the ladder to the iron hatch → Lamplight Row"
+    },
+    {
+      "source": "Old Sewer Culvert",
+      "target": "Boiler Undercroft",
+      "type": "LEADS_TO",
+      "description": "Up through the grated drain → Boiler Undercroft"
+    },
+    {
+      "source": "iron hatch",
+      "target": "Lamplight Row",
+      "type": "LOCATED_IN",
+      "description": "One branch climbs to the iron hatch on Lamplight Row"
+    },
+    {
+      "source": "grated drain",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "another rises to a grated drain under the bank's boiler room"
+    },
+    {
+      "source": "green lamp",
+      "target": "Orrery Vault Antechamber",
+      "type": "LOCATED_IN",
+      "description": "lit by a single green lamp"
+    },
+    {
+      "source": "Orrery Lock",
+      "target": "Orrery Vault Antechamber",
+      "type": "LOCATED_IN",
+      "description": "In its centre stands the Orrery Lock"
+    },
+    {
+      "source": "great round door",
+      "target": "Orrery Vault Antechamber",
+      "type": "LOCATED_IN",
+      "description": "The great round door of the vault is set into the far wall"
+    },
+    {
+      "source": "great round door",
+      "target": "Orrery Lock",
+      "type": "INTERACTS_WITH",
+      "description": "it opens only when the orrery's bodies are moved into the right positions"
+    },
+    {
+      "source": "Orrery Lock",
+      "target": "alarm bell",
+      "type": "INTERACTS_WITH",
+      "description": "a wrong setting rings an alarm bell in the ballroom above"
+    },
+    {
+      "source": "alarm bell",
+      "target": "ballroom",
+      "type": "LOCATED_IN",
+      "description": "rings an alarm bell in the ballroom above"
+    },
+    {
+      "source": "ballroom",
+      "target": "Orrery Vault Antechamber",
+      "type": "LOCATED_IN",
+      "description": "rings an alarm bell in the ballroom above"
+    },
+    {
+      "source": "Sentinel Unit Seven",
+      "target": "Orrery Vault Antechamber",
+      "type": "LOCATED_IN",
+      "description": "Beside the door stands Sentinel Unit Seven, a clockwork guard"
+    },
+    {
+      "source": "Orrery Vault Antechamber",
+      "target": "Sentinel Unit Seven",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Sentinel Unit Seven"
+    },
+    {
+      "source": "Orrery Vault Antechamber",
+      "target": "Boiler Undercroft",
+      "type": "LEADS_TO",
+      "description": "Back through the vault door → Boiler Undercroft"
+    },
+    {
+      "source": "Orrery Vault Antechamber",
+      "target": "Orrery Vault",
+      "type": "LEADS_TO",
+      "description": "Through the great round door (once the Orrery Lock is solved) → The Orrery Vault"
+    },
+    {
+      "source": "bundle of bearer bonds",
+      "target": "Orrery Vault",
+      "type": "LOCATED_IN",
+      "description": "lined with velvet-covered shelves of deeds, bonds and sealed boxes"
+    },
+    {
+      "source": "emergency chute",
+      "target": "Orrery Vault",
+      "type": "LOCATED_IN",
+      "description": "In the corner, a narrow emergency chute drops into darkness"
+    },
+    {
+      "source": "Orrery Vault",
+      "target": "bundle of bearer bonds",
+      "type": "HAS_ITEM",
+      "description": "What to take: bundle of bearer bonds (worth two hundred crowns)"
+    },
+    {
+      "source": "Orrery Vault",
+      "target": "Orrery Vault Antechamber",
+      "type": "LEADS_TO",
+      "description": "Back through the great round door → Orrery Vault Antechamber"
+    },
+    {
+      "source": "Orrery Vault",
+      "target": "Old Sewer Culvert",
+      "type": "LEADS_TO",
+      "description": "Down the emergency chute (a one-way drop) → Old Sewer Culvert"
+    },
+    {
+      "source": "cage lift",
+      "target": "Mooring Mast Nine",
+      "type": "LOCATED_IN",
+      "description": "A rattling cage lift climbs to the top platform"
+    },
+    {
+      "source": "Wren's Promise",
+      "target": "Mooring Mast Nine",
+      "type": "LOCATED_IN",
+      "description": "the airship Wren's Promise strains at its ropes"
+    },
+    {
+      "source": "Mooring Mast Nine",
+      "target": "Captain Juno Vale",
+      "type": "HAS_AGENT",
+      "description": "Who to meet: Captain Juno Vale"
+    },
+    {
+      "source": "Mooring Mast Nine",
+      "target": "Ashcombe Square",
+      "type": "LEADS_TO",
+      "description": "South along the bay road → Ashcombe Square"
+    },
+    {
+      "source": "Captain Juno Vale",
+      "target": "Wren's Promise",
+      "type": "INTERACTS_WITH",
+      "description": "the airship Wren's Promise"
+    },
+    {
+      "source": "bank plan",
+      "target": "The Rusty Gear Tavern",
+      "type": "LOCATED_IN",
+      "description": "with the plan of the bank pinned to the wall"
+    },
+    {
+      "source": "The Rusty Gear Tavern",
+      "target": "bank plan",
+      "type": "HAS_ITEM",
+      "description": "the plan of the bank pinned to the wall"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Pip Quillon",
+      "type": "INTERACTS_WITH",
+      "description": "leader of the crew"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Silas Ashcombe",
+      "type": "INTERACTS_WITH",
+      "description": "revenge on Silas Ashcombe, who seized her airship"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Captain Juno Vale",
+      "type": "INTERACTS_WITH",
+      "description": "Captain Juno Vale will wait at Mooring Mast Nine only until dawn"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Tobias Fenn",
+      "type": "INTERACTS_WITH",
+      "description": "Tobias Fenn sells the right tools"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "keep the Clockheart out of the Admiralty's hands"
+    },
+    {
+      "source": "Clockheart",
+      "target": "Admiralty",
+      "type": "INTERACTS_WITH",
+      "description": "kept out of the Admiralty's hands"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "airship",
+      "type": "INTERACTS_WITH",
+      "description": "who seized her airship over a single missed payment"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "calling card",
+      "type": "HAS_ITEM",
+      "description": "she once lifted a wallet from Silas Ashcombe himself and still has his calling card"
+    },
+    {
+      "source": "Mags Holloway",
+      "target": "Professor Amara Quell",
+      "type": "INTERACTS_WITH",
+      "description": "plans to return the Clockheart to Professor Amara Quell's daughter"
+    },
+    {
+      "source": "Orrery Lock",
+      "target": "the bank",
+      "type": "LOCATED_IN",
+      "description": "the Orrery Lock is set to \"the founding night\""
+    },
+    {
+      "source": "Captain Juno Vale",
+      "target": "Mooring Mast Nine",
+      "type": "LOCATED_IN",
+      "description": "Captain Juno Vale will wait at Mooring Mast Nine only until dawn"
+    },
+    {
+      "source": "Pip Quillon",
+      "target": "pneumatic tubes",
+      "type": "INTERACTS_WITH",
+      "description": "every pneumatic tube in Vellmoor"
+    },
+    {
+      "source": "pneumatic tubes",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "every pneumatic tube in Vellmoor"
+    },
+    {
+      "source": "pneumatic post",
+      "target": "terminal behind the head teller's desk",
+      "type": "INTERACTS_WITH",
+      "description": "a capsule posted on Lamplight Row reaches the terminal behind the head teller's desk in the Grand Hall in under a minute"
+    },
+    {
+      "source": "Grand Hall",
+      "target": "terminal behind the head teller's desk",
+      "type": "HAS_ITEM",
+      "description": "the terminal behind the head teller's desk in the Grand Hall"
+    },
+    {
+      "source": "Lamplight Row",
+      "target": "iron hatch",
+      "type": "HAS_ITEM",
+      "description": "the iron hatch on Lamplight Row"
+    },
+    {
+      "source": "iron hatch",
+      "target": "Old Sewer Culvert",
+      "type": "LEADS_TO",
+      "description": "leads down to the Old Sewer Culvert"
+    },
+    {
+      "source": "Old Sewer Culvert",
+      "target": "boiler room",
+      "type": "LEADS_TO",
+      "description": "the culvert reaches the bank's boiler room"
+    },
+    {
+      "source": "boiler room",
+      "target": "the bank",
+      "type": "LOCATED_IN",
+      "description": "the culvert reaches the bank's boiler room"
+    },
+    {
+      "source": "Pip Quillon",
+      "target": "Constable Edda Rourke",
+      "type": "INTERACTS_WITH",
+      "description": "Constable Edda Rourke takes a tea break at half past eleven"
+    },
+    {
+      "source": "Pip Quillon",
+      "target": "calling card",
+      "type": "HAS_ITEM",
+      "description": "still has his calling card"
+    },
+    {
+      "source": "Pip Quillon",
+      "target": "Silas Ashcombe",
+      "type": "INTERACTS_WITH",
+      "description": "she once lifted a wallet from Silas Ashcombe himself"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "Fenn's Clockworks",
+      "type": "LOCATED_IN",
+      "description": "the owner of Fenn's Clockworks in Brassworks Alley"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "Vellmoor",
+      "type": "LOCATED_IN",
+      "description": "the quietest fence in Vellmoor"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "tuning fork",
+      "type": "HAS_ITEM",
+      "description": "payment up front (the tuning fork costs five crowns, the lockpick set three, the grappling hook two)"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "lockpick set",
+      "type": "HAS_ITEM",
+      "description": "the lockpick set three"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "grappling hook",
+      "type": "HAS_ITEM",
+      "description": "the grappling hook two"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "Sentinel Unit Seven",
+      "type": "INTERACTS_WITH",
+      "description": "he helped build Sentinel Unit Seven twenty years ago"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "Professor Amara Quell",
+      "type": "INTERACTS_WITH",
+      "description": "secretly helped her finish the Clockheart"
+    },
+    {
+      "source": "Tobias Fenn",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "secretly helped her finish the Clockheart"
+    },
+    {
+      "source": "tuning fork",
+      "target": "Sentinel Unit Seven",
+      "type": "INTERACTS_WITH",
+      "description": "a struck tuning fork of blued steel makes it pause for a few seconds"
+    },
+    {
+      "source": "director's brass punch card",
+      "target": "Sentinel Unit Seven",
+      "type": "INTERACTS_WITH",
+      "description": "the director's brass punch card makes it obey completely"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "Ashcombe Square",
+      "type": "LOCATED_IN",
+      "description": "patrols Ashcombe Square"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "lantern",
+      "type": "HAS_ITEM",
+      "description": "with a lantern, a truncheon and a whistle"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "truncheon",
+      "type": "HAS_ITEM",
+      "description": "with a lantern, a truncheon and a whistle"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "whistle",
+      "type": "HAS_ITEM",
+      "description": "with a lantern, a truncheon and a whistle"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "Silas Ashcombe",
+      "type": "INTERACTS_WITH",
+      "description": "she would also love to see Silas Ashcombe ruined"
+    },
+    {
+      "source": "Constable Edda Rourke",
+      "target": "Founders' Ledger",
+      "type": "INTERACTS_WITH",
+      "description": "she might look the other way for someone who brings it to her"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "Grand Hall",
+      "type": "LOCATED_IN",
+      "description": "greeting guests in the Grand Hall of the bank until midnight"
+    },
+    {
+      "source": "Grand Hall",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "Grand Hall of the bank"
+    },
+    {
+      "source": "Clerks' Gallery",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "working late at his desk in the Clerks' Gallery"
+    },
+    {
+      "source": "Office",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "the safe combination in his office"
+    },
+    {
+      "source": "ballroom",
+      "target": "Ashcombe Mercantile Bank",
+      "type": "LOCATED_IN",
+      "description": "the vault alarm rings in the ballroom"
+    },
+    {
+      "source": "wall safe",
+      "target": "brass punch card",
+      "type": "HAS_ITEM",
+      "description": "the brass punch card is locked in the wall safe"
+    },
+    {
+      "source": "Office",
+      "target": "wall safe",
+      "type": "HAS_ITEM",
+      "description": "the safe combination in his office is the founding year, 1823"
+    },
+    {
+      "source": "Ashcombe Mercantile Bank",
+      "target": "Horace Pell",
+      "type": "HAS_AGENT",
+      "description": "Horace Pell is a young, nervous junior clerk"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "Horace Pell",
+      "type": "INTERACTS_WITH",
+      "description": "forging small entries in the ledgers on Silas Ashcombe's orders"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "Clockheart",
+      "type": "INTERACTS_WITH",
+      "description": "a record price for the Clockheart at noon"
+    },
+    {
+      "source": "Horace Pell",
+      "target": "Founders' Ledger",
+      "type": "HAS_ITEM",
+      "description": "the Orrery Lock positions by heart from the Founders' Ledger"
+    },
+    {
+      "source": "Founders' Ledger",
+      "target": "Orrery Lock",
+      "type": "HAS_ITEM",
+      "description": "the Orrery Lock positions by heart from the Founders' Ledger"
+    },
+    {
+      "source": "Horace Pell",
+      "target": "Royal Observatory",
+      "type": "INTERACTS_WITH",
+      "description": "he dreams of joining the Royal Observatory"
+    },
+    {
+      "source": "Silas Ashcombe",
+      "target": "Admiralty sale",
+      "type": "INTERACTS_WITH",
+      "description": "without the Admiralty sale it collapses within a month"
+    },
+    {
+      "source": "Bertha Koss",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "chief engineer of the Boiler Undercroft"
+    },
+    {
+      "source": "Bertha Koss",
+      "target": "second steam valve key",
+      "type": "HAS_ITEM",
+      "description": "keeps a second steam valve key on a nail behind boiler number three"
+    },
+    {
+      "source": "Bertha Koss",
+      "target": "the bank",
+      "type": "INTERACTS_WITH",
+      "description": "the overdue wages the bank owes her stokers"
+    },
+    {
+      "source": "steam valve key",
+      "target": "main pressure valve",
+      "type": "INTERACTS_WITH",
+      "description": "the steam valve key turns the main pressure valve"
+    },
+    {
+      "source": "second steam valve key",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "on a nail behind boiler number three"
+    },
+    {
+      "source": "boiler number three",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "behind boiler number three"
+    },
+    {
+      "source": "grated drain",
+      "target": "Old Sewer Culvert",
+      "type": "LEADS_TO",
+      "description": "the grated drain in the floor leads to the Old Sewer Culvert"
+    },
+    {
+      "source": "steam surge",
+      "target": "ballroom",
+      "type": "INTERACTS_WITH",
+      "description": "rattles the radiators in the ballroom"
+    },
+    {
+      "source": "steam surge",
+      "target": "Sentinel Unit Seven",
+      "type": "INTERACTS_WITH",
+      "description": "a steam surge from the Boiler Undercroft confuses it for a minute"
+    },
+    {
+      "source": "steam surge",
+      "target": "Boiler Undercroft",
+      "type": "LOCATED_IN",
+      "description": "a steam surge from the Boiler Undercroft"
+    },
+    {
+      "source": "Orrery Vault Antechamber",
+      "target": "great round door",
+      "type": "HAS_ITEM",
+      "description": "the great round door in the Orrery Vault Antechamber"
+    },
+    {
+      "source": "Sentinel Unit Seven",
+      "target": "great round door",
+      "type": "INTERACTS_WITH",
+      "description": "Without the director's brass punch card it raises an alarm and blocks the vault door"
+    },
+    {
+      "source": "tuning fork of blued steel",
+      "target": "Sentinel Unit Seven",
+      "type": "INTERACTS_WITH",
+      "description": "a struck tuning fork of blued steel makes it pause for a few seconds"
+    },
+    {
+      "source": "Captain Juno Vale",
+      "target": "pistol",
+      "type": "HAS_ITEM",
+      "description": "a pistol she has never fired"
+    },
+    {
+      "source": "Captain Juno Vale",
+      "target": "goggles",
+      "type": "HAS_ITEM",
+      "description": "goggles pushed up on her forehead"
+    },
+    {
+      "source": "Captain Juno Vale",
+      "target": "Ashcombe bank",
+      "type": "INTERACTS_WITH",
+      "description": "she owes the Ashcombe bank money too"
+    },
+    {
+      "source": "Ashcombe bank",
+      "target": "Captain Juno Vale",
+      "type": "INTERACTS_WITH",
+      "description": "the bank has offered to cancel her debt if she reports any suspicious passengers tonight"
+    },
+    {
+      "source": "Wren's Promise",
+      "target": "Admiralty patrol ship",
+      "type": "INTERACTS_WITH",
+      "description": "the Wren's Promise can outrun it only in fog"
+    }
+  ]
+}

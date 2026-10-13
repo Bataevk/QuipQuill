@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from quipquill_builder import storyfile
+from quipquill_builder import curation, storyfile
 from quipquill_builder.config import Settings
 from quipquill_builder.embeddings import OpenRouterBatchEmbedder, OpenRouterEmbedder
 from quipquill_builder.export import ExportError, export_story
@@ -44,6 +44,11 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
         metavar="ID",
         help="wait for an already submitted extraction batch instead of submitting a new one",
     )
+
+    curate = commands.add_parser("curate", help="apply manual fixes (TOML) to graph.json")
+    curate.add_argument("graph", type=Path, help="graph.json from `extract`")
+    curate.add_argument("rules", type=Path, help="curation.toml")
+    curate.add_argument("-o", "--output", type=Path, required=True)
 
     export = commands.add_parser("export", help="graph.json → .qqstory (with embeddings)")
     export.add_argument("graph", type=Path, help="graph.json from `extract`")
@@ -134,6 +139,19 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def run_curate(args: argparse.Namespace) -> int:
+    graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
+    curated = curation.apply(graph, curation.load(args.rules))
+    args.output.write_text(
+        json.dumps(curated.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(
+        f"{len(graph.entities)} → {len(curated.entities)} entities, "
+        f"{len(graph.relationships)} → {len(curated.relationships)} relationships → {args.output}"
+    )
+    return 0
+
+
 def run_export(args: argparse.Namespace, settings: Settings) -> int:
     graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
     embedder_type = OpenRouterEmbedder if args.sync else OpenRouterBatchEmbedder
@@ -219,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
         match args.command:
             case "extract":
                 return run_extract(args, settings)
+            case "curate":
+                return run_curate(args)
             case "export":
                 return run_export(args, settings)
             case "validate":

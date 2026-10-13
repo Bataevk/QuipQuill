@@ -1,5 +1,6 @@
 """Reading and writing .qqstory files (SQLite, schema in schema/story.sql)."""
 
+import json
 import os
 import sqlite3
 from collections.abc import Iterator
@@ -55,8 +56,12 @@ def create(path: Path, story: StoryData, meta: dict[str, str]) -> None:
     with connect(path) as conn:
         conn.executescript(schema_path().read_text(encoding="utf-8"))
         conn.executemany(
-            "INSERT INTO entities (id, type, subtype, name, description) VALUES (?, ?, ?, ?, ?)",
-            [(e.id, e.type, e.subtype, e.name, e.description) for e in story.entities],
+            "INSERT INTO entities (id, type, subtype, name, description, props)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (e.id, e.type, e.subtype, e.name, e.description, json.dumps(e.props))
+                for e in story.entities
+            ],
         )
         conn.executemany(
             "INSERT INTO relations (src, dst, type, description) VALUES (?, ?, ?, ?)",

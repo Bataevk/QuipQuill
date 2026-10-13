@@ -98,3 +98,13 @@ def test_default_start_is_first_location(
 
     with storyfile.connect(output) as conn:
         assert storyfile.read_meta(conn)["start_location"] == "loc:entrance-rune-hall"
+
+
+def test_props_are_written(graph: Graph, fake_embedder: FakeEmbedder, tmp_path: Path) -> None:
+    next(e for e in graph.entities if e.name == "rusty key").props = {"fixed": True}
+    output = tmp_path / "s.qqstory"
+    export(graph, output, fake_embedder)
+
+    with storyfile.connect(output) as conn:
+        props = conn.execute("SELECT props FROM entities WHERE id = 'item:rusty-key'").fetchone()
+    assert props == ('{"fixed": true}',)
