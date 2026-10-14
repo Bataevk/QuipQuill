@@ -75,7 +75,8 @@ CREATE TABLE embeddings (
 Создаётся копированием `.qqstory`. Исходные `entities` и `relations` **не меняются** и нужны для перезапуска и сравнения. При старте добавляются таблицы:
 
 ```sql
-CREATE TABLE state_entities  ( ...как entities... , updated_seq INTEGER NOT NULL );
+-- Точная схема — apps/mobile/src/core/library/save-schema.ts (PRAGMA user_version сохранения).
+CREATE TABLE state_entities  ( ...как entities, без CHECK на type (появится игрок)..., updated_seq INTEGER NOT NULL );
 CREATE TABLE state_relations ( ...как relations..., updated_seq INTEGER NOT NULL );
 -- Заполняются копией entities/relations при session.started.
 -- Все запросы мира во время игры идут в state_*.
@@ -109,7 +110,8 @@ CREATE TABLE transcript (            -- то, что видел игрок; то
   ts      TEXT NOT NULL
 );
 
-CREATE VIRTUAL TABLE vec_entities USING vec0(...);  -- строится при импорте, если sqlite-vec доступен (решение 3.1)
+CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
+-- строится при импорте в копии истории; rowid = rowid строки embeddings; без расширения — перебор в JS (ADR 26)
 ```
 
 ### События
@@ -137,11 +139,23 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(...);  -- строится при �
 CREATE TABLE characters (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, sex TEXT, age INTEGER, race TEXT,
   description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
-);
-CREATE TABLE stories ( id TEXT PRIMARY KEY, title TEXT, path TEXT, imported_at TEXT );
-CREATE TABLE saves   ( id TEXT PRIMARY KEY, story_id TEXT, character_id TEXT, path TEXT,
-                       created_at TEXT, updated_at TEXT, title TEXT );
+) STRICT;
+CREATE TABLE stories (                -- одна запись на story_id; новая сборка заменяет старую
+  id TEXT PRIMARY KEY,                -- meta.story_id (стабилен между сборками, ADR 24)
+  title TEXT NOT NULL, path TEXT NOT NULL, built_at TEXT NOT NULL DEFAULT '',
+  vector_index TEXT NOT NULL,         -- 'sqlite-vec' | 'brute-force' (ADR 26)
+  imported_at TEXT NOT NULL
+) STRICT;
+CREATE TABLE saves (
+  id TEXT PRIMARY KEY, story_id TEXT NOT NULL REFERENCES stories(id),
+  character_id TEXT REFERENCES characters(id), title TEXT NOT NULL, path TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+) STRICT;
 ```
+
+- Схема — в коде: [`src/core/library/app-db.ts`](../../apps/mobile/src/core/library/app-db.ts); версии — `PRAGMA user_version`, шаги миграций только дописываются.
+- Файлы лежат в каталоге данных приложения (`Documents` на iOS): `app.db`, `stories/<story_id>.qqstory`, `saves/<save_id>.db`. **Пути в таблицах — относительные**: на iOS путь контейнера приложения меняется между установками и обновлениями.
+- Импорт: проверка `schema_version` и обязательных ключей meta → копия в `stories/` (оригинал не меняется) → `vec_entities` в копии → запись в `stories`. Повторный импорт той же истории заменяет файл; сохранения не страдают — у каждого своя копия.
 
 ## PostgreSQL (cloud)
 

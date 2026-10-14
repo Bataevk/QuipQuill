@@ -34,7 +34,7 @@
 | 2.4 | Укрепление и Docker-образ | ✅ | 2 |
 | **3** | **Mobile: основа ядра** | | |
 | 3.1 | Проверки (spike) и точка решения | ✅ | 2 |
-| 3.2 | Слой БД, импорт истории, сохранения | — | 2 |
+| 3.2 | Слой БД, импорт истории, сохранения | ✅ | 2 |
 | 3.3 | Репозиторий мира и журнал событий | — | 3 |
 | 3.4 | Сеть: авторизация, WS-клиент, QueueChatModel | — | 3 |
 | **4** | **Агент мастера** | | |
@@ -184,7 +184,7 @@ graph LR
 ### 3.4 Сеть: авторизация, WS-клиент, QueueChatModel
 - **Сделать:**
   - Хранение токенов в `expo-secure-store`, обновление токена.
-  - `globalThis.crypto` на RN из `expo-crypto` в платформенном слое, ядро использует только стандартный Web Crypto ([ADR 27](../architecture/decisions.md#27-случайные-числа-и-uuid-стандартный-web-crypto-на-rn--через-expo-crypto)).
+  - ~~`globalThis.crypto` из `expo-crypto`~~ — сделано в 3.2 (`src/platform/polyfills.ts`, ADR 27).
   - Авторизация WebSocket первым сообщением `auth` вместо `?token=` — облако, протокол и клиент ([ADR 22](../architecture/decisions.md#22-авторизация-websocket-первым-сообщением)).
   - WS-клиент: переподключение с backoff, `resume`, heartbeat, типизированный протокол.
   - `QueueChatModel`: запрос → дельты в UI → `done.message` как итог с tool_calls.

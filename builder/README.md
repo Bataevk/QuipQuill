@@ -23,11 +23,13 @@ uv run builder extract ../stories/<id>/lore -o ../stories/<id>/graph.json
 # 1.5. ручные правки графа (воспроизводимо, см. ниже)
 uv run builder curate ../stories/<id>/graph.json ../stories/<id>/curation.toml -o ../stories/<id>/graph.curated.json
 # 2. граф → файл истории (эмбеддинги считаются здесь)
+#    --meta: story_id, title, language и тексты мира берутся из meta.toml (при первом запуске он создаётся)
 uv run builder export ../stories/<id>/graph.json -o ../stories/<id>/<id>.qqstory \
-    --title "The Rune Halls" --start "The Entrance Rune Hall"
-# 3. черновик world_summary / world_constraints / style одним вызовом LLM, затем ручная правка
-uv run builder meta ../stories/<id>/<id>.qqstory
-uv run builder meta ../stories/<id>/<id>.qqstory --set style="Dark fantasy, terse second person."
+    --title "The Rune Halls" --start "The Entrance Rune Hall" --meta ../stories/<id>/meta.toml
+# 3. черновик world_summary / world_constraints / style одним вызовом LLM, затем ручная правка;
+#    с --meta правки попадают и в meta.toml, поэтому переживают пересборку
+uv run builder meta ../stories/<id>/<id>.qqstory --meta ../stories/<id>/meta.toml
+uv run builder meta ../stories/<id>/<id>.qqstory --meta ../stories/<id>/meta.toml --set style="Dark fantasy, terse second person."
 uv run builder meta ../stories/<id>/<id>.qqstory --show
 # 4. финальная проверка (в CI и перед коммитом истории)
 uv run builder validate ../stories/<id>/<id>.qqstory
@@ -63,5 +65,9 @@ uv run pytest && uv run ruff check   # тесты без сети
 6. Файл пишется во временный и переименовывается только если ошибок нет.
 
 `builder validate` без `--draft` требует ещё и заполненных `world_summary`, `world_constraints`, `style`.
+
+### `meta.toml` (ADR 24)
+
+`stories/<id>/meta.toml` хранит то, что должно пережить пересборку: `story_id` (на него ссылаются сохранения на телефоне — импорт узнаёт по нему новую версию той же истории), `title`, `language` и авторские тексты `world_summary`, `world_constraints`, `style`. Без `--meta` каждый `export` создаёт новый `story_id` и пустые тексты. Если у истории уже есть `.qqstory`, а `meta.toml` нет, — `builder meta <story> --meta <toml> --show` создаст его из файла истории. `--title` при существующем `meta.toml` игнорируется (меняйте `title` в файле).
 
 Отличия от старого экстрактора (ветка `main`): см. [docs/notes/legacy-prototype.md](../docs/notes/legacy-prototype.md).

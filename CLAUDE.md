@@ -40,7 +40,7 @@
 # apps/mobile (запускать из apps/mobile, в корне нет package.json)
 npx expo install <pkg>      # вместо npm install <pkg>
 npx expo run:ios            # dev-сборка (Expo Go не подходит: op-sqlite нативный)
-npx tsc --noEmit && npx expo lint
+npx tsc --noEmit && npx expo lint && npm test   # npm test — ядро в Node (vitest)
 
 # cloud (из корня; make help — все цели)
 make infra-up               # Postgres + RabbitMQ

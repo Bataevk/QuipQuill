@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from quipquill_builder import curation, storyfile
+from quipquill_builder import curation, story_meta, storyfile
 from quipquill_builder.config import Settings
 from quipquill_builder.embeddings import OpenRouterBatchEmbedder, OpenRouterEmbedder
 from quipquill_builder.export import ExportError, export_story
@@ -58,6 +58,12 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     export.add_argument("--language", default="en")
     export.add_argument("--embed-model", default=settings.embed_model)
     export.add_argument(
+        "--meta",
+        type=Path,
+        help="stories/<id>/meta.toml: keeps story_id, title, language and world texts across "
+        "rebuilds (created on the first export if missing)",
+    )
+    export.add_argument(
         "--sync",
         action="store_true",
         default=not settings.use_batch,
@@ -82,6 +88,11 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     )
     meta.add_argument("--force", action="store_true", help="redraft keys that are already set")
     meta.add_argument("--model", default=settings.extract_model)
+    meta.add_argument(
+        "--meta",
+        type=Path,
+        help="also write drafts and edits to this meta.toml (created from the story if missing)",
+    )
     return parser
 
 
@@ -157,15 +168,24 @@ def run_export(args: argparse.Namespace, settings: Settings) -> int:
     embedder_type = OpenRouterEmbedder if args.sync else OpenRouterBatchEmbedder
     embedder = embedder_type(settings, args.embed_model)
     title = args.title or args.output.stem.replace("-", " ").replace("_", " ").title()
+    fixed: dict[str, str] = {}
+    if args.meta and args.meta.exists():
+        fixed = story_meta.load(args.meta)
+        if args.title and args.title != fixed.get("title"):
+            logging.warning("--title ignored: %s keeps the title %r", args.meta, fixed.get("title"))
+    elif args.meta:
+        fixed = story_meta.new(title, args.language)
     try:
         issues = asyncio.run(
             export_story(
                 graph,
                 args.output,
                 embedder,
-                title=title,
+                title=fixed.get("title", title),
                 start=args.start,
-                language=args.language,
+                language=fixed.get("language", args.language),
+                story_id=fixed.get("story_id"),
+                authored=fixed,
             )
         )
     except ExportError as error:
@@ -175,6 +195,9 @@ def run_export(args: argparse.Namespace, settings: Settings) -> int:
     if has_errors(issues):
         print("Export aborted: fix the graph and run again. Nothing was written.")
         return 1
+    if args.meta and not args.meta.exists():
+        story_meta.save(args.meta, fixed)
+        print(f"Created {args.meta} (story_id {fixed['story_id']}).")
     print(f"Wrote {args.output}. Next: `builder meta {args.output}` to draft the world texts.")
     return 0
 
@@ -193,6 +216,9 @@ def run_meta(args: argparse.Namespace, settings: Settings) -> int:
         raise FileNotFoundError(f"Story file not found: {args.story}")
     with storyfile.connect(args.story) as conn:
         current = storyfile.read_meta(conn)
+        if args.meta and not args.meta.exists():
+            story_meta.save(args.meta, story_meta.from_story_meta(current))
+            print(f"Created {args.meta} from {args.story}.")
         if args.show:
             for key in sorted(current):
                 print(f"{key}: {current[key]}")
@@ -207,6 +233,7 @@ def run_meta(args: argparse.Namespace, settings: Settings) -> int:
                     return 1
                 updates[key.strip()] = value
             storyfile.set_meta(conn, updates)
+            _sync_meta_file(args.meta, updates)
             print(f"Updated: {', '.join(updates)}")
             return 0
 
@@ -218,10 +245,19 @@ def run_meta(args: argparse.Namespace, settings: Settings) -> int:
             draft_meta(OpenRouterChatClient(settings, args.model), conn, current.get("title", ""))
         )
         storyfile.set_meta(conn, {key: draft[key] for key in todo})
+        _sync_meta_file(args.meta, {key: draft[key] for key in todo})
     for key in todo:
         print(f"--- {key}\n{draft[key]}\n")
     print("Draft saved. Edit with: builder meta <story> --set style='...'")
     return 0
+
+
+def _sync_meta_file(path: Path | None, updates: dict[str, str]) -> None:
+    """Mirror edits of meta.toml keys into the file, so the next export keeps them."""
+    kept = {k: v for k, v in updates.items() if k in story_meta.KEYS}
+    if path is None or not kept:
+        return
+    story_meta.save(path, {**story_meta.load(path), **kept})
 
 
 def main(argv: list[str] | None = None) -> int:

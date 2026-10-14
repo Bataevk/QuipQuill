@@ -142,11 +142,16 @@
 **Решение (2026-10-15, выбор поручен Claude владельцем с условием «самое универсальное для iOS, Android и Windows»):** ядро использует только стандартные `globalThis.crypto.getRandomValues` / `randomUUID`. В Node, Electron (десктоп на Windows, ADR 2) и браузере они есть изначально; в React Native платформенный слой ставит их из `expo-crypto` до загрузки ядра. Делается в этапе 3.4.
 **Почему:** ни `expo-crypto`, ни `react-native-get-random-values` не заявляют поддержку Windows, поэтому универсальность даёт стандартный API, а не пакет; из RN-вариантов `expo-crypto` — официальный модуль Expo с версиями под SDK (правило `apps/mobile/AGENTS.md`).
 
+### 28. Тесты ядра: vitest + node:sqlite
+**Решение (владелец, 2026-10-15):** тест-раннер ядра — vitest (5.x, тесты `src/core/**/*.test.ts` в Node); адаптер порта `Db` для Node — встроенный `node:sqlite` (тесты, позже — десктоп на Electron). В тестах в `node:sqlite` загружается sqlite-vec из npm-пакета `sqlite-vec` (dev-зависимость), поэтому адаптер `vec0` проверяется и без устройства.
+**Почему:** vitest работает с TypeScript и ESM-пакетами LangChain без настройки трансформаций; `node:sqlite` не требует нативной сборки — и в Electron на Windows не нужно пересобирать модуль под ABI. Статус API `node:sqlite` — Release candidate.
+**Попутно (Claude, 2026-10-15):** выбор файла — `File.pickFileAsync` из `expo-file-system` (есть в SDK 57) вместо `expo-document-picker`; полифил `crypto` из `expo-crypto` (ADR 27) понадобился уже в 3.2 — id сохранений.
+**Пересмотреть, если:** понадобятся тесты UI-компонентов — добавить jest-expo отдельно; `node:sqlite` изменит API до стабилизации.
+
 ---
 
 ## Ожидают решения
 
 | Вопрос | Когда решаем |
 |---|---|
-| vitest или jest для ядра | этап 3.2 |
 | Bundle ID / домен приложения: временно `app.quipquill.mobile` (этап 0.1), подтвердить до публикации | этап 6.3 |

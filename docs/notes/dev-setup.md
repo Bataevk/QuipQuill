@@ -20,6 +20,8 @@
 - Пакеты ставить через `npx expo install <пакет>` — он подбирает версии, совместимые с SDK. **Не запускать `npm audit fix --force`**: сломает согласованность версий. Чинить версии — `npx expo install --fix`.
 - **iOS 27:** без `ios.enableSceneSupport` (`expo-build-properties` в `app.json`) приложение падает при запуске — см. [spikes](spikes.md#31-попутно-запуск-на-ios-27).
 - Dev-клиент при холодном старте открывает лаунчер: подключить к Metro — `xcrun simctl openurl booted "exp+quipquill://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`, затем нужный экран — `xcrun simctl openurl booted "quipquill://<route>"`.
+- Импорт истории в симуляторе без системного диалога (только dev-сборка): положить файл в контейнер приложения и открыть ссылку —
+  `DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp story.qqstory "$DATA/tmp/"`, затем `xcrun simctl openurl booted "quipquill://?importPath=<путь, URL-кодированный>"`. Скопированный напрямую в «Файлы» симулятора файл система не видит.
 - `babel.config.js` и `metro.config.js` содержат обходы для LangChain на Hermes (ADR 25) — не удалять.
 - Следите за символом `@` в именах пакетов: полноширинный `＠` (U+FF20) уже ломал установку.
 - Expo быстро меняется — сверяться с документацией своей версии: https://docs.expo.dev/versions/v57.0.0/ (см. `apps/mobile/AGENTS.md`).
@@ -31,6 +33,7 @@
 npx expo run:ios            # dev-сборка + запуск в симуляторе
 npx expo start              # только Metro, если dev-сборка уже установлена
 npx tsc --noEmit            # проверка типов
+npm test                    # тесты ядра (vitest, Node, без симулятора)
 npx expo lint               # линтер
 npx expo-doctor             # диагностика зависимостей
 

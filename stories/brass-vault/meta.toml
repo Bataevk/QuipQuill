@@ -1,0 +1,19 @@
+# Story identity and authored texts (ADR 24). `builder export --meta` reads this file;
+# `builder meta --meta` writes drafts and edits here. Keep story_id stable: saves use it.
+
+story_id = "d09514c5-6b96-48a4-ba57-2cc4b4b68f55"
+title = "The Brass Vault"
+language = "en"
+world_summary = "The Brass Vault is set in Vellmoor, a smoke-choked bay city of gas lamps, steam pipes and airships. The Ashcombe Mercantile Bank holds the debts of most shipyards and airship captains, and it seized the life's work of the late Professor Amara Quell after she died in debt to it. Tonight the bank hosts its Founders' Gala, and the Admiralty is set to buy the Clockheart, a self-winding golden engine, at a private auction by noon tomorrow. The Admiralty wants it to build war-dreadnoughts that never land. Mags Holloway, a former airship captain who lost her ship to the bank, plans to steal the Clockheart from the Orrery Vault beneath the bank before the sale and return it to Professor Quell's daughter in the colonies. The player joins her crew. Failure means the Clockheart goes to war, and the crew is caught or ruined."
+world_constraints = """
+- Era: industrial gaslight age (1887 by the city's calendar): steam power, brass machinery, airships, gas lamps. Electricity is only a laboratory curiosity; no radio or telephones.
+- Communication: pneumatic post capsules and messenger boys; slow and local.
+- Automatons (e.g. Sentinel Unit Seven) are clockwork or steam-driven. They obey punched brass cards and can be confused by a steam surge or paused by a struck tuning fork.
+- Magic: none. The Clockheart is a mechanical marvel. Anyone claiming supernatural powers is a fraud or a stage performer. Do not introduce spells, enchantments or supernatural abilities.
+- Peoples: everyone is human; travellers from the colonies are human too. Do not add non-human peoples.
+- Weapons: revolvers and pepperbox pistols exist but are loud and rare; guards carry truncheons and whistles. Violence draws the watch quickly.
+- Money: crowns and pennies. A good meal costs two pennies; an airship passage costs fifty crowns.
+- Geography: Ashcombe Square, Lamplight Row, Brassworks Alley, the Old Sewer Culvert and Mooring Mast Nine on the bay road.
+- Player character: a freelance specialist new to Vellmoor, recruited by Mags Holloway for skills the crew lacks. Any human background fits (a colonial traveller, a dockhand, a disgraced aristocrat, an engineer, a con artist...). Adapt anything that breaks the world instead of refusing it: a non-human becomes a human from a distant island with an unusual look; magic becomes stage illusion, sleight of hand or chemistry; legendary gear becomes a well-made but ordinary tool. The character starts with only modest, era-appropriate possessions.
+- Time pressure: the Clockheart must be out of the city before dawn, when the Wren's Promise leaves; the auction is at noon."""
+style = "Atmospheric heist thriller with steampunk industrial dread. Narration is terse and sensory, focused on heat, steam, brass, smoke and ticking machinery. Keep the tone tense and morally grey, with humour from the crew and the city's street characters. Use second-person present tense for player actions and consequences."
