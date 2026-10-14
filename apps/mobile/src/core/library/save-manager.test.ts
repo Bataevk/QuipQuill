@@ -1,7 +1,9 @@
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { SaveMissingError } from '@/core/library/save-manager';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
 let env: TestEnv;
@@ -63,6 +65,18 @@ describe('SaveManager', () => {
     const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: null, title: 's' });
     await env.library.importer.import(DEMO_STORY);
     await (await env.library.saves.open(save.id)).close();
+  });
+
+  it('refuses to open a save whose file is gone instead of creating an empty one', async () => {
+    env = await makeTestEnv();
+    await env.library.importer.import(DEMO_STORY);
+    const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: null, title: 's' });
+    const path = join(env.files.dataDir, save.path);
+    await rm(path);
+
+    await expect(env.library.saves.open(save.id)).rejects.toBeInstanceOf(SaveMissingError);
+    expect(await env.files.exists(path)).toBe(false);
+    await expect(env.library.saves.open('nope')).rejects.toThrow(/no such save/);
   });
 
   it('deletes the file and the record', async () => {

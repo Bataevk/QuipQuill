@@ -7,6 +7,7 @@ relations to the single form documented in schema/story.sql.
 import logging
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -148,5 +149,36 @@ def build_story(graph: Graph) -> StoryData:
         if rel_type == "LEADS_TO" and not ONE_WAY_RE.search(rel.description):
             add(dst, src, "LEADS_TO", "")
 
+    _link_enclosed_places(story, relations, add)
+
     story.relations = list(relations.values())
     return story
+
+
+def _link_enclosed_places(
+    story: StoryData,
+    relations: dict[tuple[str, str, str], StoryRelation],
+    add: Callable[[str, str, str, str], None],
+) -> None:
+    """A place inside a place with no passages of its own gets a way in and out (ADR 31).
+
+    The extractor often says "Fenn's Clockworks LOCATED_IN Brassworks Alley" and nothing else:
+    without a LEADS_TO the player could never enter it, and the NPCs and items in it would be
+    out of reach. A place that holds other places (a building whose rooms have their own
+    passages) is only a grouping and is left alone.
+    """
+    names = {e.id: e.name for e in story.entities}
+    places = {e.id for e in story.entities if e.type == "LOCATION"}
+    with_passage = {end for (src, dst, t) in relations if t == "LEADS_TO" for end in (src, dst)}
+    enclosed = [
+        (src, dst)
+        for (src, dst, t) in relations
+        if t == "LOCATED_IN" and src in places and dst in places
+    ]
+    groupings = {parent for _, parent in enclosed}
+    for child, parent in enclosed:
+        if child in with_passage or child in groupings:
+            continue
+        add(parent, child, "LEADS_TO", f"into {names[child]}")
+        add(child, parent, "LEADS_TO", f"back out to {names[parent]}")
+        logger.info("Linked enclosed place %s ↔ %s", parent, child)

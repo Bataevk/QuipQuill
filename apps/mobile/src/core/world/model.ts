@@ -42,7 +42,8 @@ export interface EventPayloads {
   'player.updated': { before: string; after: string };
   'note.added': { id: number; text: string };
   'note.closed': { id: number; text: string };
-  'npc.asked': { npc: string; question: string; answer: string };
+  /** An NPC reacted to something (a line, an action, an event) at the master's call (ADR 33). */
+  'npc.reacted': { npc: string; situation: string; reaction: string };
 }
 
 export type EventKind = keyof EventPayloads;

@@ -21,6 +21,14 @@ export class LlmError extends Error {
   }
 }
 
+/** The caller aborted the request (AbortSignal) while it could not be cancelled on the server. */
+export class RequestAbortedError extends Error {
+  constructor() {
+    super('Request aborted');
+    this.name = 'AbortError';
+  }
+}
+
 export type SocketStatus = 'idle' | 'connecting' | 'ready' | 'reconnecting' | 'signed-out' | 'stopped';
 
 export interface CloudSocketOptions {
@@ -42,6 +50,8 @@ export interface CloudSocketOptions {
 
 interface Pending {
   sessionId: string;
+  /** Reached the server at least once (only then is there anything to resume or cancel). */
+  sent: boolean;
   resolve: (done: DoneEvent) => void;
   reject: (error: Error) => void;
   lastEventAt: number;
@@ -127,30 +137,60 @@ export class CloudSocket {
     return () => this.statusListeners.delete(listener);
   }
 
-  /** Sends an LLM request and resolves with its `done`; rejects with LlmError on `error`. */
+  /**
+   * Sends an LLM request and resolves with its `done`; rejects with LlmError on `error`.
+   * Abort while connected: the server stops between deltas and `done` (finishReason
+   * "cancelled") follows with the text so far. Abort while offline: rejects at once with
+   * RequestAbortedError; a request already sent gets its `cancel` after reconnecting.
+   */
   request(request: LlmRequest, signal?: AbortSignal): Promise<DoneEvent> {
     return new Promise<DoneEvent>((resolve, reject) => {
       if (this.state === 'stopped') return reject(new Error('Connection stopped'));
       if (this.state === 'signed-out') return reject(new AuthRequiredError());
-      this.pending.set(request.requestId, {
+      if (signal?.aborted) return reject(new RequestAbortedError());
+      const { requestId } = request;
+      const onAbort = () => this.abort(requestId);
+      const settle = () => signal?.removeEventListener('abort', onAbort);
+      this.pending.set(requestId, {
         sessionId: request.sessionId,
-        resolve,
-        reject,
+        sent: false,
+        resolve: (done) => (settle(), resolve(done)),
+        reject: (error) => (settle(), reject(error)),
         lastEventAt: Date.now(),
       });
-      // Cancel stops the generation between deltas; `done` with finishReason "cancelled" follows.
-      signal?.addEventListener('abort', () => this.send({ v: 1, type: 'cancel', requestId: request.requestId }), {
-        once: true,
-      });
+      signal?.addEventListener('abort', onAbort, { once: true });
       this.send(request);
     });
   }
 
+  private abort(requestId: string): void {
+    const pending = this.pending.get(requestId);
+    if (!pending) return;
+    if (this.state === 'ready') {
+      this.send({ v: 1, type: 'cancel', requestId });
+      return;
+    }
+    // Offline: nobody can confirm the cancel, so settle now and forget the request.
+    this.pending.delete(requestId);
+    const queued = this.outbox.findIndex((m) => m.type === 'llm.request' && m.requestId === requestId);
+    if (queued >= 0) this.outbox.splice(queued, 1); // never sent: nothing to cancel
+    else this.outbox.push({ v: 1, type: 'cancel', requestId }); // stop it after reconnecting
+    pending.reject(new RequestAbortedError());
+  }
+
   private send(message: ClientMessage): void {
     if (this.state === 'ready' && this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      this.transmit(this.ws, message);
     } else if (message.type === 'llm.request' || message.type === 'cancel') {
       this.outbox.push(message);
+    }
+  }
+
+  private transmit(ws: WebSocket, message: ClientMessage): void {
+    ws.send(JSON.stringify(message));
+    if (message.type === 'llm.request') {
+      const pending = this.pending.get(message.requestId);
+      if (pending) pending.sent = true;
     }
   }
 
@@ -220,11 +260,12 @@ export class CloudSocket {
     this.setStatus('ready');
     const now = Date.now();
     // Sessions with requests in flight: the server replays text or repeats `done`.
-    for (const sessionId of new Set([...this.pending.values()].map((p) => p.sessionId))) {
-      ws.send(JSON.stringify({ v: 1, type: 'resume', sessionId }));
+    const inFlight = [...this.pending.values()].filter((p) => p.sent);
+    for (const sessionId of new Set(inFlight.map((p) => p.sessionId))) {
+      this.transmit(ws, { v: 1, type: 'resume', sessionId });
     }
     for (const pending of this.pending.values()) pending.lastEventAt = Math.max(pending.lastEventAt, now);
-    for (const message of this.outbox.splice(0)) ws.send(JSON.stringify(message));
+    for (const message of this.outbox.splice(0)) this.transmit(ws, message);
     this.pingTimer = setInterval(() => this.tick(ws), this.options.pingIntervalMs);
   }
 
@@ -234,7 +275,7 @@ export class CloudSocket {
       ws.close(4000, 'no frames'); // reconnect via onclose
       return;
     }
-    ws.send(JSON.stringify({ v: 1, type: 'ping' }));
+    this.transmit(ws, { v: 1, type: 'ping' });
     for (const [requestId, pending] of this.pending) {
       if (now - pending.lastEventAt > this.options.requestIdleTimeoutMs) {
         this.pending.delete(requestId);

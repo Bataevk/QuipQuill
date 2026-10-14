@@ -77,7 +77,10 @@ QuipQuill/
 │       └── src/
 │           ├── app/         # экраны (Expo Router)
 │           ├── components/
-│           └── core/        # ядро без RN: agent/, world/, storage/, net/, protocol/
+│           ├── core/        # ядро без RN (тесты в Node): storage/, story/, vector/, library/,
+│           │                #   world/, protocol/, net/, util/; agent/ — фаза 4
+│           └── platform/    # адаптеры портов: op-sqlite, expo-file-system, secure-store, полифилы;
+│                            #   node/ — node:sqlite и node:fs для тестов и будущего десктопа
 ├── cloud/                   # FastAPI, uv
 ├── builder/                 # экстрактор + экспорт, uv
 ├── schema/

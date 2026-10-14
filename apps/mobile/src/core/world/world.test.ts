@@ -108,6 +108,21 @@ describe('player.moved', () => {
   });
 });
 
+describe('enclosed places (ADR 31)', () => {
+  it('lets the player walk into a place inside a place and meet who is there', async () => {
+    expectOk(await world.move(LAMPLIGHT));
+    expectOk(await world.move('Brassworks Alley'));
+    const alley = await world.scene();
+    expect(alley.exits.find((e) => e.to.id === 'loc:fenns-clockworks')?.description).toBe(
+      "into Fenn's Clockworks",
+    );
+
+    expectOk(await world.move("Fenn's Clockworks"));
+    expect(ids((await world.scene()).here)).toContain('npc:tobias-fenn');
+    expectOk(await world.move('loc:brassworks-alley'));
+  });
+});
+
 describe('item.taken', () => {
   it('moves an item from the location to the inventory', async () => {
     const event = expectOk(await world.take('the brass lantern'));
@@ -231,7 +246,7 @@ describe('player.updated and character.adapted', () => {
   });
 });
 
-describe('notes and npc.asked', () => {
+describe('notes and npc.reacted', () => {
   it('adds and closes notes', async () => {
     const added = expectOk(await world.addNote('Meet Mags at midnight.'));
     expect(added.payload).toEqual({ id: 1, text: 'Meet Mags at midnight.' });
@@ -244,11 +259,21 @@ describe('notes and npc.asked', () => {
     expectError(await world.closeNote(9), /no note #9/);
   });
 
-  it('journals a question to an NPC without touching the state', async () => {
+  it('journals an NPC reaction without touching the state', async () => {
     const before = await count('SELECT sum(updated_seq) AS n FROM state_entities');
-    expectOk(await world.recordNpcAsked({ npc: 'npc:mags-holloway', question: 'Ready?', answer: 'Always.' }));
+    const event = expectOk(
+      await world.recordNpcReaction({
+        npc: 'npc:mags-holloway',
+        situation: 'The player snatches the plan off her table.',
+        reaction: '"Hands off, rookie." She pins your wrist to the table.',
+      }),
+    );
+    expect(event.kind).toBe('npc.reacted');
     expect(await count('SELECT sum(updated_seq) AS n FROM state_entities')).toBe(before);
-    expectError(await world.recordNpcAsked({ npc: 'npc:nobody', question: '?', answer: '' }), /no npc:nobody/);
+    expectError(
+      await world.recordNpcReaction({ npc: 'npc:nobody', situation: '?', reaction: '' }),
+      /no npc:nobody/,
+    );
   });
 });
 

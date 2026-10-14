@@ -7,6 +7,17 @@ import { SAVE_SCHEMA_STEPS } from './save-schema';
 
 export const SAVES_DIR = 'saves';
 
+/** The save cannot be opened: unknown id, or its file was deleted outside the app. */
+export class SaveMissingError extends Error {
+  readonly saveId: string;
+
+  constructor(saveId: string, reason: string) {
+    super(`Save ${saveId} cannot be opened: ${reason}`);
+    this.name = 'SaveMissingError';
+    this.saveId = saveId;
+  }
+}
+
 export interface NewSave {
   storyId: string;
   characterId: string | null;
@@ -55,11 +66,16 @@ export class SaveManager {
     }
   }
 
-  /** Opens a save with its schema up to date. The caller closes the connection. */
+  /**
+   * Opens a save with its schema up to date. The caller closes the connection. Fails with
+   * SaveMissingError if the file is gone: SQLite would silently create an empty database.
+   */
   async open(saveId: string): Promise<Db> {
     const save = await this.library.getSave(saveId);
-    if (!save) throw new Error(`Save ${saveId} not found`);
-    return this.openFile(this.absolute(save.path));
+    if (!save) throw new SaveMissingError(saveId, 'there is no such save');
+    const path = this.absolute(save.path);
+    if (!(await this.files.exists(path))) throw new SaveMissingError(saveId, `${save.path} is missing`);
+    return this.openFile(path);
   }
 
   async delete(saveId: string): Promise<void> {

@@ -68,7 +68,7 @@ CREATE TABLE embeddings (
 - Эмбеддинги: `name` — имя, `desc` — «имя: описание» (только у описанных сущностей).
 - Дополнительный ключ meta `source_extract_model` — модель, которой извлекался граф.
 - Предмет может лежать **в другом предмете** (`brass punch card LOCATED_IN wall safe`, ключ за котлом) — инструменты мастера должны это учитывать (4.1).
-- Локация, которая `LOCATED_IN` достижимой локации, считается её частью (ADR 19).
+- Локация, которая `LOCATED_IN` достижимой локации, считается её частью (ADR 19). Если у неё нет своих проходов и внутри нет других мест, builder добавляет двусторонний `LEADS_TO` к родителю («into …» / «back out to …», ADR 31); здание, которое только группирует комнаты с проходами, остаётся как есть.
 
 ## Сохранение партии (`saves/<id>.db`)
 
@@ -123,13 +123,13 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `session.started` | `{story_id, character_id, player}` | копирование в `state_*`, сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
 | `character.adapted` | `{original, adapted, choice}` | имя, описание, `props.race` игрока |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
-| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь |
+| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC рядом, после обыгранной попытки (ADR 32) |
 | `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` текущей локации |
 | `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации или `player HAS_ITEM` |
 | `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
 | `player.updated` | `{before, after}` | описание игрока |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
-| `npc.asked` | `{npc, question, answer}` | только журнал |
+| `npc.reacted` | `{npc, situation, reaction}` | только журнал (ADR 33) |
 
 Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждое изменённое `state_*` получает `updated_seq` своего события.
 

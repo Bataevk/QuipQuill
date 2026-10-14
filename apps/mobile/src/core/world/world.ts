@@ -374,11 +374,15 @@ export class World {
     });
   }
 
-  /** `npc.asked`: journal only — the conversation itself lives in the NPC's chat (stage 4.3). */
-  recordNpcAsked(input: { npc: string; question: string; answer: string }): Promise<Outcome> {
+  /**
+   * `npc.reacted`: journal only — the NPC's own chat keeps the conversation (stage 4.3). The
+   * situation is what happened from the NPC's side (a line, a grab, a noise); the reaction is
+   * its words and/or deeds, or "[silence]".
+   */
+  recordNpcReaction(input: { npc: string; situation: string; reaction: string }): Promise<Outcome> {
     return this.command('gm', async ({ state, log }) => {
       if (!(await state.entity(input.npc))) reject(`There is no ${input.npc}.`);
-      return log.append(this.turn, 'gm', 'npc.asked', input);
+      return log.append(this.turn, 'gm', 'npc.reacted', input);
     });
   }
 

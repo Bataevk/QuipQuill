@@ -62,3 +62,36 @@ def test_slugify_and_type_mapping() -> None:
     assert slugify("!!!") == "entity"
     assert story_type("Person") == "NPC"
     assert story_type("weird") == "OTHER"
+
+
+def test_enclosed_places_without_passages_get_a_way_in_and_out() -> None:
+    graph = Graph(
+        entities=[
+            Entity("Brassworks Alley", "Spot"),
+            Entity("Fenn's Clockworks", "Building"),
+            Entity("Tobias Fenn", "Person"),
+            Entity("Square", "Spot"),
+            Entity("The Bank", "Building"),
+            Entity("Grand Hall", "Spot"),
+            Entity("Vault", "Spot"),
+        ],
+        relationships=[
+            Relationship("Fenn's Clockworks", "Brassworks Alley", "LOCATED_IN"),
+            Relationship("Tobias Fenn", "Fenn's Clockworks", "LOCATED_IN"),
+            # A building that only groups rooms with their own passages stays as it is.
+            Relationship("The Bank", "Square", "LOCATED_IN"),
+            Relationship("Grand Hall", "The Bank", "LOCATED_IN"),
+            Relationship("Vault", "The Bank", "LOCATED_IN"),
+            Relationship("Square", "Grand Hall", "LEADS_TO", "through the bronze doors"),
+            Relationship("Grand Hall", "Vault", "LEADS_TO", "down the stairs"),
+        ],
+    )
+    paths = {
+        (r.src, r.dst): r.description for r in build_story(graph).relations if r.type == "LEADS_TO"
+    }
+
+    assert paths[("loc:brassworks-alley", "loc:fenns-clockworks")] == "into Fenn's Clockworks"
+    assert paths[("loc:fenns-clockworks", "loc:brassworks-alley")] == "back out to Brassworks Alley"
+    assert ("loc:square", "loc:bank") not in paths  # a grouping, not a place to walk into
+    assert paths[("loc:grand-hall", "loc:vault")] == "down the stairs"  # untouched
+    assert ("loc:bank", "loc:vault") not in paths
