@@ -123,7 +123,7 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `session.started` | `{story_id, character_id, player}` | копирование в `state_*`, сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
 | `character.adapted` | `{original, adapted, choice}` | имя, описание, `props.race` игрока |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
-| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC рядом, после обыгранной попытки (ADR 32) |
+| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `npc.reacted` (ADR 32, 34); `from` — NPC |
 | `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` текущей локации |
 | `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации или `player HAS_ITEM` |
 | `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |

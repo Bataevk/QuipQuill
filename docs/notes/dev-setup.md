@@ -22,7 +22,7 @@
 - Dev-клиент при холодном старте открывает лаунчер: подключить к Metro — `xcrun simctl openurl booted "exp+quipquill://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`, затем нужный экран — `xcrun simctl openurl booted "quipquill://<route>"`.
 - Импорт истории в симуляторе без системного диалога (только dev-сборка): положить файл в контейнер приложения и открыть ссылку —
   `DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp story.qqstory "$DATA/tmp/"`, затем `xcrun simctl openurl booted "quipquill://?importPath=<путь, URL-кодированный>"`. Скопированный напрямую в «Файлы» симулятора файл система не видит.
-- `babel.config.js` и `metro.config.js` содержат обходы для LangChain на Hermes (ADR 25) — не удалять.
+- `babel.config.js` и `metro.config.js` содержат обходы для LangChain на Hermes (ADR 25) — не удалять; заглушка `node:async_hooks` — `src/platform/shims/async-hooks.js`, полифилы — `src/platform/polyfills.ts`. После правки `metro.config.js` Metro нужно перезапустить.
 - Следите за символом `@` в именах пакетов: полноширинный `＠` (U+FF20) уже ломал установку.
 - Expo быстро меняется — сверяться с документацией своей версии: https://docs.expo.dev/versions/v57.0.0/ (см. `apps/mobile/AGENTS.md`).
 

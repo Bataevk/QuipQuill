@@ -1,4 +1,4 @@
-// Spike 3.1b: Metro rejects `import(<non-literal>)`, and LangChain's initChatModel
+// ADR 25 (spike 3.1b): Metro rejects `import(<non-literal>)`, and LangChain's initChatModel
 // (pulled in by createAgent) has `import(config.package)`. We always pass a model
 // instance, so that branch is dead code: turn it into a rejected promise at build time.
 function rejectDynamicImport({ types: t }) {

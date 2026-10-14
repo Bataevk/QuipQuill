@@ -153,6 +153,33 @@ describe('item.taken', () => {
     expect(event.payload).toEqual({ item: 'item:smoke-canister', from: 'item:crate' });
     expect(await world.state.placesOf('item:smoke-canister')).toEqual([PLAYER]);
   });
+
+  it("takes an NPC's item only after that NPC reacted this turn (ADR 32, 34)", async () => {
+    expectOk(await world.move(LAMPLIGHT));
+    expectError(await world.take('calling card'), /Pip Quillon has calling card.*npc_react/);
+    world.beginTurn();
+    expectOk(
+      await world.recordNpcReaction({
+        npc: 'npc:pip-quillon',
+        situation: 'The stranger snatches the calling card from your fingers.',
+        reaction: '"Oi! Fine, keep it — it opens no doors without me."',
+      }),
+    );
+    const event = expectOk(await world.take('calling card'));
+    expect(event.payload).toEqual({ item: 'doc:calling-card', from: 'npc:pip-quillon' });
+    expect(ids(await world.state.inventory('npc:pip-quillon'))).toEqual([]);
+    expect(ids(await world.state.inventory(PLAYER))).toEqual(['doc:calling-card']);
+  });
+
+  it("does not count another NPC's or an earlier turn's reaction", async () => {
+    expectOk(await world.move(LAMPLIGHT));
+    expectOk(await world.recordNpcReaction({ npc: 'npc:pip-quillon', situation: 's', reaction: 'r' }));
+    world.beginTurn();
+    expectError(await world.take('calling card'), /Play out the attempt first/);
+    expectOk(await world.recordNpcReaction({ npc: 'npc:mags-holloway', situation: 's', reaction: 'r' }));
+    expectError(await world.take('calling card'), /Play out the attempt first/);
+    expect(await world.log.count('item.taken')).toBe(0);
+  });
 });
 
 describe('item.dropped', () => {

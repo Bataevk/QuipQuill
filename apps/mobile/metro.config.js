@@ -4,10 +4,11 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Spike 3.1b: LangChain imports node:async_hooks, which Hermes lacks (see the shim).
+// LangChain imports node:async_hooks, which Hermes lacks (ADR 25; see the shim).
+const asyncHooksShim = path.resolve(__dirname, 'src/platform/shims/async-hooks.js');
 const nodeShims = {
-  'node:async_hooks': path.resolve(__dirname, 'spikes/shims/async-hooks.js'),
-  async_hooks: path.resolve(__dirname, 'spikes/shims/async-hooks.js'),
+  'node:async_hooks': asyncHooksShim,
+  async_hooks: asyncHooksShim,
 };
 const resolveDefault = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {

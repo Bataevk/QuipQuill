@@ -36,11 +36,27 @@ export class EventLog {
     return rows.map(toEvent);
   }
 
+  /** Every event of one turn, in order. */
+  async ofTurn(turn: number): Promise<WorldEvent[]> {
+    const rows = await this.db.all<EventRow>('SELECT * FROM events WHERE turn = ? ORDER BY seq', [turn]);
+    return rows.map(toEvent);
+  }
+
   async count(kind?: EventKind): Promise<number> {
     const row = kind
       ? await this.db.get<{ n: number }>('SELECT count(*) AS n FROM events WHERE kind = ?', [kind])
       : await this.db.get<{ n: number }>('SELECT count(*) AS n FROM events');
     return Number(row?.n ?? 0);
+  }
+
+  /** Whether `npc` already reacted (`npc.reacted`) during `turn`. */
+  async reacted(turn: number, npc: string): Promise<boolean> {
+    const row = await this.db.get<{ n: number }>(
+      `SELECT count(*) AS n FROM events
+        WHERE turn = ? AND kind = 'npc.reacted' AND json_extract(payload, '$.npc') = ?`,
+      [turn, npc],
+    );
+    return Number(row?.n ?? 0) > 0;
   }
 
   async lastTurn(): Promise<number> {

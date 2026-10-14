@@ -41,6 +41,13 @@
 
 **Решение владельца:** LangChain JS — [ADR 25](../architecture/decisions.md#25-агент-мастера-на-langchain-js-v1-с-обходами-для-hermes).
 
+## 4.1 Мастер на Hermes
+**Проведена 2026-10-15.** iPhone 17 simulator, iOS 27.0, dev-сборка (пересобрана: в старой не было `expo-secure-store`), `langchain` 1.5.16, `@langchain/core` 1.2.17, `@langchain/langgraph` 1.5.0, `langsmith` 0.10.13. Код — `apps/mobile/spikes/agent-check.tsx`.
+
+Рабочий код ядра (`createGmAgent`, 9 инструментов, `WorldPrompt`, `InvalidToolCalls`, `ChatStore`, `runTurn`) на op-sqlite + sqlite-vec с обходами из `src/platform/` (а не из `spikes/shims`): демо-сценарий «осмотреться → пойти → взять → инвентарь» со скриптовой моделью.
+
+**Результат:** `ok`; события `[] / player.moved / item.taken / []`, игрок на Lamplight Row с газетой, 14 сообщений в `model_messages`; 4 хода, 7 вызовов модели — **97 мс** (debug). Ошибок в логе Metro нет.
+
 ## 3.1 Попутно: запуск на iOS 27
 Сборка SDK 57 в Xcode 27 проходит, но приложение **падает при запуске** (`EXC_BREAKPOINT` в `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`): iOS 27 требует жизненный цикл UIScene у приложений, собранных с iOS 27 SDK, а шаблон SDK 57 его не использует. Исправлено бэкпортом Expo: `expo-build-properties` → `ios.enableSceneSupport: true` (Info.plist получает `UIApplicationSceneManifest` с `EXExpoAppSceneDelegate`). В SDK 58 флаг не нужен. Источники: [expo/expo#50179](https://github.com/expo/expo/issues/50179), [react-native-community/template#251](https://github.com/react-native-community/template/pull/251).
 

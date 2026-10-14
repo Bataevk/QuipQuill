@@ -222,18 +222,31 @@ export class World {
     });
   }
 
-  /** `item.taken`: a portable item that lies here, or inside something that lies here. */
+  /**
+   * `item.taken`: a portable item that lies here, or inside something that lies here. An item
+   * an NPC here holds only after a played-out attempt (ADR 32, 34): this turn already has that
+   * NPC's `npc.reacted`, and the master decided the attempt worked.
+   */
   take(target: string): Promise<Outcome> {
     return this.command('gm', async ({ db, state, log }, player) => {
       const owned = state.resolve(target, await state.inventory(player.id));
       if (owned.kind === 'found') reject(`The player already has ${owned.entity.name}.`);
+      const reachable = await this.reachable(state, player);
+      const held = await this.heldByNpcsHere(state, player);
       const item = pick(
-        state.resolve(target, await this.reachable(state, player)),
+        state.resolve(target, [...reachable, ...held.map((h) => h.item)]),
         target,
         () => `There is no "${target}" here to take.`,
       );
       if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
       if (item.props.fixed === true) reject(`${item.name} is fixed in place and cannot be taken.`);
+      const holder = held.find((h) => h.item.id === item.id)?.npc;
+      if (holder && !(await log.reacted(this.turn, holder.id))) {
+        reject(
+          `${holder.name} has ${item.name}. Play out the attempt first: call npc_react for ` +
+            `${holder.name}, then take it only if the attempt succeeds.`,
+        );
+      }
       const [from = ''] = await state.placesOf(item.id);
       const event = await log.append(this.turn, 'gm', 'item.taken', { item: item.id, from });
       await unplace(db, item.id);
@@ -397,6 +410,20 @@ export class World {
       direct.filter((e) => PORTABLE.includes(e.type) || e.type === 'OTHER').map((e) => state.contents(e.id)),
     );
     return [...direct, ...nested.flat()];
+  }
+
+  /** Items that NPCs and creatures in the player's location carry. */
+  private async heldByNpcsHere(
+    state: WorldState,
+    player: Entity,
+  ): Promise<{ npc: Entity; item: Entity }[]> {
+    const here = await state.locationOf(player.id);
+    if (!here) return [];
+    const npcs = (await state.contents(here.id)).filter((e) => e.type === 'NPC' || e.type === 'CREATURE');
+    const held = await Promise.all(
+      npcs.map(async (npc) => (await state.inventory(npc.id)).map((item) => ({ npc, item }))),
+    );
+    return held.flat();
   }
 
   private async command(
