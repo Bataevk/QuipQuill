@@ -33,7 +33,7 @@
 | 2.3 | LLM-воркер и эмбеддинги через OpenRouter | ✅ | 2 |
 | 2.4 | Укрепление и Docker-образ | ✅ | 2 |
 | **3** | **Mobile: основа ядра** | | |
-| 3.1 | Проверки (spike) и точка решения | — | 2 |
+| 3.1 | Проверки (spike) и точка решения | ✅ | 2 |
 | 3.2 | Слой БД, импорт истории, сохранения | — | 2 |
 | 3.3 | Репозиторий мира и журнал событий | — | 3 |
 | 3.4 | Сеть: авторизация, WS-клиент, QueueChatModel | — | 3 |
@@ -165,6 +165,7 @@ graph LR
 ### 3.2 Слой БД, импорт истории, сохранения
 - **Сделать:**
   - `src/core/storage/`: интерфейс `Db` (порт) + адаптер op-sqlite (в приложении) + адаптер better-sqlite3 (для тестов в Node).
+  - Порт `VectorIndex`: адаптер sqlite-vec (`vec0` из BLOB при импорте) в приложении, перебор в JS — в тестах и как запасной ([ADR 26](../architecture/decisions.md#26-векторный-поиск-sqlite-vec-за-портом-перебор-в-js-запасной)).
   - Тестовый раннер для ядра (vitest или jest — выбрать по совместимости с Expo SDK 57).
   - `app.db` (персонажи, список историй и сохранений).
   - Импорт `.qqstory` через `expo-document-picker`: копирование в документы, проверка `schema_version`, построение векторного индекса.
@@ -183,6 +184,7 @@ graph LR
 ### 3.4 Сеть: авторизация, WS-клиент, QueueChatModel
 - **Сделать:**
   - Хранение токенов в `expo-secure-store`, обновление токена.
+  - `globalThis.crypto` на RN из `expo-crypto` в платформенном слое, ядро использует только стандартный Web Crypto ([ADR 27](../architecture/decisions.md#27-случайные-числа-и-uuid-стандартный-web-crypto-на-rn--через-expo-crypto)).
   - Авторизация WebSocket первым сообщением `auth` вместо `?token=` — облако, протокол и клиент ([ADR 22](../architecture/decisions.md#22-авторизация-websocket-первым-сообщением)).
   - WS-клиент: переподключение с backoff, `resume`, heartbeat, типизированный протокол.
   - `QueueChatModel`: запрос → дельты в UI → `done.message` как итог с tool_calls.
@@ -200,6 +202,7 @@ graph LR
   - Системный промпт мастера на английском (на основе legacy `system_lite`, без перечисления инструментов в тексте). Маркеры `{{STORY_STYLE}}` и `{{WORLD_STATE}}`; стабильный префикс для кэша.
   - Инструменты: `move` (с проверкой `LEADS_TO`), `inspect`, `take`, `drop`, `search_lore`, `add_entity`, `edit_entity`, `update_player`, `note`. Ошибки возвращаются текстом.
   - Функция `runTurn()` и тестовый стенд с фейковой моделью, работающей по сценарию.
+  - Агент на `createAgent` из LangChain JS ([ADR 25](../architecture/decisions.md#25-агент-мастера-на-langchain-js-v1-с-обходами-для-hermes)): перенести обходы для Hermes из `apps/mobile/spikes/shims` в `src/platform/` (импорт до ядра), закрепить версии `langchain` / `@langchain/*`; шаблон — `apps/mobile/spikes/agent.ts`.
 - **Готово, когда:** сценарные тесты: «осмотреться → пойти → взять → проверить инвентарь» дают правильные события и состояние.
 
 ### 4.2 Middleware: Guard, BugGuard, контекст

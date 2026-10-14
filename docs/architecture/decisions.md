@@ -127,13 +127,26 @@
 **Решение (владелец, 2026-10-15):** у каждой истории есть `stories/<id>/meta.toml` со `story_id` и authored meta (`title`, `world_summary`, `world_constraints`, `style`). `builder export` берёт значения оттуда, а не генерирует `story_id` заново; `builder meta` пишет черновик в этот файл. Делается в этапе 3.2 (до импорта на телефоне).
 **Почему:** сохранения ссылаются на `story_id`; новый id при каждой пересборке превращал бы исправленную историю в другую. Заодно закрывается проблема из 1.3: `export` стирал authored meta.
 
+### 25. Агент мастера на LangChain JS v1 (с обходами для Hermes)
+**Решение (владелец, 2026-10-15):** цикл агента — `createAgent` из `langchain` v1 с middleware (`beforeAgent` для BugGuard и Guard, `dynamicSystemPromptMiddleware`, свои хуки контекста); модель — свой наследник `BaseChatModel` (`QueueChatModel`), история — своя в SQLite (`model_messages`), чекпоинтер LangGraph не используется.
+**Почему:** проверка 3.1b прошла все сценарии на Hermes; готовые middleware (сжатие, повторы, лимиты вызовов) и модель, знакомая по AI Samba.
+**Цена (spike 3.1b):** +4,2 МБ к бандлу; обязательные обходы — Babel-плагин против нелитерального `import()`, заглушка `node:async_hooks` в Metro (config передаётся явно, `getConfig()`/`interrupt()` без аргументов не работают), полифилы `crypto.getRandomValues`, `navigator.userAgent`, `AbortSignal.throwIfAborted`. Их проверять при каждом обновлении `langchain` / `@langchain/*`, версии закреплять.
+**Отвергнуто:** свой цикл агента (~150–200 строк) — без обходов и лишнего веса, но всё middleware писать самим.
+**Пересмотреть, если:** обходы начнут ломаться при обновлениях или размер бандла станет проблемой.
+
+### 26. Векторный поиск: sqlite-vec за портом, перебор в JS запасной
+**Решение (владелец, 2026-10-15):** уточняет ADR 5. Порт `VectorIndex` в `src/core`; адаптер на sqlite-vec (`vec0` строится при импорте из BLOB `.qqstory`) — в приложении; адаптер-перебор — в тестах Node и как запасной, если `vec0` не создаётся.
+**Почему:** на 5 000 × 1536 sqlite-vec отвечает за 7,6 мс против 209 мс у перебора, но sqlite-vec — alpha (v0.1.7-alpha.2).
+
+### 27. Случайные числа и uuid: стандартный Web Crypto; на RN — через expo-crypto
+**Решение (2026-10-15, выбор поручен Claude владельцем с условием «самое универсальное для iOS, Android и Windows»):** ядро использует только стандартные `globalThis.crypto.getRandomValues` / `randomUUID`. В Node, Electron (десктоп на Windows, ADR 2) и браузере они есть изначально; в React Native платформенный слой ставит их из `expo-crypto` до загрузки ядра. Делается в этапе 3.4.
+**Почему:** ни `expo-crypto`, ни `react-native-get-random-values` не заявляют поддержку Windows, поэтому универсальность даёт стандартный API, а не пакет; из RN-вариантов `expo-crypto` — официальный модуль Expo с версиями под SDK (правило `apps/mobile/AGENTS.md`).
+
 ---
 
 ## Ожидают решения
 
 | Вопрос | Когда решаем |
 |---|---|
-| LangChain JS v1 или свой цикл агента на Hermes | этап 3.1 |
-| sqlite-vec или перебор в JS | этап 3.1 |
 | vitest или jest для ядра | этап 3.2 |
 | Bundle ID / домен приложения: временно `app.quipquill.mobile` (этап 0.1), подтвердить до публикации | этап 6.3 |

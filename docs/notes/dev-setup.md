@@ -1,13 +1,14 @@
 # Окружение разработки (macOS)
 
-## Состояние машины разработчика (2026-10-13)
+## Состояние машины разработчика (2026-10-15)
 
 | Инструмент | Состояние |
 |---|---|
 | Homebrew, watchman, fnm, uv | ✅ (uv также есть в `~/.local/bin`, эта версия идёт в PATH первой) |
 | Node | ✅ v26.11.1, npm 11.20 |
 | Xcode | ✅ 27.0, `xcode-select` указывает на Xcode.app |
-| iOS Simulator runtime | ❌ **не установлен** — Xcode → Settings → Components → iOS |
+| iOS Simulator runtime | ✅ iOS 27.0 (iPhone 17 и др.) |
+| CocoaPods | ✅ 1.17 (`brew install cocoapods`); нужен для `npx expo run:ios`. Терминалу нужен `LANG=en_US.UTF-8` |
 | Android Studio | ❌ не установлен (нужен для Android-сборок) |
 | Docker Desktop | ✅ 29.5 (Postgres 17.11, RabbitMQ 4.3.6 в compose) |
 | `apps/mobile` | ✅ Expo SDK 57.0.28, RN 0.86.3, `expo-dev-client`, `@op-engineering/op-sqlite` 18.2 |
@@ -17,6 +18,9 @@
 - Все команды `npx expo …` и `npm …` для приложения запускаются **из `apps/mobile`**. В корне репозитория нет `package.json`.
 - **Expo Go не подходит**: op-sqlite — нативный модуль. Нужна dev-сборка: `npx expo run:ios` (локально) или `eas build --profile development` (в облаке).
 - Пакеты ставить через `npx expo install <пакет>` — он подбирает версии, совместимые с SDK. **Не запускать `npm audit fix --force`**: сломает согласованность версий. Чинить версии — `npx expo install --fix`.
+- **iOS 27:** без `ios.enableSceneSupport` (`expo-build-properties` в `app.json`) приложение падает при запуске — см. [spikes](spikes.md#31-попутно-запуск-на-ios-27).
+- Dev-клиент при холодном старте открывает лаунчер: подключить к Metro — `xcrun simctl openurl booted "exp+quipquill://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`, затем нужный экран — `xcrun simctl openurl booted "quipquill://<route>"`.
+- `babel.config.js` и `metro.config.js` содержат обходы для LangChain на Hermes (ADR 25) — не удалять.
 - Следите за символом `@` в именах пакетов: полноширинный `＠` (U+FF20) уже ломал установку.
 - Expo быстро меняется — сверяться с документацией своей версии: https://docs.expo.dev/versions/v57.0.0/ (см. `apps/mobile/AGENTS.md`).
 

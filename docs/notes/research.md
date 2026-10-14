@@ -57,6 +57,11 @@
 | LangChain JS v1: `createAgent` из `langchain`, middleware `beforeModel`, `wrapModelCall`, `afterModel`, `wrapToolCall`, `dynamicSystemPromptMiddleware` | [migration guide](https://docs.langchain.com/oss/javascript/migrate/langchain-v1) |
 | `@langchain/langgraph-checkpoint-sqlite` рассчитан на Node — на RN нужен свой чекпоинтер или своя история в SQLite | [reference](https://reference.langchain.com/javascript/langchain-langgraph-checkpoint-sqlite) |
 | Tauri 2 mobile работает, но по отзывам сырой (плагины, подпись, webview) | обзоры 2026 |
+| op-sqlite 18.2.5: SQLite 3.53.4, sqlite-vec v0.1.7-alpha.2; конфиг `"op-sqlite"` ищется в ближайшем `package.json` вверх от `node_modules` | исходники пакета, spike 3.1a (2026-10-15) |
+| iOS 27 убивает при запуске приложения, собранные с iOS 27 SDK без жизненного цикла UIScene; Expo SDK 57 ≥ 57.0.23 даёт бэкпорт `expo-build-properties` → `ios.enableSceneSupport` | [expo/expo#50179](https://github.com/expo/expo/issues/50179), проверено 2026-10-15 |
+| Metro отвергает `import()` с нелитеральным аргументом всегда; `transformer.dynamicDepsInPackages: 'throwAtRuntime'` (по умолчанию) действует только на `require` | исходник `metro/src/ModuleGraph/worker/collectDependencies.js`, 2026-10-15 |
+| Hermes / RN 0.86 без полифилов: нет `crypto.getRandomValues`, `navigator.userAgent`, `AbortSignal.prototype.throwIfAborted`; есть `AbortSignal.any/timeout`, `structuredClone`, `ReadableStream`, `TextDecoderStream` | spike 3.1b, 2026-10-15 |
+| `expo-crypto` и `react-native-get-random-values` не заявляют поддержку Windows | поиск 2026-10-15 |
 
 ## Хранилища и инфраструктура
 
