@@ -41,6 +41,7 @@
 npx expo install <pkg>      # вместо npm install <pkg>
 npx expo run:ios            # dev-сборка (Expo Go не подходит: op-sqlite нативный)
 npx tsc --noEmit && npx expo lint && npm test   # npm test — ядро в Node (vitest)
+npm run test:cloud          # ядро ↔ локальное облако (после make infra-up)
 
 # cloud (из корня; make help — все цели)
 make infra-up               # Postgres + RabbitMQ

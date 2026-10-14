@@ -13,6 +13,7 @@
     "expo-font": "~57.0.4",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.26",
+    "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -45,7 +46,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:cloud": "QQ_CLOUD=1 vitest run"
   },
   "private": true,
   "op-sqlite": {

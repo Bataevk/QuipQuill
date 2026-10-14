@@ -7,7 +7,7 @@ from decimal import Decimal
 import httpx2
 import openai
 import pytest
-from conftest import INVITE, db_run
+from conftest import INVITE, db_run, ws_connect
 from fake_openrouter import FakeOpenRouter, text_stream, tool_stream
 from fastapi.testclient import TestClient
 
@@ -69,7 +69,7 @@ def gm_request(purpose: str = "gm", request_id: str = "req-1", tools=None) -> di
 
 
 def run(client: TestClient, request: dict) -> list[dict]:
-    with client.websocket_connect(f"/ws?token={token_for(client)}") as ws:
+    with ws_connect(client, token_for(client)) as ws:
         ws.send_json(request)
         events = []
         while not events or events[-1]["type"] not in ("done", "error"):
@@ -165,7 +165,7 @@ def test_daily_limit_blocks_before_calling_the_model(
     login = app_client.post(
         "/auth/login", json={"email": "gm@example.com", "password": "long enough pass"}
     ).json()
-    with app_client.websocket_connect(f"/ws?token={login['access_token']}") as ws:
+    with ws_connect(app_client, login["access_token"]) as ws:
         ws.send_json(gm_request())
         event = ws.receive_json()
 
@@ -229,7 +229,7 @@ def test_slow_stream_times_out(app_client: TestClient, fake: FakeOpenRouter) -> 
 def test_cancel_stops_the_stream(app_client: TestClient, fake: FakeOpenRouter) -> None:
     fake.chunks = text_stream(*[f"w{i} " for i in range(30)])
     fake.delay = 0.05
-    with app_client.websocket_connect(f"/ws?token={token_for(app_client)}") as ws:
+    with ws_connect(app_client, token_for(app_client)) as ws:
         ws.send_json(gm_request())
         assert ws.receive_json()["type"] == "status"
         assert ws.receive_json()["type"] == "delta"

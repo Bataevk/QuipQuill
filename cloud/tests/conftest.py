@@ -5,6 +5,7 @@ import faulthandler
 import os
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -115,3 +116,13 @@ def settings(migrated_db: str) -> Settings:
 def client(settings: Settings) -> Iterator[TestClient]:
     with TestClient(create_app(settings)) as test_client:
         yield test_client
+
+
+@contextmanager
+def ws_connect(client: TestClient, token: str) -> Iterator[Any]:
+    """Open /ws and authenticate with the first message (ADR 22); yields the ready socket."""
+    with client.websocket_connect("/ws") as ws:
+        ws.send_json({"v": 1, "type": "auth", "token": token})
+        ready = ws.receive_json()
+        assert ready == {"v": 1, "type": "ready"}, ready
+        yield ws

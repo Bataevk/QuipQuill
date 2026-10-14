@@ -1,4 +1,4 @@
-"""WebSocket endpoint: `/ws?token=<access JWT>`. Contract: docs/architecture/protocol.md."""
+"""WebSocket endpoint `/ws`: first message `auth` (ADR 22), then docs/architecture/protocol.md."""
 
 import asyncio
 import contextlib
@@ -8,7 +8,7 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from quipquill_cloud.core import logs
@@ -17,6 +17,7 @@ from quipquill_cloud.core.security import InvalidToken, decode_access_token
 from quipquill_cloud.db.models import User
 from quipquill_cloud.mq.dispatcher import SessionKey
 from quipquill_cloud.mq.schemas import (
+    Auth,
     Cancel,
     Command,
     Event,
@@ -52,12 +53,17 @@ class Connection:
             self.last_send = time.monotonic()
 
 
-async def _authenticate(websocket: WebSocket, token: str | None, settings: Settings) -> User | None:
-    if not token:
-        return None
+async def _authenticate(websocket: WebSocket, settings: Settings) -> User | None:
+    """The first message must be `auth` with a valid access token (ADR 22), within the timeout.
+
+    The token is never read from the URL: query strings end up in access logs (uvicorn, Caddy).
+    """
     try:
-        user_id = uuid.UUID(decode_access_token(token, settings)["sub"])
-    except (InvalidToken, ValueError):
+        async with asyncio.timeout(settings.ws_auth_timeout):
+            raw = await websocket.receive_text()
+        message = Auth.model_validate_json(raw)
+        user_id = uuid.UUID(decode_access_token(message.token, settings)["sub"])
+    except (TimeoutError, ValidationError, InvalidToken, ValueError):
         return None
     async with websocket.app.state.sessionmaker() as session:
         return await session.get(User, user_id)
@@ -67,20 +73,23 @@ async def _authenticate(websocket: WebSocket, token: str | None, settings: Setti
 async def websocket_endpoint(
     websocket: WebSocket,
     settings: Annotated[Settings, Depends(get_settings)],
-    token: Annotated[str | None, Query()] = None,
 ) -> None:
-    user = await _authenticate(websocket, token, settings)
-    if user is None:
-        await websocket.close(code=CLOSE_UNAUTHORIZED, reason="not_authenticated")
-        return
+    await websocket.accept()
     state = websocket.app.state
     if getattr(state, "broker", None) is None:
         await websocket.close(code=CLOSE_TRY_AGAIN_LATER, reason="queue_unavailable")
         return
+    try:
+        user = await _authenticate(websocket, settings)
+    except WebSocketDisconnect:
+        return
+    if user is None:
+        await websocket.close(code=CLOSE_UNAUTHORIZED, reason="not_authenticated")
+        return
 
-    await websocket.accept()
     logs.user_id.set(str(user.id))
     conn = Connection(websocket, user)
+    await conn.send(Event(type="ready"))
     heartbeat = asyncio.create_task(_heartbeat(conn, settings.ws_heartbeat_interval))
     try:
         while True:

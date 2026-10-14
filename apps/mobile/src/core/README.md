@@ -9,6 +9,8 @@
 | `vector/` | Порт `VectorIndex`: sqlite-vec (`vec0`) и перебор в JS (ADR 26) |
 | `library/` | `app.db` (персонажи, истории, сохранения), импорт истории, сохранения; фасад `Library` |
 | `world/` | Мир партии: `WorldState` (запросы к `state_*`), `EventLog` (журнал, заметки), `World` (команды = события, ADR 29), имена и нечёткий поиск |
+| `protocol/` | Типы протокола v1 (`messages.ts`, синхронно с `cloud/…/mq/schemas.py`), `StreamText` — текст генерации для UI |
+| `net/` | `AuthSession` (токены, refresh), `CloudSocket` (WS: auth, переподключение, resume, ping), `QueueChatModel` (LangChain-модель поверх очереди), `CloudEmbeddings` |
 | `util/` | id (стандартный Web Crypto, ADR 27) |
 
-Планируются: `net/` и `protocol/` (3.4), `agent/` (4.x). Адаптеры — в `src/platform/` (op-sqlite, expo-file-system) и `src/platform/node/` (node:sqlite, node:fs — тесты и десктоп). Тесты: `npm test`.
+Планируется: `agent/` (4.x). Адаптеры — в `src/platform/` (op-sqlite, expo-file-system) и `src/platform/node/` (node:sqlite, node:fs — тесты и десктоп). Тесты: `npm test`; против локального облака — `npm run test:cloud`.

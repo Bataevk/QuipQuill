@@ -37,7 +37,7 @@ Email + пароль, регистрация только по инвайт-ко
 
 ## WebSocket и очереди
 
-`ws://<host>/ws?token=<access JWT>` — контракт в [protocol.md](../docs/architecture/protocol.md).
+`ws://<host>/ws`, первым сообщением `{"v":1,"type":"auth","token":"<access JWT>"}` → `{"v":1,"type":"ready"}` (ADR 22; без `auth` за `WS_AUTH_TIMEOUT` — закрытие 4401). Контракт — [protocol.md](../docs/architecture/protocol.md).
 
 ```mermaid
 graph LR

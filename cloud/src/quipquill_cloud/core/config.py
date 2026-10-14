@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     echo_delay_seconds: float = 0.05
     llm_timeout_seconds: float = 120.0
     ws_heartbeat_interval: float = 2.0
+    # The first WebSocket message must be `auth` within this time (ADR 22).
+    ws_auth_timeout: float = 10.0
     # How long in-flight and finished generations are kept for `resume`.
     generation_ttl_seconds: float = 900.0
 

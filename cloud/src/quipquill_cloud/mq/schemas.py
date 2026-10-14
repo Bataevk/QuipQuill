@@ -33,6 +33,13 @@ class LlmRequest(_Message):
     meta: dict[str, Any] | None = None
 
 
+class Auth(_Message):
+    """First message on a new socket (ADR 22): the token never travels in the URL."""
+
+    type: Literal["auth"]
+    token: str = Field(min_length=1, max_length=4096)
+
+
 class Resume(_Message):
     type: Literal["resume"]
     session_id: Id = Field(alias="sessionId")
@@ -72,7 +79,7 @@ class Event(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     v: Literal[1] = PROTOCOL_VERSION
-    type: Literal["status", "delta", "tool_call", "done", "error", "replay", "heartbeat"]
+    type: Literal["ready", "status", "delta", "tool_call", "done", "error", "replay", "heartbeat"]
     user_id: str | None = Field(default=None, exclude=True)
     request_id: str | None = Field(default=None, alias="requestId")
     session_id: str | None = Field(default=None, alias="sessionId")

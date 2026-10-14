@@ -5,7 +5,7 @@ import logging
 from collections.abc import Iterator
 
 import pytest
-from conftest import INVITE
+from conftest import INVITE, ws_connect
 from fake_openrouter import FakeOpenRouter
 from fastapi.testclient import TestClient
 
@@ -61,7 +61,7 @@ def test_token_bucket() -> None:
 def test_websocket_requests_are_rate_limited(settings: Settings) -> None:
     with (
         make_client(settings, rate_limit_burst=2, rate_limit_per_minute=0.001) as client,
-        client.websocket_connect(f"/ws?token={token_for(client)}") as ws,
+        ws_connect(client, token_for(client)) as ws,
     ):
         for rid in ("a", "b"):
             ws.send_json(llm_request(rid))
@@ -93,7 +93,7 @@ def test_oversized_llm_request_is_refused(settings: Settings) -> None:
     tool = {"type": "function", "function": {"name": "t", "parameters": {}}}
     with (
         make_client(settings, max_request_tokens=50, max_tools=1) as client,
-        client.websocket_connect(f"/ws?token={token_for(client)}") as ws,
+        ws_connect(client, token_for(client)) as ws,
     ):
         ws.send_json(llm_request("big", text="word " * 200))
         too_large = ws.receive_json()

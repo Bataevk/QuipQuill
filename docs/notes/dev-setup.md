@@ -34,6 +34,7 @@ npx expo run:ios            # dev-сборка + запуск в симулят�
 npx expo start              # только Metro, если dev-сборка уже установлена
 npx tsc --noEmit            # проверка типов
 npm test                    # тесты ядра (vitest, Node, без симулятора)
+npm run test:cloud          # ядро против локального облака (echo-воркер; нужен make infra-up)
 npx expo lint               # линтер
 npx expo-doctor             # диагностика зависимостей
 

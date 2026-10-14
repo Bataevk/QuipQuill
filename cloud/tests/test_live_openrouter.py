@@ -4,7 +4,7 @@ import os
 from collections.abc import Iterator
 
 import pytest
-from conftest import INVITE, db_run
+from conftest import INVITE, db_run, ws_connect
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
@@ -54,7 +54,7 @@ def connect(client: TestClient):
         "/auth/register",
         json={"email": "live@example.com", "password": "long enough pass", "invite_code": INVITE},
     ).json()["access_token"]
-    return client.websocket_connect(f"/ws?token={token}"), token
+    return ws_connect(client, token), token
 
 
 def ask(ws, request_id: str, purpose: str, messages: list, tools=None) -> list[dict]:
@@ -125,7 +125,7 @@ def test_streaming_tool_calls_usage_cache_and_limit(live: TestClient) -> None:
         " output_tokens, cache_read_tokens, cost_usd) VALUES ($1, 'x', 'gm', 'm', 0, 0, 0, 1)",
         user["id"],
     )
-    with live.websocket_connect(f"/ws?token={token}") as ws:
+    with ws_connect(live, token) as ws:
         blocked = ask(ws, "b1", "npc", [{"role": "user", "content": "Hello?"}])
     assert [e["type"] for e in blocked] == ["error"]
     assert blocked[0]["code"] == "limit_exceeded"

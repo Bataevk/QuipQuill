@@ -1,0 +1,129 @@
+import { HttpError, requestJson } from './http';
+
+/** What the cloud returns on login, register and refresh (protocol.md#авторизация-rest). */
+interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface Tokens {
+  accessToken: string;
+  refreshToken: string;
+  /** Epoch ms when the access token expires. */
+  accessExpiresAt: number;
+}
+
+/**
+ * Where tokens survive app restarts. Port: expo-secure-store in the app
+ * (src/platform/secure-token-store.ts), memory in tests.
+ */
+export interface TokenStore {
+  load(): Promise<Tokens | null>;
+  save(tokens: Tokens): Promise<void>;
+  clear(): Promise<void>;
+}
+
+export class MemoryTokenStore implements TokenStore {
+  private tokens: Tokens | null = null;
+
+  async load(): Promise<Tokens | null> {
+    return this.tokens;
+  }
+
+  async save(tokens: Tokens): Promise<void> {
+    this.tokens = tokens;
+  }
+
+  async clear(): Promise<void> {
+    this.tokens = null;
+  }
+}
+
+/** The player must log in again (no tokens, or the refresh token was rejected). */
+export class AuthRequiredError extends Error {
+  constructor(message = 'Sign in required') {
+    super(message);
+    this.name = 'AuthRequiredError';
+  }
+}
+
+/** Refresh this long before the access token expires (clock skew, slow networks). */
+const REFRESH_MARGIN_MS = 60_000;
+
+/**
+ * The signed-in session: login / register, and a valid access token on demand. The refresh
+ * token rotates on every use (ADR 17), so concurrent callers share one refresh in flight.
+ */
+export class AuthSession {
+  private readonly baseUrl: string;
+  private readonly store: TokenStore;
+  private readonly now: () => number;
+  private refreshing: Promise<Tokens> | undefined;
+
+  constructor(baseUrl: string, store: TokenStore, now: () => number = Date.now) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+    this.store = store;
+    this.now = now;
+  }
+
+  async isSignedIn(): Promise<boolean> {
+    return (await this.store.load()) !== null;
+  }
+
+  async login(email: string, password: string): Promise<void> {
+    await this.keep(await requestJson<TokenPair>(`${this.baseUrl}/auth/login`, { body: { email, password } }));
+  }
+
+  async register(email: string, password: string, inviteCode: string): Promise<void> {
+    await this.keep(
+      await requestJson<TokenPair>(`${this.baseUrl}/auth/register`, {
+        body: { email, password, invite_code: inviteCode },
+      }),
+    );
+  }
+
+  async logout(): Promise<void> {
+    await this.store.clear();
+  }
+
+  /** A valid access token, refreshed if it is about to expire (or `force`). */
+  async accessToken(options: { force?: boolean } = {}): Promise<string> {
+    const tokens = await this.store.load();
+    if (!tokens) throw new AuthRequiredError();
+    if (!options.force && tokens.accessExpiresAt - REFRESH_MARGIN_MS > this.now()) {
+      return tokens.accessToken;
+    }
+    this.refreshing ??= this.refresh(tokens.refreshToken).finally(() => {
+      this.refreshing = undefined;
+    });
+    return (await this.refreshing).accessToken;
+  }
+
+  private async refresh(refreshToken: string): Promise<Tokens> {
+    try {
+      return await this.keep(
+        await requestJson<TokenPair>(`${this.baseUrl}/auth/refresh`, {
+          body: { refresh_token: refreshToken },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 401) {
+        await this.store.clear(); // expired, revoked or reused: sign in again
+        throw new AuthRequiredError(error.detail);
+      }
+      throw error; // network trouble: keep the tokens, try again later
+    }
+  }
+
+  private async keep(pair: TokenPair): Promise<Tokens> {
+    const tokens: Tokens = {
+      accessToken: pair.access_token,
+      refreshToken: pair.refresh_token,
+      accessExpiresAt: this.now() + pair.expires_in * 1000,
+    };
+    await this.store.save(tokens);
+    return tokens;
+  }
+}
