@@ -120,16 +120,18 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 
 | `kind` | `payload` | Изменение состояния |
 |---|---|---|
-| `session.started` | `{story_id, character_id}` | копирование в `state_*`, сущность игрока |
-| `character.adapted` | `{original, adapted, choice}` | обновление сущности игрока |
-| `player.moved` | `{from, to}` | `LOCATED_IN` игрока |
-| `item.taken` | `{item, from}` | `LOCATED_IN` → `HAS_ITEM` |
-| `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` |
-| `entity.added` | `{entity, relation}` | новая сущность + связь |
-| `entity.edited` | `{id, before, after}` | описание или props |
+| `session.started` | `{story_id, character_id, player}` | копирование в `state_*`, сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
+| `character.adapted` | `{original, adapted, choice}` | имя, описание, `props.race` игрока |
+| `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
+| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь |
+| `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` текущей локации |
+| `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации или `player HAS_ITEM` |
+| `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
 | `player.updated` | `{before, after}` | описание игрока |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
 | `npc.asked` | `{npc, question, answer}` | только журнал |
+
+Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждое изменённое `state_*` получает `updated_seq` своего события.
 
 Мастер получает текущее состояние из `state_*` и **последние 5 событий** (улучшение отбора — в backlog).
 
