@@ -169,6 +169,7 @@ graph LR
   - `app.db` (персонажи, список историй и сохранений).
   - Импорт `.qqstory` через `expo-document-picker`: копирование в документы, проверка `schema_version`, построение векторного индекса.
   - Сохранение = копия файла истории + таблицы состояния.
+  - Builder: стабильный `story_id` и authored meta из `stories/<id>/meta.toml` ([ADR 24](../architecture/decisions.md#24-стабильный-story_id-и-authored-meta-в-storiesidmetatoml)); импорт узнаёт новую версию той же истории по `story_id`.
 - **Готово, когда:** тесты ядра в Node проходят на фикстуре из builder; в приложении импорт демо-истории показывает её название.
 
 ### 3.3 Репозиторий мира и журнал событий
@@ -182,6 +183,7 @@ graph LR
 ### 3.4 Сеть: авторизация, WS-клиент, QueueChatModel
 - **Сделать:**
   - Хранение токенов в `expo-secure-store`, обновление токена.
+  - Авторизация WebSocket первым сообщением `auth` вместо `?token=` — облако, протокол и клиент ([ADR 22](../architecture/decisions.md#22-авторизация-websocket-первым-сообщением)).
   - WS-клиент: переподключение с backoff, `resume`, heartbeat, типизированный протокол.
   - `QueueChatModel`: запрос → дельты в UI → `done.message` как итог с tool_calls.
   - Клиент эмбеддингов.

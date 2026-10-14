@@ -13,7 +13,7 @@
 | Для сравнения: Sonnet 5.5 — $2 / $10, Opus 5.5 — $4 / $20 за 1M | Справочник Claude API |
 | OpenRouter отдаёт эмбеддинги: `POST /api/v1/embeddings`, например `openai/text-embedding-3-small`, `qwen/qwen3-embedding-0.6b` | [OpenRouter docs](https://openrouter.ai/docs/api-reference/embeddings) |
 
-**Проверить в этапе 2.3:** работает ли кэширование промпта через OpenRouter для Anthropic (`cache_control`, поле cache read в usage) и как передать effort.
+**Проверить в этапе 2.3:** работает ли кэширование промпта через OpenRouter для Anthropic (`cache_control`, поле cache read в usage) и как передать effort. — проверено 2026-10-14, см. «OpenRouter для игровых вызовов».
 
 ## OpenRouter: проверено вживую (2026-10-13)
 
@@ -50,8 +50,8 @@
 | Факт | Источник |
 |---|---|
 | Expo SDK 57 — стабильный (RN 0.86); SDK 58 — бета (RN 0.88 RC, iOS 27) | [SDK 57](https://expo.dev/changelog/sdk-57), [SDK 58 beta](https://expo.dev/changelog/sdk-58-beta) |
-| op-sqlite поддерживает плагины FTS5, Rtree, cr-sqlite, **sqlite-vec**; включаются ключом в `package.json` (точное имя — в README) | [op-sqlite](https://docsearch.algolia.com/mcp/docs/repo/op-engineering/op-sqlite) |
-| sqlite-vec на iOS и Android — **экспериментально** (предсобранные библиотеки с v0.1.2) | [релиз sqlite-vec](https://https-github_com.proxy.bugsmash.io/asg017/sqlite-vec/releases/tag/v0.1.2) |
+| op-sqlite поддерживает плагины FTS5, Rtree, cr-sqlite, **sqlite-vec**; включаются ключом в `package.json` (точное имя — в README) | [op-sqlite](https://github.com/OP-Engineering/op-sqlite) |
+| sqlite-vec на iOS и Android — **экспериментально** (предсобранные библиотеки с v0.1.2) | [релиз sqlite-vec](https://github.com/asg017/sqlite-vec/releases/tag/v0.1.2) |
 | expo-sqlite тоже умеет sqlite-vec (`withSQLiteVecExtension` в плагине) — запасной путь | [expo-sqlite](https://docs.expo.dev/versions/latest/sdk/sqlite.md) |
 | LangChain.js и LangGraph.js зависят от `AsyncLocalStorage` (`node:async_hooks`), которого нет в браузере и RN; в `@langchain/core` есть `MockAsyncLocalStorage`; хелперам нужно передавать `config` явно. **Подтверждений работы `createAgent` на Hermes не найдено** | [LangChain forum](https://forum.langchain.com/t/browser-compatibility-issue-createagent-fails-due-to-node-async-hooks-dependency/2713), [reference](https://reference.langchain.com/javascript/langchain-langgraph/web/getCurrentTaskInput) |
 | LangChain JS v1: `createAgent` из `langchain`, middleware `beforeModel`, `wrapModelCall`, `afterModel`, `wrapToolCall`, `dynamicSystemPromptMiddleware` | [migration guide](https://docs.langchain.com/oss/javascript/migrate/langchain-v1) |

@@ -7,6 +7,7 @@ acked, so a poison message never loops.
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
@@ -22,19 +23,32 @@ PublishEvent = Callable[[Event], Awaitable[None]]
 
 
 class CancelRegistry:
-    """Requests the client asked to stop. In-process: API and workers share one process."""
+    """Requests the client asked to stop. In-process: API and workers share one process.
 
-    def __init__(self) -> None:
-        self._cancelled: set[tuple[str, str]] = set()
+    A cancel can arrive before its command reaches a worker, or after it finished (then nobody
+    calls `forget`), so entries also expire after `ttl` seconds.
+    """
+
+    def __init__(self, ttl: float, clock: Callable[[], float] = time.monotonic) -> None:
+        self._ttl = ttl
+        self._clock = clock
+        self._cancelled: dict[tuple[str, str], float] = {}
 
     def cancel(self, user_id: str, request_id: str) -> None:
-        self._cancelled.add((user_id, request_id))
+        now = self._clock()
+        deadline = now - self._ttl
+        for key in [k for k, at in self._cancelled.items() if at < deadline]:
+            del self._cancelled[key]
+        self._cancelled[(user_id, request_id)] = now
 
     def is_cancelled(self, user_id: str, request_id: str) -> bool:
         return (user_id, request_id) in self._cancelled
 
     def forget(self, user_id: str, request_id: str) -> None:
-        self._cancelled.discard((user_id, request_id))
+        self._cancelled.pop((user_id, request_id), None)
+
+    def __len__(self) -> int:
+        return len(self._cancelled)
 
 
 class Handler(Protocol):

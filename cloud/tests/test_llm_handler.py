@@ -12,6 +12,7 @@ from fake_openrouter import FakeOpenRouter, text_stream, tool_stream
 from fastapi.testclient import TestClient
 
 from quipquill_cloud.core.config import Settings
+from quipquill_cloud.llm import usage
 from quipquill_cloud.main import create_app
 
 TOOLS = [
@@ -202,6 +203,20 @@ def test_provider_errors_become_error_events(
     assert [e["type"] for e in events] == ["status", "error"]
     assert (events[-1]["code"], events[-1]["retryable"]) == (code, retryable)
     assert db_run("SELECT count(*) AS n FROM usage_events")[0]["n"] == 0
+
+
+def test_done_arrives_even_if_usage_cannot_be_recorded(
+    app_client: TestClient, fake: FakeOpenRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken_record(*args, **kwargs) -> None:
+        raise ConnectionError("database is down")
+
+    monkeypatch.setattr(usage, "record", broken_record)
+    fake.chunks = tool_stream()
+    events = run(app_client, gm_request(tools=TOOLS))
+
+    assert [e["type"] for e in events] == ["status", "delta", "tool_call", "tool_call", "done"]
+    assert events[-1]["usage"]["costUsd"] > 0
 
 
 def test_slow_stream_times_out(app_client: TestClient, fake: FakeOpenRouter) -> None:

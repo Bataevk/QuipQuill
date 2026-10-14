@@ -4,7 +4,11 @@ import asyncio
 import logging
 
 import aio_pika
-from aio_pika.abc import AbstractIncomingMessage, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractIncomingMessage,
+    AbstractRobustChannel,
+    AbstractRobustConnection,
+)
 from pydantic import ValidationError
 
 from quipquill_cloud.mq.dispatcher import EventDispatcher
@@ -17,16 +21,21 @@ EVENTS_PREFETCH = 64
 
 
 class Broker:
-    def __init__(self, connection: AbstractRobustConnection, prefix: str) -> None:
+    def __init__(
+        self,
+        connection: AbstractRobustConnection,
+        publish_channel: AbstractRobustChannel,
+        prefix: str,
+    ) -> None:
         self._connection = connection
+        self._publish_channel = publish_channel
         self.commands_queue = f"{prefix}.commands"
         self.events_queue = f"{prefix}.events"
 
     @classmethod
     async def connect(cls, url: str, prefix: str, connect_timeout: float) -> "Broker":
         connection = await aio_pika.connect_robust(url, timeout=connect_timeout)
-        broker = cls(connection, prefix)
-        broker._publish_channel = await connection.channel()
+        broker = cls(connection, await connection.channel(), prefix)
         for name in (broker.commands_queue, broker.events_queue):
             await broker._publish_channel.declare_queue(name, durable=True)
         return broker

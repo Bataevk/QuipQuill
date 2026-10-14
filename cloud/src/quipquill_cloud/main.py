@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def _start_queue(app: FastAPI, settings: Settings) -> None:
     """Connect to RabbitMQ; on failure degrade (REST keeps working, /ws answers 1013)."""
     app.state.dispatcher = EventDispatcher(settings.generation_ttl_seconds)
-    app.state.cancels = CancelRegistry()
+    app.state.cancels = CancelRegistry(settings.generation_ttl_seconds)
     app.state.broker = None
     try:
         broker = await Broker.connect(

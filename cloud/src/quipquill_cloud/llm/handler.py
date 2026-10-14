@@ -144,18 +144,23 @@ class OpenRouterHandler:
             yield Event(type="tool_call", call=call, **common)
 
         spent = _usage(reported)
-        await usage.record(
-            self._sessionmaker,
-            user_id=user_id,
-            request_id=request.request_id,
-            session_id=request.session_id,
-            purpose=request.purpose,
-            model=model,
-            input_tokens=spent["input"],
-            output_tokens=spent["output"],
-            cache_read_tokens=spent["cacheRead"],
-            cost_usd=spent["costUsd"],
-        )
+        try:
+            await usage.record(
+                self._sessionmaker,
+                user_id=user_id,
+                request_id=request.request_id,
+                session_id=request.session_id,
+                purpose=request.purpose,
+                model=model,
+                input_tokens=spent["input"],
+                output_tokens=spent["output"],
+                cache_read_tokens=spent["cacheRead"],
+                cost_usd=spent["costUsd"],
+            )
+        except Exception:
+            # The answer is already generated and paid for: losing the accounting row is
+            # cheaper than leaving the client without `done` after deltas and tool calls.
+            logger.exception("Could not record usage for %s: %s", request.request_id, spent)
         message: dict[str, Any] = {"role": "assistant", "content": text or None}
         if calls:
             message["tool_calls"] = calls

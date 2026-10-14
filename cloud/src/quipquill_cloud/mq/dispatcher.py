@@ -3,13 +3,16 @@
 Sessions are keyed by (user_id, session_id): a client can never subscribe to another user's
 session even if it guesses the id. Delivery and replay for one session happen under one FIFO
 lock, so events keep their order and a reconnecting client neither loses nor duplicates one.
+
+A session's state is dropped once nothing references it (no lock holders or waiters, no
+subscribers, nothing in flight or finished within the TTL), so memory follows live sessions.
 """
 
 import asyncio
 import logging
 import time
-from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -38,69 +41,132 @@ class _Finished:
     at: float
 
 
+@dataclass
+class _Session:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Coroutines holding or waiting for `lock`: the session must not be dropped under them.
+    users: int = 0
+    subscribers: set[Subscriber] = field(default_factory=set)
+    active: dict[str, _Generation] = field(default_factory=dict)
+    finished: dict[str, _Finished] = field(default_factory=dict)
+
+    def expire(self, deadline: float) -> None:
+        """Forget generations whose worker went silent and results older than the TTL."""
+        for request_id in [r for r, g in self.active.items() if g.updated < deadline]:
+            del self.active[request_id]
+        for request_id in [r for r, f in self.finished.items() if f.at < deadline]:
+            del self.finished[request_id]
+
+    def idle(self) -> bool:
+        return not (self.users or self.subscribers or self.active or self.finished)
+
+
 class EventDispatcher:
-    def __init__(self, generation_ttl: float, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        generation_ttl: float,
+        clock: Callable[[], float] = time.monotonic,
+        sweep_interval: float = 60.0,
+    ) -> None:
         self._ttl = generation_ttl
         self._clock = clock
-        self._subscribers: dict[SessionKey, set[Subscriber]] = defaultdict(set)
-        self._locks: dict[SessionKey, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._active: dict[SessionKey, dict[str, _Generation]] = defaultdict(dict)
-        self._finished: dict[SessionKey, dict[str, _Finished]] = defaultdict(dict)
+        self._sweep_interval = sweep_interval
+        self._last_sweep = clock()
+        self._sessions: dict[SessionKey, _Session] = {}
 
     async def handle(self, event: Event) -> None:
         """An event from the queue: remember it, then deliver to the session's subscribers."""
         if not event.user_id or not event.session_id:
             logger.warning("Dropping event without routing info: %s", event.type)
             return
-        key = (event.user_id, event.session_id)
-        async with self._locks[key]:
-            self._record(key, event)
-            for subscriber in list(self._subscribers.get(key, ())):
+        async with self._locked((event.user_id, event.session_id)) as session:
+            self._record(session, event)
+            for subscriber in list(session.subscribers):
                 try:
                     await subscriber.send(event)
                 except Exception:
-                    logger.info("Subscriber gone; unsubscribing from %s", key[1])
-                    self._subscribers[key].discard(subscriber)
+                    logger.info("Subscriber gone; unsubscribing from %s", event.session_id)
+                    session.subscribers.discard(subscriber)
+        self._maybe_sweep()
 
     async def subscribe(self, key: SessionKey, subscriber: Subscriber, *, replay: bool) -> None:
         """Start delivering a session's events; with `replay`, first send what is in flight."""
-        async with self._locks[key]:
-            self._expire(key)
+        async with self._locked(key) as session:
             if replay:
-                for event in self._snapshot(key):
+                for event in self._snapshot(key, session):
                     await subscriber.send(event)
-            self._subscribers[key].add(subscriber)
+            session.subscribers.add(subscriber)
 
     def unsubscribe(self, subscriber: Subscriber) -> None:
-        for subscribers in self._subscribers.values():
-            subscribers.discard(subscriber)
+        for key, session in list(self._sessions.items()):
+            session.subscribers.discard(subscriber)
+            self._drop_if_idle(key, session)
 
     def has_active(self, key: SessionKey) -> bool:
-        self._expire(key)
-        return bool(self._active.get(key))
+        session = self._sessions.get(key)
+        if session is None:
+            return False
+        session.expire(self._deadline())
+        return bool(session.active)
 
-    def _record(self, key: SessionKey, event: Event) -> None:
+    def session_count(self) -> int:
+        """Sessions held in memory (for tests and diagnostics)."""
+        return len(self._sessions)
+
+    @asynccontextmanager
+    async def _locked(self, key: SessionKey) -> AsyncIterator[_Session]:
+        session = self._sessions.setdefault(key, _Session())
+        session.users += 1
+        try:
+            async with session.lock:
+                session.expire(self._deadline())
+                yield session
+        finally:
+            session.users -= 1
+            self._drop_if_idle(key, session)
+
+    def _drop_if_idle(self, key: SessionKey, session: _Session) -> None:
+        if session.idle() and self._sessions.get(key) is session:
+            del self._sessions[key]
+
+    def _maybe_sweep(self) -> None:
+        """Drop sessions nobody touched since their last results expired."""
+        now = self._clock()
+        if now - self._last_sweep < self._sweep_interval:
+            return
+        self._last_sweep = now
+        deadline = now - self._ttl
+        for key, session in list(self._sessions.items()):
+            if session.users == 0:
+                session.expire(deadline)
+                self._drop_if_idle(key, session)
+
+    def _deadline(self) -> float:
+        return self._clock() - self._ttl
+
+    def _record(self, session: _Session, event: Event) -> None:
         request_id = event.request_id
         if request_id is None:
             return
         now = self._clock()
-        active = self._active[key]
         if event.type in ("status", "delta", "tool_call"):
-            generation = active.setdefault(request_id, _Generation(event.channel, event.meta))
+            generation = session.active.setdefault(
+                request_id, _Generation(event.channel, event.meta)
+            )
             if event.type == "delta" and event.text:
                 generation.text += event.text
             if event.meta and generation.meta is None:
                 generation.meta = event.meta
             generation.updated = now
         elif event.type in ("done", "error"):
-            active.pop(request_id, None)
-            self._finished[key][request_id] = _Finished(event, now)
-        self._expire(key)
+            session.active.pop(request_id, None)
+            session.finished[request_id] = _Finished(event, now)
 
-    def _snapshot(self, key: SessionKey) -> list[Event]:
+    @staticmethod
+    def _snapshot(key: SessionKey, session: _Session) -> list[Event]:
         user_id, session_id = key
         events = []
-        for request_id, generation in self._active.get(key, {}).items():
+        for request_id, generation in session.active.items():
             common = {
                 "user_id": user_id,
                 "request_id": request_id,
@@ -112,16 +178,6 @@ class EventDispatcher:
                 events.append(Event(type="replay", text=generation.text, **common))
             else:
                 events.append(Event(type="status", status="thinking", **common))
-        # A finished result the client may have missed while disconnected.
-        events.extend(finished.event for finished in self._finished.get(key, {}).values())
+        # Finished results the client may have missed while disconnected.
+        events.extend(finished.event for finished in session.finished.values())
         return events
-
-    def _expire(self, key: SessionKey) -> None:
-        """Forget generations whose worker went silent and results older than the TTL."""
-        deadline = self._clock() - self._ttl
-        active = self._active.get(key, {})
-        for request_id in [r for r, g in active.items() if g.updated < deadline]:
-            del active[request_id]
-        finished = self._finished.get(key, {})
-        for request_id in [r for r, f in finished.items() if f.at < deadline]:
-            del finished[request_id]

@@ -65,3 +65,38 @@ def test_failing_subscriber_is_dropped() -> None:
 
     asyncio.run(scenario())
     assert [e.type for e in good.events] == ["status", "delta"]
+
+
+def test_sessions_are_dropped_when_nothing_references_them() -> None:
+    now = [0.0]
+    dispatcher = EventDispatcher(generation_ttl=10, clock=lambda: now[0], sweep_interval=5)
+    subscriber = Collector()
+
+    async def scenario() -> list[int]:
+        counts = []
+        await dispatcher.subscribe(KEY, subscriber, replay=False)
+        await dispatcher.handle(event("status", status="thinking"))
+        await dispatcher.handle(event("done", message={"content": "ok"}))
+        dispatcher.unsubscribe(subscriber)
+        counts.append(dispatcher.session_count())  # the finished result is kept for resume
+
+        now[0] = 20  # the result expired; any later event sweeps the forgotten session
+        await dispatcher.handle(
+            Event(type="status", user_id="user-2", session_id="save-2", request_id="r2")
+        )
+        counts.append(dispatcher.session_count())  # only user-2's in-flight generation
+        return counts
+
+    assert asyncio.run(scenario()) == [1, 1]
+    assert not dispatcher.has_active(KEY)
+    assert dispatcher.has_active(("user-2", "save-2"))
+
+
+def test_session_with_only_a_subscriber_goes_away_on_unsubscribe() -> None:
+    dispatcher = EventDispatcher(generation_ttl=10)
+    subscriber = Collector()
+
+    asyncio.run(dispatcher.subscribe(KEY, subscriber, replay=True))
+    assert dispatcher.session_count() == 1
+    dispatcher.unsubscribe(subscriber)
+    assert dispatcher.session_count() == 0
