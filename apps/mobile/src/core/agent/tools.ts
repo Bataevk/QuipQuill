@@ -10,12 +10,15 @@ import { z } from 'zod';
 
 import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
+import { type NpcDeps, reactNpc } from './npc';
 import { brief } from './prompt';
 
 export interface GmToolDeps {
   world: World;
   /** Query vector for search_lore, with the story's `meta.embed_model` (CloudEmbeddings). */
   embed?: (text: string) => Promise<Float32Array>;
+  /** NPC models and stores for npc_react; without them NPCs cannot react. */
+  npc?: NpcDeps;
 }
 
 export const GM_TOOL_NAMES = [
@@ -28,20 +31,21 @@ export const GM_TOOL_NAMES = [
   'edit_entity',
   'update_player',
   'note',
+  'npc_react',
 ] as const;
 
 const LORE_HITS = 5;
 
-export function createGmTools({ world, embed }: GmToolDeps): StructuredToolInterface[] {
+export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredToolInterface[] {
   // The agent may run several tool calls of one model reply concurrently; world commands must
   // apply in the order the model wrote them (move, then take).
   const run = serial();
   const guarded =
-    <A>(name: string, body: (args: A) => Promise<string>) =>
-    (args: A) =>
+    <A>(name: string, body: (args: A, signal?: AbortSignal) => Promise<string>) =>
+    (args: A, config?: { signal?: AbortSignal }) =>
       run(async () => {
         try {
-          return await body(args);
+          return await body(args, config?.signal);
         } catch (error) {
           const reason = (error as Error).message;
           return `Error: ${name} failed unexpectedly (${reason}). Narrate around it; do not retry.`;
@@ -232,7 +236,48 @@ export function createGmTools({ world, embed }: GmToolDeps): StructuredToolInter
     },
   );
 
-  return [move, inspect, take, drop, searchLore, addEntity, editEntity, updatePlayer, note];
+  const npcReact = tool(
+    guarded('npc_react', async ({ target, situation }: { target: string; situation: string }, signal) => {
+      if (!npc) return 'Error: people cannot react right now. Narrate around it.';
+      const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
+      const found = world.state.resolve(target, nearby);
+      if (found.kind === 'ambiguous') {
+        const candidates = found.candidates.map((e) => `${e.name} [${e.id}]`).join(', ');
+        return `Error: "${target}" is ambiguous: ${candidates}.`;
+      }
+      if (found.kind === 'none') return `Error: there is no "${target}" here to react.`;
+      try {
+        const reaction = await reactNpc(world, npc, found.entity, situation, signal);
+        const who = `${found.entity.name} [${found.entity.id}]`;
+        return reaction.silent
+          ? `${who} does not react.`
+          : `${who} reacted; the player already saw it, so do not repeat or paraphrase it — ` +
+              `narrate only its consequences and the rest of the scene:\n${reaction.text}`;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return `Error: ${found.entity.name} could not react right now (${(error as Error).message}). Narrate around it.`;
+      }
+    }),
+    {
+      name: 'npc_react',
+      description:
+        'Let a person or creature here react — in their own words and/or deeds — to what just happened: ' +
+        'something the player said or asked them, did to them (a shove, a bribe, a grab at their purse), ' +
+        'or an event in the scene. Use it whenever someone present would respond, instead of writing ' +
+        'their lines yourself. The player sees the reaction at once. Several calls run one after another.',
+      schema: z.object({
+        target: z.string().describe('Id or name of who reacts (someone here)'),
+        situation: z
+          .string()
+          .describe(
+            'What just happened, told to them in the second person, e.g. "The stranger asks you about the vault" ' +
+              'or "The stranger grabs the brass key from your belt"',
+          ),
+      }),
+    },
+  );
+
+  return [move, inspect, take, drop, searchLore, addEntity, editEntity, updatePlayer, note, npcReact];
 }
 
 const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;

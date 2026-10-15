@@ -14,6 +14,7 @@ import { guardMiddleware, type GuardOptions } from './middleware/guard';
 import { invalidToolCallsMiddleware } from './middleware/invalid-tool-calls';
 import { toolLimitMiddleware } from './middleware/tool-limit';
 import { worldPromptMiddleware } from './middleware/world-prompt';
+import type { NpcDeps } from './npc';
 import { renderStoryStyle } from './prompt';
 import { createGmTools, type GmToolDeps } from './tools';
 
@@ -22,6 +23,8 @@ export interface GmAgentOptions {
   world: World;
   meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary' | 'worldConstraints'>;
   embed?: GmToolDeps['embed'];
+  /** NPC models and stores for npc_react (stage 4.3). */
+  npc?: NpcDeps;
   /** Cheap model for the Guard (purpose 'guard'); without it player input is not screened. */
   guardModel?: BaseChatModel;
   /** Cheap model for history summaries (purpose 'summary'); without it old history is dropped. */
@@ -37,7 +40,7 @@ export interface GmAgentOptions {
  * InvalidToolCalls → ToolLimit (afterModel).
  */
 export function createGmAgent(options: GmAgentOptions) {
-  const { model, world, meta, embed } = options;
+  const { model, world, meta, embed, npc } = options;
   const guard = options.guardModel
     ? [
         guardMiddleware({
@@ -50,7 +53,7 @@ export function createGmAgent(options: GmAgentOptions) {
     : [];
   return createAgent({
     model,
-    tools: createGmTools({ world, embed }),
+    tools: createGmTools({ world, embed, npc }),
     middleware: [
       bugGuardMiddleware(),
       ...guard,

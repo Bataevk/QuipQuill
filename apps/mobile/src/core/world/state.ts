@@ -14,6 +14,12 @@ type EntityRow = {
 const ENTITY_COLUMNS = 'e.id, e.type, e.subtype, e.name, e.description, e.props';
 const FUZZY_THRESHOLD = 0.8;
 
+export interface Tie {
+  other: Entity;
+  type: string;
+  description: string;
+}
+
 export type Resolution =
   | { kind: 'found'; entity: Entity }
   | { kind: 'ambiguous'; candidates: Entity[] }
@@ -94,6 +100,22 @@ export class WorldState {
       [itemId, itemId],
     );
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * What an entity is tied to besides place and possessions (INTERACTS_WITH, HAS_ATTRIBUTE…),
+   * both directions, with the story's description of the tie — an NPC's acquaintances,
+   * grudges and interests.
+   */
+  async ties(id: string): Promise<Tie[]> {
+    const rows = await this.db.all<EntityRow & { tie: string; about: string }>(
+      `SELECT ${ENTITY_COLUMNS}, r.type AS tie, r.description AS about
+         FROM state_relations r JOIN state_entities e ON e.id = CASE WHEN r.src = ? THEN r.dst ELSE r.src END
+        WHERE (r.src = ? OR r.dst = ?) AND r.type NOT IN ('LEADS_TO', 'LOCATED_IN', 'HAS_ITEM')
+        ORDER BY r.id`,
+      [id, id, id],
+    );
+    return rows.map((row) => ({ other: toEntity(row), type: row.tie, description: row.about }));
   }
 
   async allEntities(): Promise<Entity[]> {

@@ -129,7 +129,7 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
 | `player.updated` | `{before, after}` | описание игрока |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
-| `npc.reacted` | `{npc, situation, reaction}` | только журнал (ADR 33) |
+| `npc.reacted` | `{npc, situation, reaction}` (молчание — `[silence]`) | только журнал (ADR 33); реплика — в чате `npc:<id>` и в `transcript` |
 
 Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждое изменённое `state_*` получает `updated_seq` своего события.
 
