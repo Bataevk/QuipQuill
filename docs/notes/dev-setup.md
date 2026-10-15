@@ -21,8 +21,12 @@
 - **iOS 27:** без `ios.enableSceneSupport` (`expo-build-properties` в `app.json`) приложение падает при запуске — см. [spikes](spikes.md#31-попутно-запуск-на-ios-27).
 - Dev-клиент при холодном старте открывает лаунчер: подключить к Metro — `xcrun simctl openurl booted "exp+quipquill://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`, затем нужный экран — `xcrun simctl openurl booted "quipquill://<route>"`.
 - Импорт истории в симуляторе без системного диалога (только dev-сборка): положить файл в контейнер приложения и открыть ссылку —
-  `DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp story.qqstory "$DATA/tmp/"`, затем `xcrun simctl openurl booted "quipquill://?importPath=<путь, URL-кодированный>"`. Скопированный напрямую в «Файлы» симулятора файл система не видит.
+  `DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp story.qqstory "$DATA/tmp/"`, затем `xcrun simctl openurl booted "quipquill://stories?importPath=<путь, URL-кодированный>"` (с этапа 5.1 импорт живёт на экране «Истории»). Скопированный напрямую в «Файлы» симулятора файл система не видит.
 - `babel.config.js` и `metro.config.js` содержат обходы для LangChain на Hermes (ADR 25) — не удалять; заглушка `node:async_hooks` — `src/platform/shims/async-hooks.js`, полифилы — `src/platform/polyfills.ts`. После правки `metro.config.js` Metro нужно перезапустить.
+- Экраны открываются dev-ссылками: `quipquill://stories`, `quipquill://characters/new`, `quipquill://new-game`, `quipquill://game/<save_id>` (id — имя файла в `Documents/saves/`).
+- Локальный аккаунт для симулятора: облако с отдельным инвайтом без правки `cloud/.env` — `cd cloud && INVITE_CODES='["<код>"]' uv run fastapi dev --host 0.0.0.0` (переменная окружения важнее `.env`; формат — JSON-список). Email с зарезервированным доменом (`.test`, `.example`) облако отвергает (422).
+- Типы маршрутов Expo Router (`.expo/types/router.d.ts`) генерирует Metro: после добавления экрана `tsc` ругается на пути, пока Metro не запущен хотя бы раз.
+- Автоввод в симуляторе (инструменты, `simctl`): первое нажатие после запуска приложения иногда не даёт фокус, а скриншоты отстают на шаг — делать паузу ~1,5 с между нажатием и вводом. Горячая перезагрузка иногда отваливается (в логе Metro нет новой сборки после правки) — тогда перезапустить приложение.
 - Следите за символом `@` в именах пакетов: полноширинный `＠` (U+FF20) уже ломал установку.
 - Expo быстро меняется — сверяться с документацией своей версии: https://docs.expo.dev/versions/v57.0.0/ (см. `apps/mobile/AGENTS.md`).
 

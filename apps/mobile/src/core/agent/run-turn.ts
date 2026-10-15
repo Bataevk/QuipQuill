@@ -71,15 +71,19 @@ export function runTurn({ input, source = 'player', ...deps }: TurnInput): Promi
 export function retryTurn(deps: TurnDeps): Promise<TurnResult> {
   return exclusive(deps.world, async () => {
     const history = await deps.chats.load(GM_CHAT);
+    if (!isUnfinished(history)) throw new NothingToRetryError();
     const start = turnStart(history);
-    const last = history.at(-1);
-    if (start < 0 || !last || (AIMessage.isInstance(last) && !last.tool_calls?.length)) {
-      throw new NothingToRetryError();
-    }
     const known = turnOf(history[start]);
     const turn = known === undefined ? deps.world.beginTurn() : deps.world.continueTurn(known);
     return play(deps, turn, history, history);
   });
+}
+
+/** The master's last turn has no final answer (it failed or was cut off): retryTurn can finish it. */
+export function isUnfinished(history: BaseMessage[]): boolean {
+  const last = history.at(-1);
+  if (turnStart(history) < 0 || !last) return false;
+  return !(AIMessage.isInstance(last) && !last.tool_calls?.length);
 }
 
 async function play(

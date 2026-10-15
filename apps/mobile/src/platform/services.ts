@@ -2,6 +2,8 @@
 import { Library } from '@/core/library/library';
 import { AuthSession } from '@/core/net/auth';
 import { CloudSocket } from '@/core/net/cloud-socket';
+import { CloudEmbeddings } from '@/core/net/embeddings';
+import { Game } from '@/core/game/game';
 import { ExpoFileStore } from './expo-files';
 import { OpSqliteDriver } from './op-sqlite-driver';
 import { SecureTokenStore } from './secure-token-store';
@@ -38,4 +40,17 @@ export function getCloud(): Cloud {
     cloud = { auth, socket };
   }
   return cloud;
+}
+
+/** Opens a playthrough wired to this platform's library and cloud (the game screen). */
+export async function openGame(saveId: string): Promise<Game> {
+  const { auth, socket } = getCloud();
+  return Game.open(
+    {
+      library: await getLibrary(),
+      socket,
+      embeddings: (model) => new CloudEmbeddings(CLOUD_URL, auth, model),
+    },
+    saveId,
+  );
 }

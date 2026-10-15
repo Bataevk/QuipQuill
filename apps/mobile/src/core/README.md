@@ -12,5 +12,6 @@
 | `protocol/` | Типы протокола v1 (`messages.ts`, синхронно с `cloud/…/mq/schemas.py`), `StreamText` — текст генерации для UI |
 | `net/` | `AuthSession` (токены, refresh), `CloudSocket` (WS: auth, переподключение, resume, ping), `QueueChatModel` (LangChain-модель поверх очереди), `CloudEmbeddings` |
 | `agent/` | Мастер (agent.md): промпт и WORLD STATE, инструменты над `World`, `createAgent` + `middleware/` (BugGuard, Guard, Context, ToolLimit, InvalidToolCalls, WorldPrompt), история в `model_messages` (`ChatStore`, `ChatSync`), `transcript`, `runTurn()` и `retryTurn()` с блокировкой хода (`turn-lock.ts`), NPC (`npc.ts`: промпт, чат, `npc_react`), старт сессии и адаптация персонажа (`character.ts`, `session.ts`), модели поверх очереди (`models.ts`); `testing/` — модель по сценарию и демо-сценарий |
+| `game/` | `Game` — открытая партия для интерфейса (5.2): сохранение, мир, мастер и NPC поверх очереди, шаги игры (`start`, `clarify`, `choose`, `send`, `recover`), фаза, поток событий своей сессии |
 | `util/` | id (стандартный Web Crypto, ADR 27) |
  Адаптеры — в `src/platform/` (op-sqlite, expo-file-system) и `src/platform/node/` (node:sqlite, node:fs — тесты и десктоп). Тесты: `npm test`; против локального облака — `npm run test:cloud`.
