@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { ChatStore } from '@/core/agent/chat-store';
+import { TranscriptStore } from '@/core/agent/transcript';
 import { createGmAgent } from '@/core/agent/gm-agent';
 import { playDemoScenario } from '@/core/agent/testing/demo-scenario';
 import { ScriptedChatModel } from '@/core/agent/testing/scripted-model';
@@ -37,7 +38,13 @@ async function runAgentCheck() {
     const model = new ScriptedChatModel([]);
     const agent = createGmAgent({ model, world, meta });
     const t0 = Date.now();
-    const results = await playDemoScenario({ model, agent, world, chats: new ChatStore(db) });
+    const results = await playDemoScenario({
+      model,
+      agent,
+      world,
+      chats: new ChatStore(db),
+      transcript: new TranscriptStore(db),
+    });
     const ms = Date.now() - t0;
     const scene = await world.scene();
     const stored = await new ChatStore(db).load('gm');

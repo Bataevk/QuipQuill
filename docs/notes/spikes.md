@@ -48,6 +48,8 @@
 
 **Результат:** `ok`; события `[] / player.moved / item.taken / []`, игрок на Lamplight Row с газетой, 14 сообщений в `model_messages`; 4 хода, 7 вызовов модели — **97 мс** (debug). Ошибок в логе Metro нет.
 
+**Повтор после 4.2** (тот же день): `runTurn` на `agent.stream` (`for await`, история по шагам) со всеми middleware, кроме Guard и сводки (им нужна модель) — `ok`, **112 мс**.
+
 ## 3.1 Попутно: запуск на iOS 27
 Сборка SDK 57 в Xcode 27 проходит, но приложение **падает при запуске** (`EXC_BREAKPOINT` в `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`): iOS 27 требует жизненный цикл UIScene у приложений, собранных с iOS 27 SDK, а шаблон SDK 57 его не использует. Исправлено бэкпортом Expo: `expo-build-properties` → `ios.enableSceneSupport: true` (Info.plist получает `UIApplicationSceneManifest` с `EXExpoAppSceneDelegate`). В SDK 58 флаг не нужен. Источники: [expo/expo#50179](https://github.com/expo/expo/issues/50179), [react-native-community/template#251](https://github.com/react-native-community/template/pull/251).
 

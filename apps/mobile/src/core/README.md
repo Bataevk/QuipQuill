@@ -11,6 +11,6 @@
 | `world/` | Мир партии: `WorldState` (запросы к `state_*`), `EventLog` (журнал, заметки), `World` (команды = события, ADR 29), имена и нечёткий поиск |
 | `protocol/` | Типы протокола v1 (`messages.ts`, синхронно с `cloud/…/mq/schemas.py`), `StreamText` — текст генерации для UI |
 | `net/` | `AuthSession` (токены, refresh), `CloudSocket` (WS: auth, переподключение, resume, ping), `QueueChatModel` (LangChain-модель поверх очереди), `CloudEmbeddings` |
-| `agent/` | Мастер (agent.md): промпт и WORLD STATE, инструменты над `World`, `createAgent` + middleware, история в `model_messages` (`ChatStore`), `runTurn()`; `testing/` — модель по сценарию и демо-сценарий |
+| `agent/` | Мастер (agent.md): промпт и WORLD STATE, инструменты над `World`, `createAgent` + `middleware/` (BugGuard, Guard, Context, ToolLimit, InvalidToolCalls, WorldPrompt), история в `model_messages` (`ChatStore`, `ChatSync`), `transcript`, `runTurn()`; `testing/` — модель по сценарию и демо-сценарий |
 | `util/` | id (стандартный Web Crypto, ADR 27) |
  Адаптеры — в `src/platform/` (op-sqlite, expo-file-system) и `src/platform/node/` (node:sqlite, node:fs — тесты и десктоп). Тесты: `npm test`; против локального облака — `npm run test:cloud`.

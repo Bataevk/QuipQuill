@@ -11,6 +11,7 @@ import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent, type GmAgent } from './gm-agent';
 import { runTurn } from './run-turn';
+import { TranscriptStore } from './transcript';
 import { DEMO_TURNS, lastToolText, playDemoScenario, systemText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
 import { GM_TOOL_NAMES } from './tools';
@@ -24,6 +25,7 @@ let env: TestEnv;
 let db: Db;
 let world: World;
 let chats: ChatStore;
+let transcript: TranscriptStore;
 let model: ScriptedChatModel;
 let agent: GmAgent;
 let mags: Float32Array;
@@ -42,6 +44,7 @@ beforeEach(async () => {
   );
   mags = toVector(row!.vector);
   chats = new ChatStore(db);
+  transcript = new TranscriptStore(db);
   model = new ScriptedChatModel([]);
   agent = createGmAgent({ model, world, meta: await readStoryMeta(db), embed: async () => mags });
 });
@@ -54,7 +57,7 @@ afterEach(async () => {
 /** Runs one turn with these model steps. */
 async function turn(input: string, ...steps: Step[]) {
   model.push(...steps);
-  const result = await runTurn({ agent, world, chats, input });
+  const result = await runTurn({ agent, world, chats, transcript, input });
   expect(model.remaining).toBe(0);
   return result;
 }
@@ -64,7 +67,7 @@ const toolTexts = (messages: BaseMessage[]) =>
 
 describe('demo scenario: look → go → take → inventory', () => {
   it('produces the right events, state and replies', async () => {
-    const results = await playDemoScenario({ model, agent, world, chats });
+    const results = await playDemoScenario({ model, agent, world, chats, transcript });
 
     expect(results.map((r) => r.turn)).toEqual([1, 2, 3, 4]);
     expect(results.map((r) => r.events.map((e) => e.kind))).toEqual([[], ['player.moved'], ['item.taken'], []]);
@@ -84,7 +87,7 @@ describe('demo scenario: look → go → take → inventory', () => {
   });
 
   it('keeps the history in model_messages and gives it back to the model next turn', async () => {
-    await playDemoScenario({ model, agent, world, chats });
+    await playDemoScenario({ model, agent, world, chats, transcript });
     const stored = await chats.load(GM_CHAT);
     // per turn: player input, AI (+ tool call), tool result, AI reply; the last turn has no tool
     expect(stored.map((m) => m.getType())).toEqual([
@@ -242,7 +245,7 @@ describe('tools', () => {
   it('answers without lore search when there are no embeddings', async () => {
     const offline = createGmAgent({ model, world, meta: await readStoryMeta(db) });
     model.push({ toolCalls: [{ name: 'search_lore', args: { query: 'x' } }] }, { text: 'ok' });
-    const result = await runTurn({ agent: offline, world, chats, input: 'Who is Mags?' });
+    const result = await runTurn({ agent: offline, world, chats, transcript, input: 'Who is Mags?' });
     expect(toolTexts(result.messages)).toEqual(['Error: lore search is not available right now. Rely on the world state.']);
   });
 
@@ -256,7 +259,7 @@ describe('tools', () => {
       },
     });
     model.push({ toolCalls: [{ name: 'search_lore', args: { query: 'x' } }] }, { text: 'ok' });
-    const result = await runTurn({ agent: broken, world, chats, input: 'Who is Mags?' });
+    const result = await runTurn({ agent: broken, world, chats, transcript, input: 'Who is Mags?' });
     expect(toolTexts(result.messages)[0]).toBe(
       'Error: search_lore failed unexpectedly (network down). Narrate around it; do not retry.',
     );

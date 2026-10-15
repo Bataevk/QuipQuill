@@ -5,6 +5,7 @@
 import type { BaseMessage } from '@langchain/core/messages';
 
 import type { ChatStore } from '../chat-store';
+import type { TranscriptStore } from '../transcript';
 import type { GmAgent } from '../gm-agent';
 import { runTurn, type TurnResult } from '../run-turn';
 import type { World } from '../../world/world';
@@ -60,6 +61,7 @@ export async function playDemoScenario(input: {
   agent: GmAgent;
   world: World;
   chats: ChatStore;
+  transcript: TranscriptStore;
 }): Promise<TurnResult[]> {
   const results: TurnResult[] = [];
   for (const turn of DEMO_TURNS) {
