@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from quipquill_cloud.api.deps import CurrentUser
+from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.db.models import UsageEvent
 from quipquill_cloud.db.session import get_session
-from quipquill_cloud.llm.policy import tier
+from quipquill_cloud.llm.policy import daily_cap
 from quipquill_cloud.llm.usage import utc_day_start
 
 router = APIRouter(tags=["account"])
@@ -40,7 +41,11 @@ class Me(BaseModel):
 
 
 @router.get("/me")
-async def me(user: CurrentUser, session: Annotated[AsyncSession, Depends(get_session)]) -> Me:
+async def me(
+    user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Me:
     day_start = utc_day_start()
     row = (
         await session.execute(
@@ -63,5 +68,5 @@ async def me(user: CurrentUser, session: Annotated[AsyncSession, Depends(get_ses
             output_tokens=row[2],
             cost_usd=Decimal(row[3]).quantize(COST_QUANTUM),
         ),
-        limits=Limits(daily_cost_usd=tier(user.tier).daily_cost_usd),
+        limits=Limits(daily_cost_usd=daily_cap(user.tier, settings.daily_cost_limit_usd)),
     )

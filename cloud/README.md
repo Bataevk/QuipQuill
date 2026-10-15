@@ -22,6 +22,8 @@ make cloud-lint
 
 Email + пароль, регистрация только по инвайт-коду (`INVITE_CODES`).
 
+Дневной лимит трат — по тарифу (`llm/policy.py`, free $0.05 в UTC-сутки); `DAILY_COST_LIMIT_USD` переопределяет его для всех (локальные прогоны, демо; ADR 38).
+
 | Эндпоинт | Что |
 |---|---|
 | `POST /auth/register` `{email, password, invite_code}` | 201 → `{access_token, refresh_token, token_type, expires_in}`; 403 `invalid_invite_code`; 409 `email_taken` |

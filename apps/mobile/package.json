@@ -49,7 +49,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:cloud": "QQ_CLOUD=1 vitest run"
+    "test:cloud": "QQ_CLOUD=1 vitest run",
+    "test:live": "QQ_LIVE=1 vitest run"
   },
   "private": true,
   "op-sqlite": {

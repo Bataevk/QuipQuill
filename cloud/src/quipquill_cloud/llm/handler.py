@@ -69,7 +69,8 @@ class OpenRouterHandler:
             "session_id": request.session_id,
             "channel": request.channel,
         }
-        if await usage.over_limit(self._sessionmaker, user_id, command.tier):
+        cap = self._settings.daily_cost_limit_usd
+        if await usage.over_limit(self._sessionmaker, user_id, command.tier, cap):
             yield error_event("limit_exceeded", **common)
             return
 

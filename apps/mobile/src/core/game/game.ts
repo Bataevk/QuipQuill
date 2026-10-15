@@ -25,6 +25,7 @@ import type { Library } from '../library/library';
 import type { CloudSocket } from '../net/cloud-socket';
 import { QueueChatModel } from '../net/queue-chat-model';
 import type { ServerEvent } from '../protocol/messages';
+import { type ActionUsage, addUsage, emptyUsage, UsageMeter } from '../protocol/usage-meter';
 import type { Db } from '../storage/db';
 import { readStoryMeta, type StoryMeta } from '../story/story-meta';
 import { nowIso } from '../util/ids';
@@ -82,6 +83,10 @@ export class Game {
   private readonly agent: GmAgent;
   private readonly sessionDeps: SessionDeps;
   private readonly names = new Map<string, string>();
+  /** What the last action cost (stage 6.1); undefined before the first one. */
+  lastUsage: ActionUsage | undefined;
+  /** What this game cost since it was opened. */
+  sessionUsage: ActionUsage = emptyUsage();
 
   private constructor(init: {
     save: SaveRecord;
@@ -181,19 +186,21 @@ export class Game {
 
   /** Starts the playthrough with the save's character: the first proposal. */
   start(signal?: AbortSignal): Promise<CharacterProposal> {
-    return beginSession({ ...this.sessionDeps, signal }, { storyId: this.save.storyId, character: this.sheet() });
+    return this.metered(() =>
+      beginSession({ ...this.sessionDeps, signal }, { storyId: this.save.storyId, character: this.sheet() }),
+    );
   }
 
   clarify(wishes: string, signal?: AbortSignal): Promise<CharacterProposal> {
-    return clarifyCharacter({ ...this.sessionDeps, signal }, wishes);
+    return this.metered(() => clarifyCharacter({ ...this.sessionDeps, signal }, wishes));
   }
 
   choose(index: number, signal?: AbortSignal): Promise<TurnResult> {
-    return this.touched(chooseCharacter({ ...this.sessionDeps, agent: this.agent, signal }, index));
+    return this.metered(() => this.touched(chooseCharacter({ ...this.sessionDeps, agent: this.agent, signal }, index)));
   }
 
   send(input: string, signal?: AbortSignal): Promise<TurnResult> {
-    return this.touched(runTurn({ ...this.turnDeps(signal), input }));
+    return this.metered(() => this.touched(runTurn({ ...this.turnDeps(signal), input })));
   }
 
   /**
@@ -206,9 +213,11 @@ export class Game {
       case 'adapting':
         return this.start(signal); // idempotent: returns the pending proposal
       case 'opening':
-        return this.touched(startStory({ ...this.sessionDeps, agent: this.agent, signal }));
+        return this.metered(() => this.touched(startStory({ ...this.sessionDeps, agent: this.agent, signal })));
       case 'playing':
-        return (await this.unfinished()) ? this.touched(retryTurn(this.turnDeps(signal))) : undefined;
+        return (await this.unfinished())
+          ? this.metered(() => this.touched(retryTurn(this.turnDeps(signal))))
+          : undefined;
     }
   }
 
@@ -239,6 +248,19 @@ export class Game {
 
   private turnDeps(signal?: AbortSignal) {
     return { agent: this.agent, world: this.world, chats: this.chats, transcript: this.transcript, signal };
+  }
+
+  /** Counts what the generations of one action cost (`lastUsage`, `sessionUsage`). */
+  private async metered<T>(work: () => Promise<T>): Promise<T> {
+    const meter = new UsageMeter();
+    const off = this.onStream((event) => meter.apply(event));
+    try {
+      return await work();
+    } finally {
+      off();
+      this.lastUsage = meter.total;
+      this.sessionUsage = addUsage(this.sessionUsage, meter.total);
+    }
   }
 
   private async touched<T>(work: Promise<T>): Promise<T> {

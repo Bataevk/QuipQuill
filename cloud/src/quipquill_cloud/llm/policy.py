@@ -40,3 +40,8 @@ TIERS: dict[str, Tier] = {
 
 def tier(name: str) -> Tier:
     return TIERS.get(name, TIERS["free"])
+
+
+def daily_cap(tier_name: str, override: Decimal | None = None) -> Decimal | None:
+    """The spend cap per UTC day: `DAILY_COST_LIMIT_USD` if set, else the tier's own."""
+    return override if override is not None else tier(tier_name).daily_cost_usd

@@ -122,6 +122,33 @@ describe('Game', () => {
     expect((await game.lines()).map((l) => l.extra.kind)).toEqual(['character_proposal']);
   });
 
+  it('knows what each action cost, from the done events of its own generations', async () => {
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    await game.start();
+    master.push({ text: 'It begins.' });
+    await game.choose(0);
+    const emit = (event: ServerEvent) => listeners.forEach((l) => l(event));
+    const routed = (requestId: string, sessionId = game.save.id) => ({ v: 1 as const, requestId, sessionId, channel: 'gm' });
+    const done = (requestId: string, costUsd: number, sessionId?: string): ServerEvent => ({
+      ...routed(requestId, sessionId),
+      type: 'done',
+      message: { role: 'assistant', content: 'x' },
+      finishReason: 'stop',
+      usage: { input: 9000, output: 300, cacheRead: 3000, costUsd },
+    });
+    master.push(() => {
+      emit(done('old', 0.5)); // repeated after resume: not this action's
+      emit({ ...routed('r1'), type: 'status', status: 'thinking' });
+      emit({ ...routed('x', 'other-save'), type: 'status', status: 'thinking' });
+      emit(done('x', 0.7, 'other-save')); // another playthrough
+      emit(done('r1', 0.0025));
+      return { text: 'Mags nods.' };
+    });
+    await game.send('I nod.');
+    expect(game.lastUsage).toMatchObject({ calls: 1, input: 9000, cacheRead: 3000, costUsd: 0.0025 });
+    expect(game.sessionUsage.calls).toBe(1);
+  });
+
   it('streams only its own session, and names speakers', async () => {
     character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
     await game.start();

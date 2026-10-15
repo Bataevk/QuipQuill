@@ -126,7 +126,10 @@ adb push stories/brass-vault/brass-vault.qqstory /sdcard/Download/
 
 ## 4. Что важно знать
 
-- **Дневной лимит.** У всех аккаунтов тариф free: $0.05 в UTC-сутки (`cloud/src/quipquill_cloud/llm/policy.py`). Один ход мастера ≈ $0.002–0.003, то есть ~20 ходов в день. Дальше ходы отклоняются до полуночи по UTC. Потрачено сегодня:
+- **Дневной лимит.** У всех аккаунтов тариф free: $0.05 в UTC-сутки (`cloud/src/quipquill_cloud/llm/policy.py`). Средний ход ≈ $0.0023, то есть ~20 ходов в день. Дальше ходы отклоняются до полуночи по UTC. Для своих прогонов и показа лимит можно поднять для всех, не трогая код: добавить в `cloud/.env` строку `DAILY_COST_LIMIT_USD=1` и перезапустить `make cloud-dev`.
+- **Стоимость хода видна прямо в игре** (только dev-сборка): мелкая строка под каждым ходом — цена, число вызовов по каналам (`guard`, `gm`, `npc`), токены и сколько из кэша; внизу ленты — итог за сессию.
+- **Автоматический прогон демо-сценария** без телефона (ядро + облако + настоящий Haiku, ~$0.02 за прогон, 3 прогона ≈ 6 минут): `cd apps/mobile && npm run test:live` (нужен `make infra-up`; своё облако тест поднимает сам). Число прогонов — `QQ_RUNS=1 npm run test:live`.
+- Потрачено сегодня:
 
   ```bash
   docker exec quipquill-postgres-1 psql -U quipquill -d quipquill -c "select purpose, count(*), round(sum(cost_usd)::numeric,4) from usage_events where created_at >= date_trunc('day', now() at time zone 'utc') group by purpose;"
@@ -144,7 +147,8 @@ adb push stories/brass-vault/brass-vault.qqstory /sdcard/Download/
 | При входе «HTTP 500» | Нет Postgres: `make infra-up` |
 | «Check the email address…» при регистрации | Домен email зарезервирован (`.test`, `.example`) или пароль слишком короткий |
 | «This invite code is not valid» | Код не из `INVITE_CODES` в `cloud/.env` (после правки `.env` перезапустить `make cloud-dev`) |
-| Ошибка `limit_exceeded` | Дневной лимит $0.05 исчерпан |
+| Ошибка `limit_exceeded` | Дневной лимит исчерпан — `DAILY_COST_LIMIT_USD` в `cloud/.env` (см. раздел 4) |
+| Android: «QuipQuill isn't responding» | Эмулятору не хватает памяти (часто после долгого простоя) — перезапустить эмулятор с холодного старта (Device Manager → ⋮ → Cold Boot Now) |
 | Под последним сообщением кнопка «The story paused — continue» | Прошлый ход оборвался (закрыли приложение, сеть) — кнопка доигрывает его |
 | Красный экран `Cannot find native module …` | Dev-клиент собран без нового нативного модуля: `LANG=en_US.UTF-8 npx expo run:ios` |
 | Android: `A restricted method in java.lang.System has been called` при сборке | Сборка идёт на JDK 25 — проверить `JAVA_HOME` (нужен JDK 17, раздел 2а) и остановить старый демон: `cd android && ./gradlew --stop` |

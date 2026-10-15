@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.db.models import UsageEvent
-from quipquill_cloud.llm.policy import tier
+from quipquill_cloud.llm.policy import daily_cap
 
 
 def utc_day_start(now: datetime | None = None) -> datetime:
@@ -26,9 +26,12 @@ async def spent_today(session: AsyncSession, user_id: uuid.UUID) -> Decimal:
 
 
 async def over_limit(
-    sessionmaker: async_sessionmaker[AsyncSession], user_id: uuid.UUID, tier_name: str
+    sessionmaker: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    tier_name: str,
+    override: Decimal | None = None,
 ) -> bool:
-    cap = tier(tier_name).daily_cost_usd
+    cap = daily_cap(tier_name, override)
     if cap is None:
         return False
     async with sessionmaker() as session:

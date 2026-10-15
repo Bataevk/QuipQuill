@@ -270,6 +270,22 @@ def test_embeddings_respect_the_daily_limit(app_client: TestClient) -> None:
     assert app_client.post("/embeddings", json=body, headers=headers).status_code == 429
 
 
+def test_daily_limit_can_be_raised_for_everyone(settings: Settings) -> None:
+    fake = FakeOpenRouter()
+    raised = settings.model_copy(update={"daily_cost_limit_usd": Decimal("5")})
+    with TestClient(create_app(raised, llm_client=fake)) as client:
+        headers = {"Authorization": f"Bearer {token_for(client)}"}
+        (user,) = db_run("SELECT id FROM users")
+        db_run(
+            "INSERT INTO usage_events (user_id, request_id, purpose, model, input_tokens,"
+            " output_tokens, cache_read_tokens, cost_usd) VALUES ($1, 'x', 'gm', 'm', 0, 0, 0, 1)",
+            user["id"],
+        )
+        body = {"model": "openai/text-embedding-3-small", "input": ["abc"]}
+        assert client.post("/embeddings", json=body, headers=headers).status_code == 200
+        assert client.get("/me", headers=headers).json()["limits"] == {"daily_cost_usd": "5"}
+
+
 def test_me_reports_limits(app_client: TestClient) -> None:
     headers = {"Authorization": f"Bearer {token_for(app_client)}"}
     assert app_client.get("/me", headers=headers).json()["limits"] == {"daily_cost_usd": "0.05"}

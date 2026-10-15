@@ -15,6 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 /** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
 type FeedItem =
   | { key: string; kind: 'bubble'; speaker: string; name?: string; text: string; cards?: CharacterOption[] }
+  | { key: string; kind: 'cost'; text: string }
   | { key: string; kind: 'footer' };
 
 /** The game (stage 5.2): bubbles of the master, NPCs and the player, live streaming, cards. */
@@ -38,21 +39,27 @@ export default function GameScreen() {
 
   const items = useMemo<FeedItem[]>(() => {
     const lastCard = game.lines.findLastIndex((l) => l.extra.kind === PROPOSAL_CARD);
-    const rows: FeedItem[] = game.lines.map((line, i) => ({
-      key: `line-${line.seq}`,
-      kind: 'bubble',
-      speaker: line.speaker,
-      name: line.extra.name as string | undefined,
-      text: line.text,
-      cards: i === lastCard && adapting ? game.proposal?.options : undefined,
-    }));
+    const rows: FeedItem[] = [];
+    game.lines.forEach((line, i) => {
+      rows.push({
+        key: `line-${line.seq}`,
+        kind: 'bubble',
+        speaker: line.speaker,
+        name: line.extra.name as string | undefined,
+        text: line.text,
+        cards: i === lastCard && adapting ? game.proposal?.options : undefined,
+      });
+      game.costs
+        .filter((cost) => cost.afterSeq === line.seq)
+        .forEach((cost, n) => rows.push({ key: `cost-${line.seq}-${n}`, kind: 'cost', text: cost.text }));
+    });
     if (game.pending) rows.push({ key: 'pending', kind: 'bubble', speaker: 'player', text: game.pending });
     for (const bubble of game.live) {
       rows.push({ key: `live-${bubble.requestId}`, kind: 'bubble', speaker: bubble.channel, name: bubble.speaker, text: bubble.text });
     }
     rows.push({ key: 'footer', kind: 'footer' });
     return rows;
-  }, [game.lines, game.pending, game.live, game.proposal, adapting]);
+  }, [game.lines, game.pending, game.live, game.proposal, game.costs, adapting]);
 
   const footer = (
     <View style={styles.footer}>
@@ -63,6 +70,11 @@ export default function GameScreen() {
         </ThemedText>
       ) : null}
       <ErrorText>{game.error}</ErrorText>
+      {game.sessionCost ? (
+        <ThemedText type="code" themeColor="textSecondary">
+          Session: {game.sessionCost}
+        </ThemedText>
+      ) : null}
       {(game.error || game.stalled) && !game.busy ? (
         <Button title={game.error ? 'Try again' : 'The story paused — continue'} onPress={game.recover} />
       ) : null}
@@ -86,6 +98,10 @@ export default function GameScreen() {
             renderItem={({ item }) =>
               item.kind === 'footer' ? (
                 footer
+              ) : item.kind === 'cost' ? (
+                <ThemedText type="code" themeColor="textSecondary">
+                  {item.text}
+                </ThemedText>
               ) : (
                 <View>
                   <Bubble speaker={item.speaker} name={item.name} text={item.text} />

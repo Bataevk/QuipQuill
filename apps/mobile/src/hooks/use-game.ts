@@ -4,6 +4,7 @@ import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
 import type { Game, GamePhase, GameStep } from '@/core/game/game';
 import { LiveFeed, type LiveBubble } from '@/core/protocol/live-feed';
+import { formatUsage } from '@/core/protocol/usage-meter';
 import { getCloud, openGame } from '@/platform/services';
 
 export type { LiveBubble };
@@ -24,6 +25,10 @@ export interface GameView {
   stalled: boolean;
   /** The cloud connection is up; while it is not, requests wait and are sent on reconnect. */
   online: boolean;
+  /** Dev builds only (stage 6.1): what each action cost, shown after the line it ended on. */
+  costs: { afterSeq: number; text: string }[];
+  /** Dev builds only: what this game cost since the screen opened. */
+  sessionCost: string | undefined;
   send(text: string): void;
   clarify(text: string): void;
   choose(index: number): void;
@@ -66,6 +71,8 @@ export function useGame(saveId: string): GameView {
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string>();
   const [online, setOnline] = useState(() => getCloud().socket.status === 'ready');
+  const [costs, setCosts] = useState<{ afterSeq: number; text: string }[]>([]);
+  const [sessionCost, setSessionCost] = useState<string>();
 
   useEffect(() => getCloud().socket.onStatus((status) => setOnline(status === 'ready')), []);
 
@@ -91,6 +98,12 @@ export function useGame(saveId: string): GameView {
         // render, so nothing shows twice or flickers.
         feed.current.end();
         if (next) setState(next);
+        if (__DEV__ && game.lastUsage && next) {
+          const afterSeq = next.lines.at(-1)?.seq ?? 0;
+          const line = formatUsage(game.lastUsage);
+          setCosts((list) => [...list, { afterSeq, text: line }]);
+          setSessionCost(formatUsage(game.sessionUsage));
+        }
         setLive([]);
         setPending(undefined);
         setThinking(false);
@@ -158,6 +171,8 @@ export function useGame(saveId: string): GameView {
     error,
     stalled: !!state?.step,
     online,
+    costs,
+    sessionCost,
     send: (text) => run((g, signal) => g.send(text, signal), text),
     clarify: (text) => run((g, signal) => g.clarify(text, signal), text),
     choose: (index) => run((g, signal) => g.choose(index, signal)),

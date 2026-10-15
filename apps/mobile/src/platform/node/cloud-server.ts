@@ -1,7 +1,9 @@
 /// <reference types="node" />
 /**
- * A real cloud (FastAPI + RabbitMQ worker) for core integration tests, with the echo handler
- * instead of the LLM. Needs `make infra-up` and the cloud's uv environment.
+ * A real cloud (FastAPI + RabbitMQ worker) for core integration tests: the echo handler instead
+ * of the LLM, or (`live`) the real OpenRouter with the key from `cloud/.env` and the daily cap
+ * raised (DAILY_COST_LIMIT_USD). Own queue prefix, so it does not disturb a running
+ * `make cloud-dev`. Needs `make infra-up` and the cloud's uv environment.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -16,7 +18,9 @@ export interface TestCloud {
   stop(): Promise<void>;
 }
 
-export async function startTestCloud(options: { echoDelaySeconds?: number } = {}): Promise<TestCloud> {
+export async function startTestCloud(
+  options: { echoDelaySeconds?: number; live?: boolean; dailyLimitUsd?: number } = {},
+): Promise<TestCloud> {
   const port = await freePort();
   const child = spawn(
     'uv',
@@ -30,8 +34,9 @@ export async function startTestCloud(options: { echoDelaySeconds?: number } = {}
           process.env.TEST_DATABASE_URL ??
           'postgresql+asyncpg://quipquill:quipquill@localhost:5432/quipquill_test',
         RABBITMQ_URL: process.env.TEST_RABBITMQ_URL ?? 'amqp://quipquill:quipquill@localhost:5672/',
-        QUEUE_PREFIX: 'qq.test.ts-core',
-        LLM_HANDLER: 'echo',
+        QUEUE_PREFIX: options.live ? 'qq.test.ts-live' : 'qq.test.ts-core',
+        LLM_HANDLER: options.live ? 'openrouter' : 'echo',
+        DAILY_COST_LIMIT_USD: String(options.dailyLimitUsd ?? 1),
         ECHO_DELAY_SECONDS: String(options.echoDelaySeconds ?? 0.01),
         INVITE_CODES: JSON.stringify([TEST_INVITE]),
         JWT_SECRET: 'ts-core-test-secret-that-is-long-enough-32b',

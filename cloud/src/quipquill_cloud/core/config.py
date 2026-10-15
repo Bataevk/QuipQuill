@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -22,6 +23,9 @@ class Settings(BaseSettings):
     # Abuse limits on top of the daily spend cap (owner, 2026-10-14).
     rate_limit_per_minute: float = 30
     rate_limit_burst: int = 10
+    # Overrides the tier's spend cap per UTC day for everyone (local test runs, demos);
+    # unset = each tier's own cap (llm/policy.py). The product cap stays in code.
+    daily_cost_limit_usd: Decimal | None = None
     max_http_body_bytes: int = 1_000_000
     # Rough guard (chars / 4) keeping a request under Haiku's 100K-token price step.
     max_request_tokens: int = 95_000

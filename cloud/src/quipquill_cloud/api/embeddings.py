@@ -42,7 +42,7 @@ async def embeddings(
     if not request.app.state.rate_limiter.allow(str(user.id)):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited")
     sessionmaker = request.app.state.sessionmaker
-    if await usage.over_limit(sessionmaker, user.id, user.tier):
+    if await usage.over_limit(sessionmaker, user.id, user.tier, settings.daily_cost_limit_usd):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="limit_exceeded")
     try:
         response = await request.app.state.llm_client.embeddings.create(
