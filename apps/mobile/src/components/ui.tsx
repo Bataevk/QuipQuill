@@ -36,7 +36,8 @@ export function Screen({
   );
   return (
     <ThemedView style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {/* The Stack header covers the top inset; only the bottom is ours. */}
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         {scroll ? <ScrollView keyboardShouldPersistTaps="handled">{body}</ScrollView> : body}
         {footer}
       </SafeAreaView>

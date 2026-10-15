@@ -1,4 +1,6 @@
 /** Composition root: the core's ports wired to this platform's adapters. */
+import { Platform } from 'react-native';
+
 import { Library } from '@/core/library/library';
 import { AuthSession } from '@/core/net/auth';
 import { CloudSocket } from '@/core/net/cloud-socket';
@@ -20,10 +22,12 @@ export function getLibrary(): Promise<Library> {
 }
 
 /**
- * Cloud base URL: EXPO_PUBLIC_CLOUD_URL (e.g. http://192.168.1.10:8000 for a phone on the LAN);
- * the iOS simulator reaches the Mac's localhost directly.
+ * Cloud base URL: EXPO_PUBLIC_CLOUD_URL (e.g. http://192.168.1.10:8000 for a phone on the LAN).
+ * Without it: the iOS simulator reaches the Mac's localhost directly, the Android emulator
+ * reaches it as 10.0.2.2.
  */
-export const CLOUD_URL = (process.env.EXPO_PUBLIC_CLOUD_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+const LOCAL_CLOUD = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+export const CLOUD_URL = (process.env.EXPO_PUBLIC_CLOUD_URL ?? LOCAL_CLOUD).replace(/\/+$/, '');
 
 export interface Cloud {
   auth: AuthSession;

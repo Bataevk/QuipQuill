@@ -2,17 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
-import { Game, type GamePhase, isStoryChannel } from '@/core/game/game';
-import { StreamText } from '@/core/protocol/stream-text';
+import type { Game, GamePhase, GameStep } from '@/core/game/game';
+import { LiveFeed, type LiveBubble } from '@/core/protocol/live-feed';
 import { getCloud, openGame } from '@/platform/services';
 
-/** A bubble being streamed right now (stage 5.2): deltas by request, replaced on replay. */
-export interface LiveBubble {
-  requestId: string;
-  channel: string;
-  speaker: string | undefined;
-  text: string;
-}
+export type { LiveBubble };
 
 export interface GameView {
   ready: boolean;
@@ -26,7 +20,8 @@ export interface GameView {
   /** A generation is queued or thinking and no text has come yet. */
   thinking: boolean;
   error: string | undefined;
-  unfinished: boolean;
+  /** The game cannot go on by itself (`Game.nextStep()`): show "continue". */
+  stalled: boolean;
   /** The cloud connection is up; while it is not, requests wait and are sent on reconnect. */
   online: boolean;
   send(text: string): void;
@@ -35,132 +30,133 @@ export interface GameView {
   recover(): void;
 }
 
+interface Snapshot {
+  phase: GamePhase;
+  lines: TranscriptLine[];
+  proposal: CharacterProposal | undefined;
+  step: GameStep;
+}
+
+async function snapshot(game: Game): Promise<Snapshot> {
+  const [phase, lines, proposal, step] = await Promise.all([
+    game.phase(),
+    game.lines(),
+    game.proposal(),
+    game.nextStep(),
+  ]);
+  return { phase, lines, proposal: phase === 'adapting' ? proposal : undefined, step };
+}
+
 /**
  * The game screen's state over one `Game`: committed lines from the transcript, live bubbles
- * from the socket stream while a turn runs, one action at a time. Leaving the screen aborts a
- * running action and closes the save when it settles.
+ * (LiveFeed) while an action runs, one action at a time. On open it finishes what needs no
+ * decision (`start`, `open`); an unfinished turn waits for the player. Leaving the screen aborts
+ * a running action and closes the save when it settles.
  */
 export function useGame(saveId: string): GameView {
   const gameRef = useRef<Game | undefined>(undefined);
-  const streams = useRef(new Map<string, { stream: StreamText; channel: string; speaker?: string }>());
+  const feed = useRef(new LiveFeed());
   const abortRef = useRef<AbortController | undefined>(undefined);
   const runningRef = useRef<Promise<unknown> | undefined>(undefined);
   const [ready, setReady] = useState(false);
-  const [phase, setPhase] = useState<GamePhase>();
-  const [lines, setLines] = useState<TranscriptLine[]>([]);
+  const [state, setState] = useState<Snapshot | undefined>();
   const [live, setLive] = useState<LiveBubble[]>([]);
   const [pending, setPending] = useState<string>();
-  const [proposal, setProposal] = useState<CharacterProposal>();
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string>();
-  const [unfinished, setUnfinished] = useState(false);
   const [online, setOnline] = useState(() => getCloud().socket.status === 'ready');
 
   useEffect(() => getCloud().socket.onStatus((status) => setOnline(status === 'ready')), []);
 
-  const publishLive = useCallback(() => {
-    setLive(
-      [...streams.current.entries()]
-        .map(([requestId, s]) => ({ requestId, channel: s.channel, speaker: s.speaker, text: s.stream.text }))
-        .filter((bubble) => bubble.text.trim()),
-    );
-  }, []);
-
-  const refresh = useCallback(async () => {
+  const run = useCallback((action: (game: Game, signal: AbortSignal) => Promise<unknown>, shown?: string) => {
     const game = gameRef.current;
-    if (!game) return;
-    const nextPhase = await game.phase();
-    const [nextLines, nextProposal, nextUnfinished] = await Promise.all([
-      game.lines(),
-      nextPhase === 'adapting' ? game.proposal() : Promise.resolve(undefined),
-      nextPhase === 'playing' ? game.unfinished() : Promise.resolve(false),
-    ]);
-    setPhase(nextPhase);
-    setLines(nextLines);
-    setProposal(nextProposal);
-    setUnfinished(nextUnfinished);
+    if (!game || runningRef.current) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    feed.current.begin();
+    setLive([]);
+    setBusy(true);
+    setError(undefined);
+    setPending(shown);
+    let failure: string | undefined;
+    const work = action(game, controller.signal)
+      .catch((e: unknown) => {
+        failure = e instanceof Error ? e.message : String(e);
+      })
+      .then(() => (controller.signal.aborted ? undefined : snapshot(game)))
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        // One synchronous update: the transcript takes over from the live bubbles in a single
+        // render, so nothing shows twice or flickers.
+        feed.current.end();
+        if (next) setState(next);
+        setLive([]);
+        setPending(undefined);
+        setThinking(false);
+        setError(failure);
+        setBusy(false);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => {
+        runningRef.current = undefined;
+      });
+    runningRef.current = work;
   }, []);
-
-  const run = useCallback(
-    (action: (game: Game, signal: AbortSignal) => Promise<unknown>, shown?: string) => {
-      const game = gameRef.current;
-      if (!game || runningRef.current) return;
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setBusy(true);
-      setError(undefined);
-      setPending(shown);
-      streams.current.clear();
-      publishLive();
-      const work = action(game, controller.signal)
-        .catch((e: unknown) => {
-          if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
-        })
-        .then(() => (controller.signal.aborted ? undefined : refresh()))
-        .finally(() => {
-          runningRef.current = undefined;
-          if (controller.signal.aborted) return;
-          streams.current.clear();
-          publishLive();
-          setPending(undefined);
-          setThinking(false);
-          setBusy(false);
-        });
-      runningRef.current = work;
-    },
-    [publishLive, refresh],
-  );
 
   useEffect(() => {
     let closed = false;
     let off: (() => void) | undefined;
+    const liveFeed = feed.current;
     openGame(saveId)
       .then(async (game) => {
         if (closed) return game.close();
         gameRef.current = game;
         off = game.onStream((event) => {
           if (event.type === 'status') return setThinking(true);
-          if (!('requestId' in event) || !event.requestId || !isStoryChannel(event.channel)) return;
-          let entry = streams.current.get(event.requestId);
-          if (!entry) {
-            entry = { stream: new StreamText(event.requestId), channel: event.channel ?? 'gm' };
-            streams.current.set(event.requestId, entry);
-            const speaker = event.meta?.speaker;
-            if (typeof speaker === 'string') entry.speaker = speaker;
-            else void game.speakerOf(entry.channel).then((name) => ((entry!.speaker = name), publishLive()));
-          }
-          if (entry.stream.apply(event)) {
-            setThinking(false);
-            publishLive();
+          const change = feed.current.apply(event);
+          if (!change) return;
+          setThinking(false);
+          setLive(feed.current.bubbles());
+          if (change === 'new' && 'requestId' in event && event.requestId) {
+            const requestId = event.requestId;
+            if (!feed.current.speakerKnown(requestId)) {
+              void game.speakerOf(feed.current.channelOf(requestId) ?? 'gm').then((name) => {
+                feed.current.setSpeaker(requestId, name);
+                setLive(feed.current.bubbles());
+              });
+            }
           }
         });
-        await refresh();
+        const first = await snapshot(game);
+        setState(first);
         setReady(true);
-        if ((await game.phase()) === 'new') run((g, signal) => g.start(signal));
+        // Nothing to decide: begin the playthrough, or open the story after the choice.
+        if (first.step === 'start' || first.step === 'open') run((g, signal) => g.recover(signal));
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
     return () => {
       closed = true;
       off?.();
       abortRef.current?.abort();
+      liveFeed.end();
       const game = gameRef.current;
       gameRef.current = undefined;
       void Promise.resolve(runningRef.current).finally(() => game?.close());
     };
-  }, [saveId, refresh, run, publishLive]);
+  }, [saveId, run]);
 
   return {
     ready,
-    phase,
-    lines,
+    phase: state?.phase,
+    lines: state?.lines ?? [],
     live,
     pending,
-    proposal,
+    proposal: state?.proposal,
     busy,
     thinking,
     error,
-    unfinished,
+    stalled: !!state?.step,
     online,
     send: (text) => run((g, signal) => g.send(text, signal), text),
     clarify: (text) => run((g, signal) => g.clarify(text, signal), text),

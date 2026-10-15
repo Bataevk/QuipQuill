@@ -31,10 +31,15 @@ function useAuthGate() {
 
   // Back from the background: the OS may have dropped the socket; reconnect at once and
   // resume (the server replays the text of a generation in flight).
+  // Only after real backgrounding: `inactive` (control centre, app switcher, system prompts)
+  // keeps the socket alive, and a needless reconnect would replay the stream for nothing.
   useEffect(() => {
+    let previous = AppState.currentState;
     const sub = AppState.addEventListener('change', (state) => {
+      const wasAway = previous === 'background';
+      previous = state;
       const { socket } = getCloud();
-      if (state === 'active' && (socket.status === 'ready' || socket.status === 'reconnecting')) {
+      if (state === 'active' && wasAway && (socket.status === 'ready' || socket.status === 'reconnecting')) {
         socket.reconnectNow();
       }
     });

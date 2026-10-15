@@ -91,6 +91,28 @@ describe('Game', () => {
     expect(await game.recover()).toMatchObject({ reply: 'Yes.' });
   });
 
+  it('tells what is needed to go on, so a failed start or opening never leaves it stuck', async () => {
+    expect(await game.nextStep()).toBe('start');
+    character.push({ text: 'garbage' });
+    await expect(game.start()).rejects.toThrow();
+    await game.close();
+    game = await open(); // the app restarted after the failed proposal
+    expect([await game.phase(), await game.proposal(), await game.nextStep()]).toEqual(['adapting', undefined, 'start']);
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    await game.recover();
+    expect(await game.nextStep()).toBeUndefined(); // waiting for the player's choice
+
+    // chosen, but the app died before the master's first turn began
+    await game.world.adaptCharacter({ adapted: ADAPTED, choice: 'adapted' });
+    expect([await game.phase(), await game.nextStep()]).toEqual(['opening', 'open']);
+    master.push({ text: 'It begins.' });
+    expect(await game.recover()).toMatchObject({ reply: 'It begins.' });
+    expect(await game.nextStep()).toBeUndefined();
+
+    await expect(game.send('Hm?')).rejects.toThrow(/no step/);
+    expect(await game.nextStep()).toBe('retry');
+  });
+
   it('survives reopening: the same phase and lines', async () => {
     character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
     await game.start();

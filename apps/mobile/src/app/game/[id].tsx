@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,13 +12,18 @@ import { PROPOSAL_CARD } from '@/core/agent/session';
 import { useGame } from '@/hooks/use-game';
 import { useTheme } from '@/hooks/use-theme';
 
+/** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
+type FeedItem =
+  | { key: string; kind: 'bubble'; speaker: string; name?: string; text: string; cards?: CharacterOption[] }
+  | { key: string; kind: 'footer' };
+
 /** The game (stage 5.2): bubbles of the master, NPCs and the player, live streaming, cards. */
 export default function GameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const game = useGame(id);
   const [text, setText] = useState('');
   const [inputKey, setInputKey] = useState(0); // a new key clears the (uncontrolled) field
-  const scroll = useRef<ScrollView>(null);
+  const list = useRef<FlatList<FeedItem>>(null);
 
   const adapting = game.phase === 'adapting';
   const canType = game.ready && !game.busy && (game.phase === 'playing' || (adapting && !!game.proposal?.canClarify));
@@ -30,7 +35,39 @@ export default function GameScreen() {
     if (adapting) game.clarify(value);
     else game.send(value);
   };
-  const lastCard = game.lines.findLastIndex((l) => l.extra.kind === PROPOSAL_CARD);
+
+  const items = useMemo<FeedItem[]>(() => {
+    const lastCard = game.lines.findLastIndex((l) => l.extra.kind === PROPOSAL_CARD);
+    const rows: FeedItem[] = game.lines.map((line, i) => ({
+      key: `line-${line.seq}`,
+      kind: 'bubble',
+      speaker: line.speaker,
+      name: line.extra.name as string | undefined,
+      text: line.text,
+      cards: i === lastCard && adapting ? game.proposal?.options : undefined,
+    }));
+    if (game.pending) rows.push({ key: 'pending', kind: 'bubble', speaker: 'player', text: game.pending });
+    for (const bubble of game.live) {
+      rows.push({ key: `live-${bubble.requestId}`, kind: 'bubble', speaker: bubble.channel, name: bubble.speaker, text: bubble.text });
+    }
+    rows.push({ key: 'footer', kind: 'footer' });
+    return rows;
+  }, [game.lines, game.pending, game.live, game.proposal, adapting]);
+
+  const footer = (
+    <View style={styles.footer}>
+      {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator style={styles.spinner} /> : null}
+      {!game.online ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Connecting to the server… {game.busy ? 'Your move will be sent as soon as it is back.' : ''}
+        </ThemedText>
+      ) : null}
+      <ErrorText>{game.error}</ErrorText>
+      {(game.error || game.stalled) && !game.busy ? (
+        <Button title={game.error ? 'Try again' : 'The story paused — continue'} onPress={game.recover} />
+      ) : null}
+    </View>
+  );
 
   return (
     <ThemedView style={styles.screen}>
@@ -39,34 +76,24 @@ export default function GameScreen() {
           style={styles.screen}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-          <ScrollView
-            ref={scroll}
+          <FlatList
+            ref={list}
+            data={items}
+            keyExtractor={(item) => item.key}
             contentContainerStyle={styles.feed}
-            onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
-            keyboardShouldPersistTaps="handled">
-            {game.lines.map((line, i) => (
-              <View key={line.seq}>
-                <Bubble speaker={line.speaker} name={line.extra.name as string | undefined} text={line.text} />
-                {i === lastCard && adapting && game.proposal ? (
-                  <Cards options={game.proposal.options} disabled={game.busy} onChoose={game.choose} />
-                ) : null}
-              </View>
-            ))}
-            {game.pending ? <Bubble speaker="player" text={game.pending} /> : null}
-            {game.live.map((bubble) => (
-              <Bubble key={bubble.requestId} speaker={bubble.channel} name={bubble.speaker} text={bubble.text} />
-            ))}
-            {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator style={styles.spinner} /> : null}
-            {!game.online ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Connecting to the server… {game.busy ? 'Your move will be sent as soon as it is back.' : ''}
-              </ThemedText>
-            ) : null}
-            <ErrorText>{game.error}</ErrorText>
-            {(game.error || game.unfinished) && !game.busy ? (
-              <Button title={game.error ? 'Try again' : 'The story paused — continue'} onPress={game.recover} />
-            ) : null}
-          </ScrollView>
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
+            renderItem={({ item }) =>
+              item.kind === 'footer' ? (
+                footer
+              ) : (
+                <View>
+                  <Bubble speaker={item.speaker} name={item.name} text={item.text} />
+                  {item.cards ? <Cards options={item.cards} disabled={game.busy} onChoose={game.choose} /> : null}
+                </View>
+              )
+            }
+          />
           {game.phase === 'playing' || adapting ? (
             <View style={styles.inputRow}>
               <View style={styles.input}>
@@ -129,10 +156,10 @@ function Cards({
   );
 }
 
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   feed: { gap: Spacing.two, padding: Spacing.three },
+  footer: { gap: Spacing.two },
   bubble: { borderRadius: Spacing.three, gap: Spacing.one, maxWidth: '88%', padding: Spacing.three },
   player: { alignSelf: 'flex-end' },
   other: { alignSelf: 'flex-start' },

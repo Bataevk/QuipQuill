@@ -11,7 +11,8 @@
 | Xcode | ✅ 27.0, `xcode-select` указывает на Xcode.app |
 | iOS Simulator runtime | ✅ iOS 27.0 (iPhone 17 и др.) |
 | CocoaPods | ✅ 1.17 (`brew install cocoapods`); нужен для `npx expo run:ios`. Терминалу нужен `LANG=en_US.UTF-8` |
-| Android Studio | ❌ не установлен (нужен для Android-сборок) |
+| Android Studio | ✅ (2026-10-16): SDK `android-37.0`, эмулятор `Medium_Phone_API_37.0`; `adb` — в `~/Library/Android/sdk/platform-tools` (PATH — см. [run-guide](run-guide.md#2а-android-эмулятор-вместо-ios-или-вместе-с-ним)) |
+| JDK для Android | ✅ OpenJDK 17 (`brew install openjdk@17`). JDK 25 из Android Studio ломает CMake-шаги сборки (JEP 472) |
 | Docker Desktop | ✅ 29.5 (Postgres 17.11, RabbitMQ 4.3.6 в compose) |
 | `apps/mobile` | ✅ Expo SDK 57.0.28, RN 0.86.3, `expo-dev-client`, `@op-engineering/op-sqlite` 18.2 |
 

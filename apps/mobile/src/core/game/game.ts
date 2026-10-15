@@ -58,9 +58,17 @@ export interface GameModels {
  */
 export type GamePhase = 'new' | 'adapting' | 'opening' | 'playing';
 
-/** Channels the UI draws as bubbles: the master and NPCs (not the guard or system calls). */
-export const isStoryChannel = (channel: string | undefined) =>
-  channel === 'gm' || (channel?.startsWith('npc:') ?? false);
+/**
+ * What the game needs before the player can act (after a failure or an app restart):
+ * - `start`: no proposal yet (new playthrough, or the first proposal failed) — safe to run;
+ * - `open`: the character is chosen but the story has not begun — safe to run;
+ * - `retry`: the last turn did not finish — ask the player (it costs a model call they did
+ *   not ask for just now).
+ * All three are done by `recover()`.
+ */
+export type GameStep = 'start' | 'open' | 'retry' | undefined;
+
+export { isStoryChannel } from '../protocol/live-feed';
 
 export class Game {
   readonly save: SaveRecord;
@@ -141,6 +149,19 @@ export class Game {
     if ((await log.count('session.started')) === 0) return 'new';
     if ((await log.count('character.adapted')) === 0) return 'adapting';
     return (await this.chats.load(GM_CHAT)).length === 0 ? 'opening' : 'playing';
+  }
+
+  async nextStep(): Promise<GameStep> {
+    switch (await this.phase()) {
+      case 'new':
+        return 'start';
+      case 'adapting':
+        return (await this.proposal()) ? undefined : 'start';
+      case 'opening':
+        return 'open';
+      case 'playing':
+        return (await this.unfinished()) ? 'retry' : undefined;
+    }
   }
 
   /** Everything the player has seen, oldest first. */

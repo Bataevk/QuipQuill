@@ -6,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Row, Screen } from '@/components/ui';
 import type { StoryRecord } from '@/core/library/app-db';
 import { StoryFormatError } from '@/core/story/story-meta';
-import { toPath } from '@/platform/expo-files';
+import { pickedFilePath, removeFile } from '@/platform/expo-files';
 import { getLibrary } from '@/platform/services';
 
 /** Import a .qqstory and list the library (stage 3.2, moved here in 5.1). */
@@ -43,7 +43,13 @@ export default function StoriesScreen() {
 
   const pickAndImport = async () => {
     const picked = await File.pickFileAsync();
-    if (!picked.canceled) await importFrom(toPath(picked.result.uri));
+    if (picked.canceled) return;
+    const { path, temporary } = await pickedFilePath(picked.result);
+    try {
+      await importFrom(path);
+    } finally {
+      if (temporary) removeFile(path);
+    }
   };
 
   // Dev only: quipquill://stories?importPath=<absolute path> imports without the system picker

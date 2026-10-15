@@ -46,3 +46,20 @@ export function toPath(uri: string): string {
 export function toUri(path: string): string {
   return path.startsWith('file://') ? path : `file://${encodeURI(path)}`;
 }
+
+/**
+ * A picked file as a plain path the core can open. iOS hands out a file:// copy already;
+ * Android's picker gives a content:// URI, so that one is copied into the cache first
+ * (`temporary`: delete it after use).
+ */
+export async function pickedFilePath(file: File): Promise<{ path: string; temporary: boolean }> {
+  if (file.uri.startsWith('file://')) return { path: toPath(file.uri), temporary: false };
+  const copy = new File(Paths.cache, `import-${Date.now()}.qqstory`);
+  await file.copy(copy);
+  return { path: toPath(copy.uri), temporary: true };
+}
+
+export function removeFile(path: string): void {
+  const file = new File(toUri(path));
+  if (file.exists) file.delete();
+}
