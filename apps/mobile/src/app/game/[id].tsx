@@ -57,6 +57,11 @@ export default function GameScreen() {
               <Bubble key={bubble.requestId} speaker={bubble.channel} name={bubble.speaker} text={bubble.text} />
             ))}
             {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator style={styles.spinner} /> : null}
+            {!game.online ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                Connecting to the server… {game.busy ? 'Your move will be sent as soon as it is back.' : ''}
+              </ThemedText>
+            ) : null}
             <ErrorText>{game.error}</ErrorText>
             {(game.error || game.unfinished) && !game.busy ? (
               <Button title={game.error ? 'Try again' : 'The story paused — continue'} onPress={game.recover} />

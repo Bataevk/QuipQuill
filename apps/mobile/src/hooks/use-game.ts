@@ -4,7 +4,7 @@ import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
 import { Game, type GamePhase, isStoryChannel } from '@/core/game/game';
 import { StreamText } from '@/core/protocol/stream-text';
-import { openGame } from '@/platform/services';
+import { getCloud, openGame } from '@/platform/services';
 
 /** A bubble being streamed right now (stage 5.2): deltas by request, replaced on replay. */
 export interface LiveBubble {
@@ -27,6 +27,8 @@ export interface GameView {
   thinking: boolean;
   error: string | undefined;
   unfinished: boolean;
+  /** The cloud connection is up; while it is not, requests wait and are sent on reconnect. */
+  online: boolean;
   send(text: string): void;
   clarify(text: string): void;
   choose(index: number): void;
@@ -53,6 +55,9 @@ export function useGame(saveId: string): GameView {
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string>();
   const [unfinished, setUnfinished] = useState(false);
+  const [online, setOnline] = useState(() => getCloud().socket.status === 'ready');
+
+  useEffect(() => getCloud().socket.onStatus((status) => setOnline(status === 'ready')), []);
 
   const publishLive = useCallback(() => {
     setLive(
@@ -156,6 +161,7 @@ export function useGame(saveId: string): GameView {
     thinking,
     error,
     unfinished,
+    online,
     send: (text) => run((g, signal) => g.send(text, signal), text),
     clarify: (text) => run((g, signal) => g.clarify(text, signal), text),
     choose: (index) => run((g, signal) => g.choose(index, signal)),

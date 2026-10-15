@@ -79,6 +79,28 @@ describe('SaveManager', () => {
     await expect(env.library.saves.open('nope')).rejects.toThrow(/no such save/);
   });
 
+  it('starts a save over from its story, keeping id, title and character', async () => {
+    env = await makeTestEnv();
+    await env.library.importer.import(DEMO_STORY);
+    const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: null, title: 'Run' });
+    let db = await env.library.saves.open(save.id);
+    await db.run("INSERT INTO transcript (speaker, text, ts) VALUES ('player', 'hi', '2026-10-15')");
+    await db.close();
+
+    const restarted = await env.library.saves.restart(save.id);
+    expect(restarted).toMatchObject({ id: save.id, title: 'Run', path: save.path, characterId: null });
+    expect(restarted.updatedAt >= save.updatedAt).toBe(true);
+    db = await env.library.saves.open(save.id);
+    try {
+      expect(await db.get('SELECT count(*) AS n FROM transcript')).toEqual({ n: 0 });
+      expect(Number((await db.get<{ n: number }>('SELECT count(*) AS n FROM entities'))?.n)).toBeGreaterThan(0);
+    } finally {
+      await db.close();
+    }
+    expect(await env.files.exists(join(env.files.dataDir, `${save.path}.restart`))).toBe(false);
+    expect(await env.library.repository.listSaves()).toHaveLength(1);
+  });
+
   it('deletes the file and the record', async () => {
     env = await makeTestEnv();
     await env.library.importer.import(DEMO_STORY);

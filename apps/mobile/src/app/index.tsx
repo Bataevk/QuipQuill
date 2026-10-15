@@ -1,32 +1,79 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, ErrorText, Row, Screen, errorText } from '@/components/ui';
 import type { SaveRecord, StoryRecord } from '@/core/library/app-db';
+import { Spacing } from '@/constants/theme';
 import { getCloud, getLibrary } from '@/platform/services';
 
-/** Home: where to go, and the playthroughs to continue (full save management — stage 5.3). */
+/** "15 Oct, 19:31" in the device's time zone (records keep UTC ISO-8601). */
+function localTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Asks before an action that cannot be undone. */
+function confirm(title: string, message: string, action: string, run: () => void) {
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: action, style: 'destructive', onPress: run },
+  ]);
+}
+
+/** Home: where to go, and the playthroughs: continue, start over, delete (stage 5.3). */
 export default function HomeScreen() {
   const [saves, setSaves] = useState<SaveRecord[]>([]);
   const [stories, setStories] = useState<Map<string, StoryRecord>>(new Map());
   const [error, setError] = useState('');
 
+  const load = useCallback(async () => {
+    const library = await getLibrary();
+    const [list, storyList] = await Promise.all([library.repository.listSaves(), library.repository.listStories()]);
+    return { list, stories: new Map(storyList.map((s) => [s.id, s])) };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      (async () => {
-        const library = await getLibrary();
-        const [list, storyList] = await Promise.all([library.repository.listSaves(), library.repository.listStories()]);
-        if (!active) return;
-        setSaves(list);
-        setStories(new Map(storyList.map((s) => [s.id, s])));
-      })().catch((e) => active && setError(errorText(e)));
+      load()
+        .then((next) => {
+          if (!active) return;
+          setSaves(next.list);
+          setStories(next.stories);
+        })
+        .catch((e) => active && setError(errorText(e)));
       return () => {
         active = false;
       };
-    }, []),
+    }, [load]),
   );
+
+  /** Runs a save action, then shows the list again. */
+  const act = async (work: () => Promise<unknown>) => {
+    setError('');
+    try {
+      await work();
+      const next = await load();
+      setSaves(next.list);
+      setStories(next.stories);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  const startOver = (save: SaveRecord) =>
+    confirm('Start over?', `“${save.title}” begins again from the start. Everything played so far is lost.`, 'Start over', () =>
+      void act(async () => {
+        await (await getLibrary()).saves.restart(save.id);
+        router.push(`/game/${save.id}`);
+      }),
+    );
+
+  const remove = (save: SaveRecord) =>
+    confirm('Delete this game?', `“${save.title}” will be deleted for good.`, 'Delete', () =>
+      void act(async () => (await getLibrary()).saves.delete(save.id)),
+    );
 
   const signOut = async () => {
     const { auth, socket } = getCloud();
@@ -42,12 +89,21 @@ export default function HomeScreen() {
       <Button title="Characters" onPress={() => router.push('/characters')} />
       <ThemedText type="smallBold">Continue</ThemedText>
       {saves.map((save) => (
-        <Row
-          key={save.id}
-          title={save.title}
-          subtitle={`${stories.get(save.storyId)?.title ?? 'Unknown story'} · ${save.updatedAt.slice(0, 16).replace('T', ' ')}`}
-          onPress={() => router.push(`/game/${save.id}`)}
-        />
+        <View key={save.id} style={styles.save}>
+          <Row
+            title={save.title}
+            subtitle={`${stories.get(save.storyId)?.title ?? 'Unknown story'} · ${localTime(save.updatedAt)}`}
+            onPress={() => router.push(`/game/${save.id}`)}
+          />
+          <View style={styles.actions}>
+            <View style={styles.action}>
+              <Button title="Start over" onPress={() => startOver(save)} />
+            </View>
+            <View style={styles.action}>
+              <Button title="Delete" onPress={() => remove(save)} />
+            </View>
+          </View>
+        </View>
       ))}
       {saves.length === 0 ? <ThemedText themeColor="textSecondary">No games yet.</ThemedText> : null}
       <ErrorText>{error}</ErrorText>
@@ -55,3 +111,9 @@ export default function HomeScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  save: { gap: Spacing.one },
+  actions: { flexDirection: 'row', gap: Spacing.one },
+  action: { flex: 1 },
+});

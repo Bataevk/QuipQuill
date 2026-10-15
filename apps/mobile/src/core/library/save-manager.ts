@@ -78,6 +78,32 @@ export class SaveManager {
     return this.openFile(path);
   }
 
+  /**
+   * "Start over": the save becomes a fresh copy of its story (the version in the library now),
+   * keeping its id, title and character. The new copy is prepared beside the old one and moved
+   * over it only when ready. Close the save's connection first.
+   */
+  async restart(saveId: string): Promise<SaveRecord> {
+    const save = await this.library.getSave(saveId);
+    if (!save) throw new SaveMissingError(saveId, 'there is no such save');
+    const story = await this.library.getStory(save.storyId);
+    if (!story) throw new Error(`Story ${save.storyId} is not in the library`);
+    const path = this.absolute(save.path);
+    const fresh = `${path}.restart`;
+    await this.files.copy(this.absolute(story.path), fresh);
+    try {
+      const db = await this.openFile(fresh);
+      await db.close();
+      await this.files.move(fresh, path);
+    } catch (error) {
+      await this.files.remove(fresh);
+      throw error;
+    }
+    const now = nowIso();
+    await this.library.touchSave(saveId, now);
+    return { ...save, updatedAt: now };
+  }
+
   async delete(saveId: string): Promise<void> {
     const save = await this.library.getSave(saveId);
     if (!save) return;

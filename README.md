@@ -17,7 +17,7 @@ Interactive fiction with an AI game master. A story world is a typed graph (loca
 
 ## Getting started
 
-See [docs/notes/dev-setup.md](docs/notes/dev-setup.md). Short version for the app (macOS, Xcode with an iOS simulator installed):
+Step-by-step run and play guide (in Russian): [docs/notes/run-guide.md](docs/notes/run-guide.md). Machine setup: [docs/notes/dev-setup.md](docs/notes/dev-setup.md). Short version for the app (macOS, Xcode with an iOS simulator installed):
 
 ```bash
 cd apps/mobile
