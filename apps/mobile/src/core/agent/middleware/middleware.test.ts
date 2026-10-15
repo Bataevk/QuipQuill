@@ -9,7 +9,8 @@ import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform
 import { ChatStore, GM_CHAT } from '../chat-store';
 import { createGmAgent, type GmAgentOptions } from '../gm-agent';
 import { estimateTokens, inputMessage, sourceOf } from '../messages';
-import { runTurn } from '../run-turn';
+import { NothingToRetryError, retryTurn, runTurn } from '../run-turn';
+import { TurnInProgressError } from '../turn-lock';
 import { lastToolText, systemText } from '../testing/demo-scenario';
 import { ScriptedChatModel, type Step } from '../testing/scripted-model';
 import { TranscriptStore } from '../transcript';
@@ -291,6 +292,21 @@ describe('ToolLimit', () => {
     expect(calls.every((id) => answered.has(id!))).toBe(true);
   });
 
+  it('also limits a reply whose other calls had broken arguments', async () => {
+    const result = await play('I grab it all.', [
+      {
+        toolCalls: Array.from({ length: 10 }, () => ({ name: 'inspect', args: { target: 'crate' } })),
+        invalidToolCalls: [{ name: 'take', args: '{x' }],
+      },
+      { text: 'Enough.' },
+    ]);
+    const texts = result.messages.filter((m) => ToolMessage.isInstance(m)).map((m) => m.text);
+    expect(texts.filter((t) => t.startsWith('crate'))).toHaveLength(8);
+    expect(texts.filter((t) => t === TOOL_LIMIT_TEXT)).toHaveLength(2);
+    expect(texts.filter((t) => t.startsWith('Error: the arguments of take'))).toHaveLength(1);
+    expect(result.reply).toBe('Enough.');
+  });
+
   it('counts only this turn', async () => {
     await play('First.', [...Array.from({ length: 6 }, () => inspect), { text: 'One.' }]);
     const result = await play('Second.', [...Array.from({ length: 6 }, () => inspect), { text: 'Two.' }]);
@@ -307,5 +323,90 @@ describe('history', () => {
     ).rejects.toThrow(/no step 1/);
     expect((await chats.load(GM_CHAT)).map((m) => m.text)).toEqual(['Hi.']);
     expect(HumanMessage.isInstance((await chats.load(GM_CHAT))[0])).toBe(true);
+  });
+
+  it('keeps every piece of the master\'s text, in order, in the reply and the transcript', async () => {
+    const result = await play('I take the lantern.', [
+      { text: 'You reach for the lantern.', toolCalls: [{ name: 'take', args: { item: 'brass lantern' } }] },
+      { text: 'It is warm.' },
+    ]);
+    expect(result.reply).toBe('You reach for the lantern.\n\nIt is warm.');
+    expect((await transcript.lines()).map((l) => [l.speaker, l.text])).toEqual([
+      ['player', 'I take the lantern.'],
+      ['gm', 'You reach for the lantern.'],
+      ['gm', 'It is warm.'],
+    ]);
+  });
+
+  it('runs one turn at a time per playthrough', async () => {
+    model.push({ text: 'One.' });
+    const agent = createGmAgent({ model, world, meta });
+    const first = runTurn({ agent, world, chats, transcript, input: 'a' });
+    await expect(runTurn({ agent, world, chats, transcript, input: 'b' })).rejects.toThrow(TurnInProgressError);
+    expect((await first).reply).toBe('One.');
+    // the lock is released after a turn, failed or not
+    await expect(runTurn({ agent, world, chats, transcript, input: 'c' })).rejects.toThrow(/no step/);
+    model.push({ text: 'Two.' });
+    expect((await retryTurn({ agent, world, chats, transcript })).reply).toBe('Two.');
+  });
+});
+
+describe('retryTurn', () => {
+  it('finishes a failed turn without sending the input again, under the same turn number', async () => {
+    const agent = createGmAgent({ model, world, meta });
+    await expect(runTurn({ agent, world, chats, transcript, input: 'Hello?' })).rejects.toThrow(/no step/);
+    model.push({ toolCalls: [{ name: 'move', args: { to: 'Lamplight Row' } }] }, { text: 'Yes?' });
+    const result = await retryTurn({ agent, world, chats, transcript });
+    expect(result).toMatchObject({ turn: 1, reply: 'Yes?' });
+    expect(result.events.map((e) => [e.kind, e.turn])).toEqual([['player.moved', 1]]);
+    expect((await chats.load(GM_CHAT)).map((m) => `${m.getType()}:${m.text}`)).toEqual([
+      'human:Hello?',
+      'ai:',
+      'tool:The player is now in Lamplight Row [loc:lamplight-row]. The world state shows the new scene.',
+      'ai:Yes?',
+    ]);
+    expect((await transcript.lines()).map((l) => l.text)).toEqual(['Hello?', 'Yes?']);
+  });
+
+  it('continues a turn cut off after a tool ran; its events stay in one turn', async () => {
+    const abort = new AbortController();
+    const embed = async () => {
+      abort.abort(new Error('app killed'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return new Float32Array(1536);
+    };
+    await expect(
+      play(
+        'Look around and ask about Mags.',
+        [
+          { text: 'You glance around.', toolCalls: [{ name: 'note', args: { text: 'Asked about Mags.' } }] },
+          { toolCalls: [{ name: 'search_lore', args: { query: 'Mags' } }] },
+        ],
+        { embed },
+        abort.signal,
+      ),
+    ).rejects.toThrow();
+    const agent = createGmAgent({ model, world, meta });
+    model.push((messages) => {
+      // BugGuard dropped the unanswered search; the note and its result are still there
+      expect(messages.slice(1).map((m) => m.getType())).toEqual(['human', 'ai', 'tool']);
+      return { text: 'Mags runs the crew.' };
+    });
+    const result = await retryTurn({ agent, world, chats, transcript });
+    expect(result.turn).toBe(1);
+    expect(result.reply).toBe('You glance around.\n\nMags runs the crew.');
+    expect(result.events.map((e) => e.kind)).toEqual(['note.added']);
+    expect((await transcript.lines()).map((l) => l.text)).toEqual([
+      'Look around and ask about Mags.',
+      'You glance around.',
+      'Mags runs the crew.',
+    ]);
+  });
+
+  it('refuses when the last turn already has its answer', async () => {
+    await play('Hi.', [{ text: 'Hello.' }]);
+    await expect(retryTurn({ agent: createGmAgent({ model, world, meta }), world, chats, transcript })).rejects.toThrow(
+      NothingToRetryError,
+    );
   });
 });

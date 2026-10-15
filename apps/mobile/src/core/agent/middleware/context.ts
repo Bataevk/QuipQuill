@@ -37,6 +37,8 @@ export interface ContextOptions {
   timeoutMs?: number;
   retries?: number;
   onError?: (error: unknown, attempt: number) => void;
+  /** Put in place of dropped history (default TRIMMED_NOTE, written for the master). */
+  trimmedNote?: string;
 }
 
 const DEFAULTS = { triggerTokens: 30_000, keepTokens: 8_000, maxTokens: 85_000, timeoutMs: 25_000, retries: 2 };
@@ -77,10 +79,11 @@ export async function compactHistory(
     if (cut > 0) {
       const older = messages.slice(0, cut);
       const summary = await summarize(older, o, signal);
-      result = [inputMessage(summary ? `${SUMMARY_PREFIX}\n${summary}` : TRIMMED_NOTE, 'summary'), ...messages.slice(cut)];
+      const head = summary ? `${SUMMARY_PREFIX}\n${summary}` : (o.trimmedNote ?? TRIMMED_NOTE);
+      result = [inputMessage(head, 'summary'), ...messages.slice(cut)];
     }
   }
-  const capped = enforceCeiling(result ?? messages, o.maxTokens);
+  const capped = enforceCeiling(result ?? messages, o.maxTokens, o.trimmedNote ?? TRIMMED_NOTE);
   return capped ?? result;
 }
 
@@ -150,9 +153,9 @@ function cutForTail(messages: BaseMessage[], tokens: number): number {
  * Makes the history fit: drops older turns (keeping the current one whole), then shortens long
  * tool results, and only then cuts into the current turn.
  */
-function enforceCeiling(messages: BaseMessage[], maxTokens: number): BaseMessage[] | undefined {
+function enforceCeiling(messages: BaseMessage[], maxTokens: number, noteText: string): BaseMessage[] | undefined {
   if (estimateTokens(messages) <= maxTokens) return undefined;
-  const note = inputMessage(TRIMMED_NOTE, 'summary');
+  const note = inputMessage(noteText, 'summary');
   const room = maxTokens - estimateTokens([note]);
   const cut = Math.min(cutForTail(messages, room), safeCutAtOrBefore(messages, Math.max(turnStart(messages), 0)));
   let tail = messages.slice(cut);

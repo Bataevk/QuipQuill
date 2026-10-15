@@ -1,5 +1,5 @@
-import type { BaseMessage } from '@langchain/core/messages';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CloudSocket } from '@/core/net/cloud-socket';
 import { QueueChatModel } from '@/core/net/queue-chat-model';
@@ -13,7 +13,7 @@ import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
-import { npcChatId, SILENCE } from './npc';
+import { NPC_TRIMMED_NOTE, npcChatId, SILENCE } from './npc';
 import { runTurn } from './run-turn';
 import { lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
@@ -210,6 +210,39 @@ describe('npc_react', () => {
     expect(results[0]).toMatch(/^Error: Pip Quillon has calling card\. Play out the attempt first/);
     expect(result.events.map((e) => e.kind)).toEqual(['npc.reacted']);
     expect((await world.state.inventory(PIP)).map((e) => e.id)).toEqual(['doc:calling-card']);
+  });
+
+  it('keeps the transcript in the order the player saw it: master, NPC, master', async () => {
+    npcSays(MAGS, '"Took you long enough."');
+    await play(
+      'I sit down with Mags.',
+      { text: 'You slide onto the bench.', toolCalls: [{ name: 'npc_react', args: { target: MAGS, situation: 'The recruit sits down.' } }] },
+      { text: 'The ale arrives.' },
+    );
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm', MAGS, 'gm']);
+  });
+
+  it('writes nothing visible when the reaction cannot be journaled', async () => {
+    npcSays(MAGS, '"Hm."');
+    vi.spyOn(world, 'recordNpcReaction').mockResolvedValue({ ok: false, error: 'disk full' });
+    const result = await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: 'Silence.' });
+    expect(result.messages.find((m) => m.getType() === 'tool')?.text).toMatch(/^Error: Mags Holloway could not react/);
+    expect(await chats.load(MAGS)).toEqual([]);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
+  });
+
+  it('trims a long NPC chat with a note written for the NPC', async () => {
+    const filler = 'w'.repeat(4_000);
+    await chats.append(
+      MAGS,
+      Array.from({ length: 10 }, (_, i) => [new HumanMessage(`Q${i} ${filler}`), new AIMessage(`A${i} ${filler}`)]).flat(),
+    );
+    npcSays(MAGS, '"What were we saying?"');
+    await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: '.' });
+    const seen = npcCalls[0].messages.slice(1);
+    expect(seen[0].text).toBe(NPC_TRIMMED_NOTE);
+    expect(seen.at(-1)!.text).toBe('The recruit says hi.');
+    expect((await chats.load(MAGS))[0].text).toBe(NPC_TRIMMED_NOTE);
   });
 
   it('refuses someone who is not here, and survives a failing NPC model', async () => {

@@ -15,8 +15,10 @@ import type { TranscriptStore } from './transcript';
 
 export const SILENCE = '[silence]';
 
+export const NPC_TRIMMED_NOTE = '[You remember only the latest part of this conversation.]';
+
 /** NPC chats are small: kept by trimming (no summary call), well under any price step. */
-const NPC_CONTEXT = { triggerTokens: 6_000, keepTokens: 3_000, maxTokens: 12_000 };
+const NPC_CONTEXT = { triggerTokens: 6_000, keepTokens: 3_000, maxTokens: 12_000, trimmedNote: NPC_TRIMMED_NOTE };
 
 export interface NpcDeps {
   /**
@@ -89,8 +91,9 @@ function raceOf(player: Entity): string {
 }
 
 /**
- * One reaction: the situation joins the NPC's chat, its model answers, the exchange is saved,
- * the line goes to the transcript (the player sees it), and `npc.reacted` to the journal.
+ * One reaction: the situation joins the NPC's chat, its model answers; then `npc.reacted` goes
+ * to the journal, the exchange to the NPC's chat, the line to the transcript (the player sees
+ * it).
  */
 export async function reactNpc(
   world: World,
@@ -115,10 +118,11 @@ export async function reactNpc(
   const silent = !raw || isSilence(raw);
   const text = silent ? '' : raw;
 
-  await new ChatSync(deps.chats, chatId, saved).save([...history, new AIMessage(silent ? SILENCE : text)]);
-  if (!silent) await deps.transcript.append(chatId, text, { name: npc.name });
+  // The journal first: a reaction the player sees must count for the world's rules (ADR 34).
   const recorded = await world.recordNpcReaction({ npc: npc.id, situation, reaction: silent ? SILENCE : text });
   if (!recorded.ok) throw new Error(recorded.error);
+  await new ChatSync(deps.chats, chatId, saved).save([...history, new AIMessage(silent ? SILENCE : text)]);
+  if (!silent) await deps.transcript.append(chatId, text, { name: npc.name });
   return { npc, text, silent };
 }
 

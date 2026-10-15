@@ -271,6 +271,13 @@ describe('player.updated and character.adapted', () => {
       props: { race: 'human', age: 31, sex: 'female', original: CHARACTER },
     });
   });
+
+  it('adapts only once', async () => {
+    expectOk(await world.adaptCharacter({ adapted: { name: 'Ari' }, choice: 'adapted' }));
+    expectError(await world.adaptCharacter({ adapted: { name: 'Bea' }, choice: 'adapted' }), /already settled/);
+    expect(await world.log.count('character.adapted')).toBe(1);
+    expect((await world.state.player())?.name).toBe('Ari');
+  });
 });
 
 describe('notes and npc.reacted', () => {

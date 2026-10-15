@@ -13,6 +13,7 @@ import { beginSession, chooseCharacter, clarifyCharacter, PROPOSAL_CARD, type Se
 import { systemText } from './testing/demo-scenario';
 import { ScriptedChatModel } from './testing/scripted-model';
 import { TranscriptStore } from './transcript';
+import { TurnInProgressError } from './turn-lock';
 
 const TAVERN = 'loc:rusty-gear-tavern';
 const ELF = {
@@ -189,6 +190,34 @@ describe('session start rules', () => {
     expect(first.options).toHaveLength(3);
     await expect(chooseCharacter({ ...deps, agent: agent() }, 3)).rejects.toThrow(/no character #4/);
     expect(await world.log.count('character.adapted')).toBe(0);
+  });
+
+  it('a double tap on a card adapts once and opens one scene', async () => {
+    characterModel.push(proposal(ADAPTED, [ALT_1], 'Welcome.'));
+    await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    master.push({ text: 'The story begins.' }, { text: 'Again?' });
+    const both = await Promise.allSettled([
+      chooseCharacter({ ...deps, agent: agent() }, 0),
+      chooseCharacter({ ...deps, agent: agent() }, 1),
+    ]);
+    expect(both.map((r) => r.status)).toEqual(['fulfilled', 'rejected']);
+    expect((both[1] as PromiseRejectedResult).reason).toBeInstanceOf(TurnInProgressError);
+    expect(await world.log.count('character.adapted')).toBe(1);
+    expect(master.calls).toHaveLength(1);
+    // and later, too
+    await expect(chooseCharacter({ ...deps, agent: agent() }, 0)).rejects.toThrow(CharacterProposalError);
+  });
+
+  it("shows the player's wishes once, even when the first try failed", async () => {
+    characterModel.push(proposal(ADAPTED, [], 'Welcome.'), { text: 'garbage' }, proposal(ALT_1, [], 'Taller now.'));
+    await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    await expect(clarifyCharacter(deps, 'Taller, please.')).rejects.toThrow(CharacterProposalError);
+    await clarifyCharacter(deps, 'Taller, please.');
+    expect((await deps.transcript.lines()).map((l) => `${l.speaker}:${l.text}`)).toEqual([
+      'gm:Welcome.',
+      'player:Taller, please.',
+      'gm:Taller now.',
+    ]);
   });
 
   it('can retry the opening scene alone if it failed after the choice', async () => {

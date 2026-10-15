@@ -8,9 +8,19 @@ import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langcha
 export type InputSource = 'player' | 'system' | 'summary';
 
 const SOURCE = 'qq_source';
+const TURN = 'qq_turn';
 
-export function inputMessage(text: string, source: InputSource): HumanMessage {
-  return new HumanMessage({ content: text, additional_kwargs: { [SOURCE]: source } });
+/** An input message; `turn` (the world's turn number) lets a failed turn be retried as itself. */
+export function inputMessage(text: string, source: InputSource, turn?: number): HumanMessage {
+  return new HumanMessage({
+    content: text,
+    additional_kwargs: { [SOURCE]: source, ...(turn === undefined ? {} : { [TURN]: turn }) },
+  });
+}
+
+export function turnOf(message: BaseMessage): number | undefined {
+  const turn = message.additional_kwargs?.[TURN];
+  return typeof turn === 'number' ? turn : undefined;
 }
 
 export function sourceOf(message: BaseMessage): InputSource | undefined {
@@ -25,11 +35,6 @@ export function turnStart(messages: BaseMessage[]): number {
     if (source === 'player' || source === 'system') return i;
   }
   return -1;
-}
-
-/** Tool call ids of an AI message. */
-export function callIds(message: BaseMessage): string[] {
-  return AIMessage.isInstance(message) ? (message.tool_calls ?? []).flatMap((c) => (c.id ? [c.id] : [])) : [];
 }
 
 /** Ids of tool calls that already have a result. */

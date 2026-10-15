@@ -101,6 +101,12 @@ export class World {
     return this.turn;
   }
 
+  /** Goes back to an unfinished turn (a retry): its events keep one number. */
+  continueTurn(turn: number): number {
+    this.turn = turn;
+    return turn;
+  }
+
   // --- queries -------------------------------------------------------------------------------
 
   async scene(): Promise<Scene> {
@@ -174,12 +180,13 @@ export class World {
     });
   }
 
-  /** `character.adapted`: the player's choice after `propose_character` (stage 4.4). */
+  /** `character.adapted`: the player's choice after `propose_character` (stage 4.4), once. */
   adaptCharacter(input: {
     adapted: { name?: string; race?: string; age?: number | null; description?: string };
     choice: string;
   }): Promise<Outcome> {
     return this.command('gm', async ({ db, log }, player) => {
+      if ((await log.count('character.adapted')) > 0) reject('The character is already settled.');
       const original = (player.props.original as Props | undefined) ?? {};
       const event = await log.append(this.turn, 'gm', 'character.adapted', {
         original,

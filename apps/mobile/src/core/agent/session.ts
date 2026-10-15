@@ -20,6 +20,7 @@ import type { ChatStore } from './chat-store';
 import type { GmAgent } from './gm-agent';
 import { runTurn, type TurnResult } from './run-turn';
 import type { TranscriptStore } from './transcript';
+import { exclusive } from './turn-lock';
 
 export interface SessionDeps {
   world: World;
@@ -39,35 +40,38 @@ export const CHOICE_CARD = 'character_choice';
  * Starts the playthrough and returns the first proposal. Idempotent: after a restart it returns
  * the pending proposal instead of starting again.
  */
-export async function beginSession(
+export function beginSession(
   deps: SessionDeps,
   input: { storyId: string; character: CharacterSheet },
 ): Promise<CharacterProposal> {
   const { world } = deps;
-  if ((await world.log.count('session.started')) === 0) {
-    const started = await world.startSession({
-      storyId: input.storyId,
-      character: input.character,
-      startLocation: deps.meta.startLocation,
-    });
-    if (!started.ok) throw new Error(started.error);
-  }
-  if (await isAdapted(world)) throw new CharacterProposalError('The character is already chosen.');
-  const pending = await lastProposal(deps.chats);
-  if (pending) return pending;
-  return propose(deps, sheetText(input.character));
+  return exclusive(world, async () => {
+    if ((await world.log.count('session.started')) === 0) {
+      const started = await world.startSession({
+        storyId: input.storyId,
+        character: input.character,
+        startLocation: deps.meta.startLocation,
+      });
+      if (!started.ok) throw new Error(started.error);
+    }
+    if (await isAdapted(world)) throw new CharacterProposalError('The character is already chosen.');
+    const pending = await lastProposal(deps.chats);
+    if (pending) return pending;
+    return propose(deps, sheetText(input.character));
+  });
 }
 
 /** The player's wishes for the character: a new proposal (not on the last round). */
-export async function clarifyCharacter(deps: SessionDeps, wishes: string): Promise<CharacterProposal> {
-  if (await isAdapted(deps.world)) throw new CharacterProposalError('The character is already chosen.');
-  const pending = await lastProposal(deps.chats);
-  if (!pending) throw new CharacterProposalError('There is no proposal to change yet.');
-  if (!pending.canClarify) {
-    throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
-  }
-  await deps.transcript.append('player', wishes);
-  return propose(deps, wishes);
+export function clarifyCharacter(deps: SessionDeps, wishes: string): Promise<CharacterProposal> {
+  return exclusive(deps.world, async () => {
+    if (await isAdapted(deps.world)) throw new CharacterProposalError('The character is already chosen.');
+    const pending = await lastProposal(deps.chats);
+    if (!pending) throw new CharacterProposalError('There is no proposal to change yet.');
+    if (!pending.canClarify) {
+      throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
+    }
+    return propose(deps, wishes, wishes);
+  });
 }
 
 /**
@@ -78,14 +82,17 @@ export async function chooseCharacter(
   deps: SessionDeps & { agent: GmAgent },
   index: number,
 ): Promise<TurnResult> {
-  const pending = await lastProposal(deps.chats);
-  const option = pending?.options[index];
-  if (!pending || !option) throw new CharacterProposalError(`There is no character #${index + 1} to choose.`);
-  const choice = index === 0 ? 'adapted' : `alternative ${index}`;
-  const adapted = await deps.world.adaptCharacter({ adapted: option, choice });
-  if (!adapted.ok) throw new Error(adapted.error);
-  await deps.transcript.append('player', `${option.name}, ${option.race}`, { kind: CHOICE_CARD, choice });
-  await deps.chats.clear(CHARACTER_CHAT);
+  await exclusive(deps.world, async () => {
+    const pending = await lastProposal(deps.chats);
+    const option = pending?.options[index];
+    if (!pending || !option) throw new CharacterProposalError(`There is no character #${index + 1} to choose.`);
+    const choice = index === 0 ? 'adapted' : `alternative ${index}`;
+    // Refused when already adapted, so a double tap cannot adapt twice.
+    const adapted = await deps.world.adaptCharacter({ adapted: option, choice });
+    if (!adapted.ok) throw new CharacterProposalError(adapted.error);
+    await deps.transcript.append('player', `${option.name}, ${option.race}`, { kind: CHOICE_CARD, choice });
+    await deps.chats.clear(CHARACTER_CHAT);
+  });
   return startStory(deps);
 }
 
@@ -124,12 +131,14 @@ export function sessionStartCommand(character: CharacterOption, meta: Pick<Story
   ].join('\n');
 }
 
-async function propose(deps: SessionDeps, message: string): Promise<CharacterProposal> {
+/** A proposal; the player's message (`echo`) is shown only once the proposal arrived. */
+async function propose(deps: SessionDeps, message: string, echo?: string): Promise<CharacterProposal> {
   const proposal = await proposeCharacter(
     { model: deps.characterModel, chats: deps.chats, meta: deps.meta },
     message,
     deps.signal,
   );
+  if (echo) await deps.transcript.append('player', echo);
   await deps.transcript.append('gm', proposal.rationale, {
     kind: PROPOSAL_CARD,
     round: proposal.round,

@@ -21,9 +21,12 @@ export function toolLimitMiddleware(limit = MAX_TOOL_CALLS_PER_TURN) {
       canJumpTo: ['model', 'end'],
       hook: (state) => {
         const { messages } = state;
-        const last = messages.at(-1);
+        // The model's reply may already be followed by error results (InvalidToolCalls).
+        const at = messages.findLastIndex((m) => AIMessage.isInstance(m));
+        const last = messages[at];
         if (!last || !AIMessage.isInstance(last) || !last.tool_calls?.length) return undefined;
-        const turn = messages.slice(Math.max(turnStart(messages), 0), -1);
+        if (messages.slice(at + 1).some((m) => !ToolMessage.isInstance(m))) return undefined;
+        const turn = messages.slice(Math.max(turnStart(messages), 0), at);
         const results = turn.filter((m) => ToolMessage.isInstance(m));
         const blockedBefore = results.some((m) => m.additional_kwargs?.qq_blocked === true);
         const used = results.filter((m) => m.additional_kwargs?.qq_blocked !== true).length;
