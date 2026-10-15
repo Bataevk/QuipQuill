@@ -176,7 +176,7 @@ export class World {
 
   /** `character.adapted`: the player's choice after `propose_character` (stage 4.4). */
   adaptCharacter(input: {
-    adapted: { name?: string; race?: string; description?: string };
+    adapted: { name?: string; race?: string; age?: number | null; description?: string };
     choice: string;
   }): Promise<Outcome> {
     return this.command('gm', async ({ db, log }, player) => {
@@ -186,7 +186,8 @@ export class World {
         adapted: input.adapted,
         choice: input.choice,
       });
-      const props = { ...player.props, ...(input.adapted.race ? { race: input.adapted.race } : {}) };
+      const { race, age } = input.adapted;
+      const props = { ...player.props, ...(race ? { race } : {}), ...(typeof age === 'number' ? { age } : {}) };
       await db.run(
         'UPDATE state_entities SET name = ?, description = ?, props = ?, updated_seq = ? WHERE id = ?',
         [

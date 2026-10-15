@@ -95,7 +95,7 @@ CREATE TABLE notes (                 -- заметки мастера: квес�
 );
 
 CREATE TABLE model_messages (        -- рабочая память моделей; сжимается
-  chat_id TEXT NOT NULL,             -- 'gm' | 'npc:<id>'
+  chat_id TEXT NOT NULL,             -- 'gm' | 'npc:<id>' | 'character' (только до выбора персонажа)
   seq     INTEGER NOT NULL,
   role    TEXT NOT NULL,             -- system | user | assistant | tool
   content TEXT NOT NULL,             -- JSON сообщения (LangChain-совместимый)
@@ -106,7 +106,7 @@ CREATE TABLE transcript (            -- то, что видел игрок; то
   seq     INTEGER PRIMARY KEY AUTOINCREMENT,
   speaker TEXT NOT NULL,             -- 'player' | 'gm' | 'npc:<id>' | 'system'
   text    TEXT NOT NULL,
-  extra   TEXT NOT NULL DEFAULT '{}',-- JSON: карточки выбора и т.п.
+  extra   TEXT NOT NULL DEFAULT '{}',-- JSON: {kind: character_proposal | character_choice, …}, {guard: reject}, {name} у NPC
   ts      TEXT NOT NULL
 );
 
@@ -121,7 +121,7 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `kind` | `payload` | Изменение состояния |
 |---|---|---|
 | `session.started` | `{story_id, character_id, player}` | копирование в `state_*`, сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
-| `character.adapted` | `{original, adapted, choice}` | имя, описание, `props.race` игрока |
+| `character.adapted` | `{original, adapted, choice}`; `choice` — `adapted` или `alternative N` | имя, описание, `props.race` и `props.age` игрока (ADR 37) |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
 | `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `npc.reacted` (ADR 32, 34); `from` — NPC |
 | `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` текущей локации |

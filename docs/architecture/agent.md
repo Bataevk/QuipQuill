@@ -75,7 +75,6 @@ graph TD
 | `update_player` | `description` (целиком) | — | `player.updated` |
 | `note` | `text` или `close_id` | — | `note.added` / `note.closed` |
 | `npc_react` | `target, situation` | цель существует и находится рядом | `npc.reacted` |
-| `propose_character` | `adapted, alternatives[≤2], rationale` | только во время старта сессии | (после выбора) `character.adapted` |
 
 Код: [`src/core/agent/`](../../apps/mobile/src/core/agent/) — `prompt.ts` (промпт и WORLD STATE), `tools.ts`, `gm-agent.ts` (`createAgent` + middleware), `middleware/`, `chat-store.ts` (`model_messages`), `transcript.ts`, `run-turn.ts`; тестовый стенд — `testing/` (модель по сценарию).
 
@@ -109,22 +108,29 @@ graph TD
 
 ## Старт сессии и адаптация персонажа
 
+Адаптация — **не работа мастера**: отдельный чат со своим промптом до начала игры (ADR 37). Код — `src/core/agent/character.ts` (чат и промпт) и `session.ts` (порядок шагов для интерфейса).
+
 ```mermaid
 sequenceDiagram
   participant P as Игрок
-  participant A as Агент
-  P->>A: выбор истории + персонажа
-  A->>A: session.started (копия state_*, сущность player)
-  A->>A: system: session_start + анкета + world_constraints
-  A-->>P: propose_character → карточки: адаптация / альт. A / альт. B / своё уточнение
-  P->>A: выбор (или уточнение текстом, до 3 кругов)
-  A->>A: character.adapted
-  A-->>P: вступительная сцена в meta.start_location
+  participant C as Чат адаптации (purpose character)
+  participant A as Мастер
+  P->>C: beginSession: история + персонаж
+  Note over C: session.started (копия state_*, сущность player)
+  C-->>P: propose_character → карточки: адаптация / альт. 1 / альт. 2 + объяснение
+  P->>C: clarifyCharacter: своё уточнение (всего до 3 предложений)
+  C-->>P: новое предложение
+  P->>A: chooseCharacter: выбор карточки
+  Note over A: character.adapted, чат адаптации удалён
+  A-->>P: system session_start → вступительная сцена в meta.start_location
 ```
 
-- Мастер пишет первым: ход запускается системной командой `session_start`, Guard её пропускает.
-- Анкета: имя, пол, возраст, раса, описание. Исходная анкета сохраняется в `props.original` сущности игрока.
-- Адаптация — под `world_constraints`: эпоха, допустимые расы, уровень магии и технологий, баланс («полубог с легендарным мечом» → сильные стороны приглушены).
+- **Шаги** (`session.ts`): `beginSession` → `session.started` и первое предложение (идемпотентно: после перезапуска вернёт ожидающее предложение); `clarifyCharacter(текст)` → новое предложение; `chooseCharacter(n)` (0 — адаптация, 1–2 — альтернативы) → `character.adapted` и `startStory`; `startStory` можно повторить отдельно, если сцена не открылась.
+- **Чат адаптации** — `model_messages(chat_id='character')`, пока игрок выбирает, после выбора удаляется. Системный промпт `CHARACTER_PROMPT`: `world_summary` + `world_constraints` + задача; первое сообщение — анкета игрока (имя, пол, возраст, раса, описание). Модель — `purpose: character`, канал `system`, ответ — структурный JSON `propose_character` (`CHARACTER_RESPONSE_FORMAT`): `adapted`, `alternatives` (лишние сверх двух отбрасываются), `rationale`; у персонажа — `name, race, age, description`. Нечитаемый ответ — `CharacterProposalError`, в чат и `transcript` ничего не пишется, шаг можно повторить.
+- **Круги:** не больше 3 предложений; на третьем `canClarify = false`, уточнение отклоняется — только выбор карточки. Уточнение игрока Guard не проверяет: это пожелание к персонажу, а не действие в мире; баланс держит промпт адаптации через `world_constraints`.
+- **`transcript`:** предложение — строка мастера с `extra = {kind: "character_proposal", round, options, canClarify}` (карточки для интерфейса 5.2), уточнение — строка игрока, выбор — строка игрока `extra = {kind: "character_choice", choice}`.
+- **Выбор:** `character.adapted {original, adapted, choice}` меняет имя, описание, `props.race` и `props.age` игрока; исходная анкета остаётся в `props.original`.
+- **Мастер пишет первым:** его первый ход — системная команда `[session_start]` с выбранным персонажем: выдать упомянутые в описании вещи (`add_entity`, в инвентарь) и открыть сцену в стартовой локации. Мастер чат адаптации не видит, Guard системную команду пропускает.
 
 ## Контекст и стоимость
 

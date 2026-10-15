@@ -260,7 +260,7 @@ describe('player.updated and character.adapted', () => {
   it('adapts the character and keeps the original sheet', async () => {
     const event = expectOk(
       await world.adaptCharacter({
-        adapted: { race: 'human', description: 'A cartographer from the colonies.' },
+        adapted: { race: 'human', age: 31, description: 'A cartographer from the colonies.' },
         choice: 'adapted',
       }),
     );
@@ -268,7 +268,7 @@ describe('player.updated and character.adapted', () => {
     expect(await world.state.player()).toMatchObject({
       name: 'Aria',
       description: 'A cartographer from the colonies.',
-      props: { race: 'human', original: CHARACTER },
+      props: { race: 'human', age: 31, sex: 'female', original: CHARACTER },
     });
   });
 });

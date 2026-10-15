@@ -31,6 +31,11 @@ export class ChatStore {
     return mapStoredMessagesToChatMessages(rows.map((row) => JSON.parse(row.content) as StoredMessage));
   }
 
+  /** Deletes the whole chat (the character adaptation chat after the choice). */
+  async clear(chatId: string): Promise<void> {
+    await this.db.run('DELETE FROM model_messages WHERE chat_id = ?', [chatId]);
+  }
+
   /** Appends after the chat's last message, all or nothing. */
   async append(chatId: string, messages: BaseMessage[]): Promise<void> {
     await this.db.transaction(async (tx) => {
