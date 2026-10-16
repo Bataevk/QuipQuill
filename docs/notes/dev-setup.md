@@ -8,7 +8,7 @@
 |---|---|
 | Homebrew, watchman, fnm, uv | ✅ (uv также есть в `~/.local/bin`, эта версия идёт в PATH первой) |
 | Node | ✅ v26.11.1, npm 11.20 |
-| Xcode | ✅ 27.0, `xcode-select` указывает на Xcode.app |
+| Xcode | ✅ 27.1 (Swift 6.4), `xcode-select` указывает на Xcode.app |
 | iOS Simulator runtime | ✅ iOS 27.0 (iPhone 17 и др.) |
 | CocoaPods | ✅ 1.17 (`brew install cocoapods`); нужен для `npx expo run:ios`. Терминалу нужен `LANG=en_US.UTF-8` |
 | Android Studio | ✅ (2026-10-16): SDK `android-37.0`, эмулятор `Medium_Phone_API_37.0`; `adb` — в `~/Library/Android/sdk/platform-tools` (PATH — см. [run-guide](run-guide.md#2а-android-эмулятор-вместо-ios-или-вместе-с-ним)) |
@@ -21,6 +21,7 @@
 - Все команды `npx expo …` и `npm …` для приложения запускаются **из `apps/mobile`**. В корне репозитория нет `package.json`.
 - **Expo Go не подходит**: op-sqlite — нативный модуль. Нужна dev-сборка: `npx expo run:ios` (локально) или `eas build --profile development` (в облаке).
 - Пакеты ставить через `npx expo install <пакет>` — он подбирает версии, совместимые с SDK. **Не запускать `npm audit fix --force`**: сломает согласованность версий. Чинить версии — `npx expo install --fix`.
+- **Xcode 27.1 (Swift 6.4):** предсобранные модули Expo SDK 57 собраны Swift 6.3.1 и не импортируются, поэтому в `app.json` `ios.usePrecompiledModules: false` — модули собираются из исходников (первая сборка дольше). После обновления Xcode может понадобиться сбросить кэш `ExpoModulesJSI` — [run-guide, раздел 7](run-guide.md#если-сборка-ios-упала).
 - **iOS 27:** без `ios.enableSceneSupport` (`expo-build-properties` в `app.json`) приложение падает при запуске — см. [spikes](spikes.md#31-попутно-запуск-на-ios-27).
 - Dev-клиент при холодном старте открывает лаунчер: подключить к Metro — `xcrun simctl openurl booted "exp+quipquill://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`, затем нужный экран — `xcrun simctl openurl booted "quipquill://<route>"`.
 - Импорт истории в симуляторе без системного диалога (только dev-сборка): положить файл в контейнер приложения и открыть ссылку —
@@ -76,6 +77,6 @@ uv run pytest && uv run ruff check
 
 ## Распространение сборок
 
-- Свой iPhone, бесплатный Apple ID: установка через Xcode, подпись живёт 7 дней.
-- TestFlight и раздача партнёру: Apple Developer Program, $99 в год.
-- Android: APK устанавливается напрямую.
+- Свой iPhone, бесплатный Apple ID: установка через Xcode, подпись живёт 7 дней. **Так раздаём сейчас** — [run-guide, раздел 7](run-guide.md#7-сборки-для-телефона), ADR 41.
+- TestFlight и раздача по ссылке: Apple Developer Program, $99 в год — перед выходом на рынок.
+- Android: APK устанавливается напрямую ([run-guide, раздел 7](run-guide.md#7-сборки-для-телефона)).

@@ -174,3 +174,56 @@ make infra-down
 ```
 
 Docker Desktop можно закрыть из меню кита.
+
+## 7. Сборки для телефона
+
+Release-сборки собираются **локально**, без аккаунтов Expo и Apple Developer (решение — [ADR 41](../architecture/decisions.md#41-демо-сборки-локально-apk-и-xcode-с-бесплатным-apple-id)). Они не зависят от Metro: JS вшит в сборку, адрес облака — тоже, поэтому `EXPO_PUBLIC_CLOUD_URL` задаётся **в той же команде**, что собирает. Без переменной сборка пойдёт на `localhost` и на телефоне работать не будет.
+
+Перед сборкой после правок `app.json` (иконка, название, плагины) — перегенерировать нативные папки (из `apps/mobile`):
+
+```bash
+LANG=en_US.UTF-8 npx expo prebuild --clean
+```
+
+### Android: APK
+
+Из `apps/mobile/android` (JDK 17 — раздел 2а), ~11 минут с нуля, дальше быстрее:
+
+```bash
+EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io ./gradlew assembleRelease
+```
+
+Готовый файл — `android/app/build/outputs/apk/release/app-release.apk` (~107 МБ, все четыре ABI). Скопировать с понятным именем и отправить партнёру (мессенджер, почта, Google Drive):
+
+```bash
+mkdir -p dist && cp android/app/build/outputs/apk/release/app-release.apk dist/QuipQuill-1.0.0-preview.apk
+```
+
+APK подписан debug-ключом из шаблона Expo — для раздачи «своим» этого достаточно. Ставится поверх dev-сборки на эмуляторе (`adb install -r …`), данные сохраняются. Установка на телефоне — [demo-script](demo-script.md#установка-на-телефон).
+
+### iPhone: Xcode и бесплатный Apple ID
+
+Нужен iPhone, подключённый кабелем к этому Mac. Сборка на телефоне живёт **7 дней**.
+
+Один раз:
+
+1. Xcode → **Settings → Accounts** → **+** → Apple ID (любой, платный аккаунт не нужен). Появится команда «<Имя> (Personal Team)».
+2. На iPhone: **Settings → Privacy & Security → Developer Mode** → включить, перезагрузить телефон (пункт появляется после первого подключения к Xcode). На вопрос «Доверять этому компьютеру?» — **Trust**.
+
+Сборка и установка (из `apps/mobile`, телефон разблокирован):
+
+```bash
+LANG=en_US.UTF-8 EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo run:ios --configuration Release --device
+```
+
+Выбрать телефон в списке; при первом запуске CLI попросит выбрать команду подписи — Personal Team. После установки на телефоне: **Settings → General → VPN & Device Management** → профиль разработчика → **Trust**. Через 7 дней приложение перестанет открываться — повторить команду.
+
+То же на симуляторе (проверить release-сборку без телефона): `--device "iPhone 17"` вместо `--device`.
+
+### Если сборка iOS упала
+
+| Симптом | Причина и что делать |
+|---|---|
+| `this SDK is not supported by the compiler (the SDK is built with 'Apple Swift version …')` | Предсобранные модули Expo собраны другим Swift, чем в текущем Xcode. В `app.json` уже стоит `usePrecompiledModules: false` (`expo-build-properties`) — проверить, что после правки `app.json` был `npx expo prebuild` и `pod install` |
+| `cannot find type '__ObjC::expo' in scope` в `ExpoModulesJSI…swiftinterface` | Устаревший кэш xcframework `ExpoModulesJSI` в `node_modules` (в логе `xcframework slices up to date, skipping build`). Удалить метку слайса и собрать снова: `rm node_modules/expo-modules-jsi/apple/Products/ExpoModulesJSI.xcframework/*/.build-hash` |
+| `Unicode Normalization not appropriate for ASCII-8BIT` в `pod install` | Не UTF-8 локаль: `LANG=en_US.UTF-8` перед командой |
