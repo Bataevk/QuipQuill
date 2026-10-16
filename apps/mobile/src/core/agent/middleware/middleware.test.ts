@@ -296,14 +296,14 @@ describe('ToolLimit', () => {
     const result = await play('I grab it all.', [
       {
         toolCalls: Array.from({ length: 10 }, () => ({ name: 'inspect', args: { target: 'crate' } })),
-        invalidToolCalls: [{ name: 'take', args: '{x' }],
+        invalidToolCalls: [{ name: 'set_relation', args: '{x' }],
       },
       { text: 'Enough.' },
     ]);
     const texts = result.messages.filter((m) => ToolMessage.isInstance(m)).map((m) => m.text);
     expect(texts.filter((t) => t.startsWith('crate'))).toHaveLength(8);
     expect(texts.filter((t) => t === TOOL_LIMIT_TEXT)).toHaveLength(2);
-    expect(texts.filter((t) => t.startsWith('Error: the arguments of take'))).toHaveLength(1);
+    expect(texts.filter((t) => t.startsWith('Error: the arguments of set_relation'))).toHaveLength(1);
     expect(result.reply).toBe('Enough.');
   });
 
@@ -327,7 +327,7 @@ describe('history', () => {
 
   it('keeps every piece of the master\'s text, in order, in the reply and the transcript', async () => {
     const result = await play('I take the lantern.', [
-      { text: 'You reach for the lantern.', toolCalls: [{ name: 'take', args: { item: 'brass lantern' } }] },
+      { text: 'You reach for the lantern.', toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'brass lantern' } }] },
       { text: 'It is warm.' },
     ]);
     expect(result.reply).toBe('You reach for the lantern.\n\nIt is warm.');
@@ -355,7 +355,7 @@ describe('retryTurn', () => {
   it('finishes a failed turn without sending the input again, under the same turn number', async () => {
     const agent = createGmAgent({ model, world, meta });
     await expect(runTurn({ agent, world, chats, transcript, input: 'Hello?' })).rejects.toThrow(/no step/);
-    model.push({ toolCalls: [{ name: 'move', args: { to: 'Lamplight Row' } }] }, { text: 'Yes?' });
+    model.push({ toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Lamplight Row' } }] }, { text: 'Yes?' });
     const result = await retryTurn({ agent, world, chats, transcript });
     expect(result).toMatchObject({ turn: 1, reply: 'Yes?' });
     expect(result.events.map((e) => [e.kind, e.turn])).toEqual([['player.moved', 1]]);

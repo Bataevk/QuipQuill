@@ -148,7 +148,7 @@ describe('npc_react', () => {
       {
         toolCalls: [
           {
-            name: 'add_entity',
+            name: 'set_entity',
             args: { name: 'innkeeper', type: 'npc', description: 'A bald man polishing mugs that never get clean.' },
           },
           { name: 'npc_react', args: { target: 'innkeeper', situation: 'A stranger waves you over.' } },
@@ -178,12 +178,12 @@ describe('npc_react', () => {
   });
 
   it('snatching an item: the owner reacts first, then take succeeds (ADR 32, 34)', async () => {
-    await world.move(LAMPLIGHT);
+    await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
     npcSays(PIP, '*Pip lets go with a scowl.* "Keep it. It opens no doors without me."');
     const result = await play(
       "I snatch Pip's calling card.",
       react('Pip Quillon', 'The stranger snatches the calling card from your fingers.'),
-      { toolCalls: [{ name: 'take', args: { item: 'calling card' } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'calling card' } }] },
       (messages) => ({ text: lastToolText(messages).startsWith('The player now has calling card') ? 'Yours now.' : '?' }),
     );
     expect(result.reply).toBe('Yours now.');
@@ -194,13 +194,13 @@ describe('npc_react', () => {
   });
 
   it('snatching an item: take before the reaction is refused; a failed attempt takes nothing', async () => {
-    await world.move(LAMPLIGHT);
+    await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
     npcSays(PIP, '*Pip twists away and is gone into the crowd.*');
     const result = await play(
       "I snatch Pip's calling card.",
       {
         toolCalls: [
-          { name: 'take', args: { item: 'calling card' } },
+          { name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'calling card' } },
           { name: 'npc_react', args: { target: PIP, situation: 'The stranger grabs at your calling card.' } },
         ],
       },
@@ -321,10 +321,36 @@ describe('NPC stream on its own channel', () => {
 describe('a world that follows the player (ADR 42)', () => {
   const call = (name: string, args: Record<string, unknown>) => ({ name, args });
 
+  it('what an honest NPC tells about becomes real: the master creates the bag, the player takes it (ADR 43)', async () => {
+    npcSays(MAGS, '"Tools? Under the bench by the stairs. A canvas bag, mind the chisels."');
+    await play(
+      'I ask Mags where I can find tools for the lock.',
+      react('Mags Holloway', 'The stranger asks where to find tools for the lock.'),
+      {
+        toolCalls: [
+          call('set_entity', {
+            name: 'bag of tools',
+            type: 'item',
+            description: 'A canvas bag under the bench by the stairs, heavy with chisels and picks.',
+          }),
+        ],
+      },
+      { text: 'She nods towards the stairs.' },
+    );
+    const result = await play(
+      'I take the bag of tools from under the bench.',
+      { toolCalls: [call('set_relation', { a: 'player', relation: 'has_item', b: 'bag of tools' })] },
+      (messages) => ({ text: lastToolText(messages).startsWith('The player now has bag of tools') ? 'Heavy.' : '?' }),
+    );
+    expect(result.reply).toBe('Heavy.');
+    expect(result.events.map((e) => e.kind)).toEqual(['item.taken']);
+    expect((await world.scene()).inventory.map((e) => e.id)).toEqual(['item:bag-of-tools']);
+  });
+
   it('lets an NPC leave for another location, where she is found later', async () => {
     const result = await play(
       'I tell Mags to wait for me on Lamplight Row.',
-      { toolCalls: [call('move_npc', { who: 'Mags Holloway', to: 'Lamplight Row' })] },
+      { toolCalls: [call('set_relation', { a: 'Mags Holloway', relation: 'located_in', b: 'Lamplight Row' })] },
       (messages) => {
         expect(lastToolText(messages)).toBe(
           'Mags Holloway [npc:mags-holloway] is now in Lamplight Row [loc:lamplight-row].',
@@ -335,7 +361,7 @@ describe('a world that follows the player (ADR 42)', () => {
     expect(result.events.map((e) => e.kind)).toEqual(['npc.moved']);
     expect((await world.scene()).here.map((e) => e.id)).not.toContain(MAGS);
 
-    await play('I follow her.', { toolCalls: [call('move', { to: 'Lamplight Row' })] }, { text: 'Gas lamps.' });
+    await play('I follow her.', { toolCalls: [call('set_relation', { a: 'player', relation: 'located_in', b: 'Lamplight Row' })] }, { text: 'Gas lamps.' });
     expect((await world.scene()).here.map((e) => e.id)).toContain(MAGS);
     npcSays(MAGS, '"Took your time."');
     await play('Hello again.', react(MAGS, 'The stranger catches up with you.'), { text: '.' });
@@ -352,12 +378,13 @@ describe('a world that follows the player (ADR 42)', () => {
         toolCalls: [
           call('set_relation', {
             a: 'Mags Holloway',
+            relation: 'interacts_with',
             b: 'Aria',
             description: 'the stranger refused to join the heist and took Pip; she no longer trusts them',
           }),
           call('cancel_relation', { a: 'Mags Holloway', b: 'Pip Quillon' }),
-          call('edit_entity', {
-            target: 'Mags Holloway',
+          call('set_entity', {
+            id: 'Mags Holloway',
             description: 'A former airship captain with a brass hook. Her crew fell apart; she plans alone now.',
           }),
         ],

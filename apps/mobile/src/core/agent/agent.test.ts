@@ -18,7 +18,7 @@ import { GM_TOOL_NAMES } from './tools';
 
 const TAVERN = 'loc:rusty-gear-tavern';
 const LAMPLIGHT = 'loc:lamplight-row';
-const PLAYER = 'player:c1';
+const PLAYER = 'player';
 const CHARACTER = { id: 'c1', name: 'Aria', sex: 'female', age: 27, race: 'human', description: 'A cartographer.' };
 
 let env: TestEnv;
@@ -108,7 +108,7 @@ describe('system prompt', () => {
   it('puts the cache breakpoint after the story style and rebuilds the world state every call', async () => {
     await turn(
       'I go upstairs.',
-      { toolCalls: [{ name: 'move', args: { to: LAMPLIGHT } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: LAMPLIGHT } }] },
       { text: 'Up you go.' },
     );
     const [first, second] = model.calls.map((call) => call[0] as SystemMessage);
@@ -118,7 +118,7 @@ describe('system prompt', () => {
     expect(parts[0].text).toContain('# Story style\nTitle: The Brass Vault');
     expect(parts[0].text).toMatch(/steampunk/);
     expect(parts[0].text).not.toContain('{{');
-    expect(parts[1].text).toMatch(/^Player: Aria \(human, female, age 27\) \[player:c1\]/);
+    expect(parts[1].text).toMatch(/^Player: Aria \(human, female, age 27\) \[player\]/);
     expect(parts[1].text).toContain('Location: The Rusty Gear Tavern [loc:rusty-gear-tavern]');
     // the second call sees the result of the move, with the same cached prefix
     const secondParts = second.content as { text: string }[];
@@ -146,7 +146,7 @@ describe('tools', () => {
   it('returns broken rules as text and changes nothing', async () => {
     const result = await turn(
       'I walk into the vault.',
-      { toolCalls: [{ name: 'move', args: { to: 'Orrery Vault' } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Orrery Vault' } }] },
       (messages) => ({ text: lastToolText(messages).startsWith('Error: There is no path') ? 'No way.' : '?' }),
     );
     expect(result.reply).toBe('No way.');
@@ -155,13 +155,46 @@ describe('tools', () => {
     expect((await world.scene()).location?.id).toBe(TAVERN);
   });
 
+  it('keeps the old rules through the general tools (ADR 43)', async () => {
+    const rel = (a: string, relation: string, b: string) => ({ name: 'set_relation', args: { a, relation, b } });
+    const refused = await turn(
+      'I try everything at once.',
+      { toolCalls: [rel('player', 'has_item', 'crate'), rel('player', 'located_in', 'Orrery Vault')] },
+      { text: 'Nothing gives.' },
+    );
+    expect(toolTexts(refused.messages)).toEqual([
+      'Error: crate is fixed in place and cannot be taken.',
+      expect.stringMatching(/^Error: There is no path from The Rusty Gear Tavern to "Orrery Vault"\. Exits: Lamplight Row/),
+    ]);
+    expect(refused.events).toEqual([]);
+
+    const moves = await turn(
+      'I take the lantern, go up, leave the lantern there and try to grab Pip\'s card.',
+      {
+        toolCalls: [
+          rel('player', 'has_item', 'brass lantern'),
+          rel('player', 'located_in', 'Lamplight Row'),
+          rel('brass lantern', 'located_in', 'Lamplight Row'),
+          rel('player', 'has_item', 'calling card'),
+        ],
+      },
+      { text: 'Pip keeps his card.' },
+    );
+    expect(toolTexts(moves.messages)[3]).toMatch(/^Error: Pip Quillon has calling card\. Play out the attempt first/);
+    expect(moves.events.map((e) => [e.kind, e.payload])).toEqual([
+      ['item.taken', { item: 'item:brass-lantern', from: TAVERN }],
+      ['player.moved', { from: TAVERN, to: LAMPLIGHT }],
+      ['item.dropped', { item: 'item:brass-lantern', to: LAMPLIGHT }],
+    ]);
+  });
+
   it('runs several calls of one reply in the order the model wrote them', async () => {
     const result = await turn(
       'I go up and grab the newspaper.',
       {
         toolCalls: [
-          { name: 'move', args: { to: 'Lamplight Row' } },
-          { name: 'take', args: { item: 'newspaper' } },
+          { name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Lamplight Row' } },
+          { name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'newspaper' } },
         ],
       },
       { text: 'Done.' },
@@ -187,34 +220,34 @@ describe('tools', () => {
     expect(person).toMatch(/^Mags Holloway \[npc:mags-holloway\] \(npc\)\n.*captain/);
     expect(person).toContain('Where: The Rusty Gear Tavern [loc:rusty-gear-tavern].');
     expect(crate).toContain('(item, fixed in place)');
-    expect(player).toMatch(/^Aria \[player:c1\] \(player\)\nA cartographer\./);
+    expect(player).toMatch(/^Aria \[player\] \(player\)\nA cartographer\./);
     // out of sight: only by an id the master already knows (from lore search or events)
     expect(byId).toMatch(/^Orrery Vault \[loc:orrery-vault\] \(location\)\n[^]*\nExits: Old Sewer Culvert/);
     expect(byName).toBe('Error: there is no "Orrery Vault" here or in the inventory.');
   });
 
   it("refuses an NPC's item until the NPC reacted (ADR 32, 34)", async () => {
-    await world.move(LAMPLIGHT);
+    await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
     const result = await turn(
       "I snatch Pip's calling card.",
-      { toolCalls: [{ name: 'take', args: { item: 'calling card' } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'calling card' } }] },
       { text: 'Pip pulls it back.' },
     );
     expect(toolTexts(result.messages)[0]).toMatch(/^Error: Pip Quillon has calling card\. Play out the attempt/);
     expect(result.events).toEqual([]);
   });
 
-  it('adds, edits, updates the player, takes notes, drops and searches the lore', async () => {
+  it('creates, edits, updates the player, takes notes, drops and searches the lore', async () => {
     const result = await turn(
       'I rig a torch, scare Mags, tear my coat and drop the torch.',
       {
         toolCalls: [
-          { name: 'add_entity', args: { name: 'makeshift torch', type: 'item', description: 'Rags on a stick.', place: 'inventory' } },
-          { name: 'edit_entity', args: { target: 'Mags Holloway', description: 'Mags, now wary of fire.' } },
-          { name: 'update_player', args: { description: 'A cartographer in a torn coat.' } },
+          { name: 'set_entity', args: { name: 'makeshift torch', type: 'item', description: 'Rags on a stick.' } },
+          { name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'makeshift torch' } },
+          { name: 'set_entity', args: { id: 'Mags Holloway', description: 'Mags, now wary of fire.' } },
+          { name: 'set_entity', args: { id: 'player', description: 'A cartographer in a torn coat.' } },
           { name: 'note', args: { text: 'Mags owes the player a drink.' } },
-          { name: 'drop', args: { item: 'makeshift torch' } },
-          { name: 'note', args: { close_id: 1 } },
+          { name: 'set_relation', args: { a: 'makeshift torch', relation: 'located_in', b: 'The Rusty Gear Tavern' } },
           { name: 'note', args: {} },
           { name: 'search_lore', args: { query: 'airship captain' } },
         ],
@@ -223,25 +256,25 @@ describe('tools', () => {
     );
     const texts = toolTexts(result.messages);
     expect(texts.slice(0, 7)).toEqual([
-      'Added makeshift torch [item:makeshift-torch] to the inventory. It is now a lasting part of the world.',
+      'Created makeshift torch [item:makeshift-torch] here. It is now a lasting part of the world.',
+      'The player now has makeshift torch [item:makeshift-torch] (taken from The Rusty Gear Tavern).',
       'Mags Holloway [npc:mags-holloway] is updated.',
-      "The player's description is updated.",
+      'Aria [player] is updated.',
       'Note #1 is added.',
       'makeshift torch [item:makeshift-torch] now lies in The Rusty Gear Tavern.',
-      'Note #1 is closed.',
       'Error: give the text of a new note, or close_id to close one.',
     ]);
-    // the query is her story description, which edit_entity has just rewritten: the lore no
+    // the query is her story description, which set_entity has just rewritten: the lore no
     // longer finds her by it (ADR 42); the rest of the lore answers
     expect(texts[7].split('\n')[0]).toMatch(/^- .+ \[[a-z]+:[a-z-]+\] \([a-z]+\): /);
     expect(texts[7]).not.toContain('[npc:mags-holloway]');
     expect(result.events.map((e) => e.kind)).toEqual([
       'entity.added',
+      'item.taken',
       'entity.edited',
-      'player.updated',
+      'entity.edited',
       'note.added',
       'item.dropped',
-      'note.closed',
     ]);
     expect((await world.state.entity(PLAYER))?.description).toBe('A cartographer in a torn coat.');
   });
@@ -283,10 +316,10 @@ describe('invalid tool call arguments', () => {
   it('reports them to the model as tool errors instead of ending the turn', async () => {
     const result = await turn(
       'I go upstairs.',
-      { invalidToolCalls: [{ name: 'move', args: '{"to": "Lamplight' }] },
+      { invalidToolCalls: [{ name: 'set_relation', args: '{"to": "Lamplight' }] },
       (messages) => {
-        expect(lastToolText(messages)).toMatch(/^Error: the arguments of move call are not a valid JSON object/);
-        return { toolCalls: [{ name: 'move', args: { to: 'Lamplight Row' } }] };
+        expect(lastToolText(messages)).toMatch(/^Error: the arguments of set_relation call are not a valid JSON object/);
+        return { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Lamplight Row' } }] };
       },
       { text: 'Up the stairs.' },
     );
@@ -295,7 +328,7 @@ describe('invalid tool call arguments', () => {
     // The broken call stays in the history as a regular call with its raw arguments, answered.
     const ai = result.messages[1] as AIMessage;
     expect(ai.tool_calls).toEqual([
-      { id: 'bad_1_0', name: 'move', args: { invalid_arguments: '{"to": "Lamplight' }, type: 'tool_call' },
+      { id: 'bad_1_0', name: 'set_relation', args: { invalid_arguments: '{"to": "Lamplight' }, type: 'tool_call' },
     ]);
     expect(ai.invalid_tool_calls).toEqual([]);
     expect((result.messages[2] as ToolMessage).tool_call_id).toBe('bad_1_0');
@@ -305,13 +338,13 @@ describe('invalid tool call arguments', () => {
     const result = await turn(
       'I go up and grab the paper.',
       {
-        toolCalls: [{ name: 'move', args: { to: 'Lamplight Row' } }],
-        invalidToolCalls: [{ name: 'take', args: '{item' }],
+        toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Lamplight Row' } }],
+        invalidToolCalls: [{ name: 'set_relation', args: '{item' }],
       },
       (messages) => {
         const tools = messages.filter((m) => ToolMessage.isInstance(m)).map((m) => m.text);
         expect(tools).toHaveLength(2);
-        return { toolCalls: [{ name: 'take', args: { item: 'newspaper' } }] };
+        return { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'newspaper' } }] };
       },
       { text: 'Got it.' },
     );

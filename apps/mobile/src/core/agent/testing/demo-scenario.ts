@@ -32,14 +32,14 @@ export const DEMO_TURNS: { input: string; steps: Step[] }[] = [
   {
     input: 'I climb the stairs to Lamplight Row.',
     steps: [
-      { toolCalls: [{ name: 'move', args: { to: 'Lamplight Row' } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: 'Lamplight Row' } }] },
       { text: 'Gas lamps hiss along the wet cobbles of Lamplight Row.' },
     ],
   },
   {
     input: 'I pick up the newspaper from the gutter.',
     steps: [
-      { toolCalls: [{ name: 'take', args: { item: 'evening newspaper' } }] },
+      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'evening newspaper' } }] },
       { text: 'You fold the damp evening paper into your coat.' },
     ],
   },

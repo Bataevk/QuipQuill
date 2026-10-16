@@ -9,7 +9,7 @@ import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform
 
 const TAVERN = 'loc:rusty-gear-tavern';
 const LAMPLIGHT = 'loc:lamplight-row';
-const PLAYER = 'player:c1';
+const PLAYER = 'player';
 const CHARACTER = {
   id: 'c1',
   name: 'Aria',
@@ -83,7 +83,7 @@ describe('session.started', () => {
 
 describe('player.moved', () => {
   it('follows a LEADS_TO path, by name or id', async () => {
-    const event = expectOk(await world.move('Lamplight Row'));
+    const event = expectOk(await world.setRelation('player', 'LOCATED_IN', 'Lamplight Row'));
     expect(event).toMatchObject({ kind: 'player.moved', payload: { from: TAVERN, to: LAMPLIGHT } });
     expect((await world.scene()).location?.id).toBe(LAMPLIGHT);
     expect(
@@ -92,42 +92,42 @@ describe('player.moved', () => {
       ]),
     ).toBe(event.seq);
 
-    expectOk(await world.move(TAVERN)); // the reverse edge
+    expectOk(await world.setRelation('player', 'LOCATED_IN', TAVERN)); // the reverse edge
     expect((await world.scene()).location?.id).toBe(TAVERN);
   });
 
   it('refuses a location that is not adjacent, listing the exits', async () => {
-    const outcome = await world.move('loc:orrery-vault');
+    const outcome = await world.setRelation('player', 'LOCATED_IN', 'loc:orrery-vault');
     expectError(outcome, /no path from The Rusty Gear Tavern.*Exits: Lamplight Row/);
     expect((await world.scene()).location?.id).toBe(TAVERN);
     expect(await world.log.count('player.moved')).toBe(0);
   });
 
   it('understands partial and misspelled names', async () => {
-    expectOk(await world.move('lamplight'));
-    expectOk(await world.move('the rusty gear taverm'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', 'lamplight'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', 'the rusty gear taverm'));
     expect((await world.scene()).location?.id).toBe(TAVERN);
   });
 });
 
 describe('enclosed places (ADR 31)', () => {
   it('lets the player walk into a place inside a place and meet who is there', async () => {
-    expectOk(await world.move(LAMPLIGHT));
-    expectOk(await world.move('Brassworks Alley'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', 'Brassworks Alley'));
     const alley = await world.scene();
     expect(alley.exits.find((e) => e.to.id === 'loc:fenns-clockworks')?.description).toBe(
       "into Fenn's Clockworks",
     );
 
-    expectOk(await world.move("Fenn's Clockworks"));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', "Fenn's Clockworks"));
     expect(ids((await world.scene()).here)).toContain('npc:tobias-fenn');
-    expectOk(await world.move('loc:brassworks-alley'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', 'loc:brassworks-alley'));
   });
 });
 
 describe('item.taken', () => {
   it('moves an item from the location to the inventory', async () => {
-    const event = expectOk(await world.take('the brass lantern'));
+    const event = expectOk(await world.setRelation('player', 'HAS_ITEM', 'the brass lantern'));
     expect(event).toMatchObject({ payload: { item: 'item:brass-lantern', from: TAVERN } });
     const scene = await world.scene();
     expect(ids(scene.inventory)).toEqual(['item:brass-lantern']);
@@ -135,16 +135,16 @@ describe('item.taken', () => {
   });
 
   it('refuses an item that lies in another location', async () => {
-    expectError(await world.take('pneumatic post'), /no "pneumatic post" here/);
-    expectError(await world.take('item:pneumatic-post'), /here/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'pneumatic post'), /no "pneumatic post" here/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'item:pneumatic-post'), /here/);
     expect(await world.log.count('item.taken')).toBe(0);
   });
 
   it('refuses fixed things, people and what the player already has', async () => {
-    expectError(await world.take('crate'), /fixed in place/);
-    expectError(await world.take('Mags Holloway'), /cannot be carried/);
-    expectOk(await world.take('brass lantern'));
-    expectError(await world.take('brass lantern'), /already has brass lantern/i);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'crate'), /fixed in place/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'Mags Holloway'), /cannot be carried/);
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'), /already has brass lantern/i);
   });
 
   it('takes an item out of a container that is here', async () => {
@@ -152,14 +152,14 @@ describe('item.taken', () => {
       // a story where the canister lies in the crate (the story's own graph, before the game reads it)
       "UPDATE relations SET dst = 'item:crate' WHERE src = 'item:smoke-canister' AND type = 'LOCATED_IN'",
     );
-    const event = expectOk(await world.take('smoke canister'));
+    const event = expectOk(await world.setRelation('player', 'HAS_ITEM', 'smoke canister'));
     expect(event.payload).toEqual({ item: 'item:smoke-canister', from: 'item:crate' });
     expect(await world.state.placesOf('item:smoke-canister')).toEqual([PLAYER]);
   });
 
   it("takes an NPC's item only after that NPC reacted this turn (ADR 32, 34)", async () => {
-    expectOk(await world.move(LAMPLIGHT));
-    expectError(await world.take('calling card'), /Pip Quillon has calling card.*npc_react/);
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Pip Quillon has calling card.*npc_react/);
     world.beginTurn();
     expectOk(
       await world.recordNpcReaction({
@@ -168,43 +168,70 @@ describe('item.taken', () => {
         reaction: '"Oi! Fine, keep it — it opens no doors without me."',
       }),
     );
-    const event = expectOk(await world.take('calling card'));
+    const event = expectOk(await world.setRelation('player', 'HAS_ITEM', 'calling card'));
     expect(event.payload).toEqual({ item: 'doc:calling-card', from: 'npc:pip-quillon' });
     expect(ids(await world.state.inventory('npc:pip-quillon'))).toEqual([]);
     expect(ids(await world.state.inventory(PLAYER))).toEqual(['doc:calling-card']);
   });
 
   it("does not count another NPC's or an earlier turn's reaction", async () => {
-    expectOk(await world.move(LAMPLIGHT));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
     expectOk(await world.recordNpcReaction({ npc: 'npc:pip-quillon', situation: 's', reaction: 'r' }));
     world.beginTurn();
-    expectError(await world.take('calling card'), /Play out the attempt first/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Play out the attempt first/);
     expectOk(await world.recordNpcReaction({ npc: 'npc:mags-holloway', situation: 's', reaction: 'r' }));
-    expectError(await world.take('calling card'), /Play out the attempt first/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Play out the attempt first/);
     expect(await world.log.count('item.taken')).toBe(0);
   });
 });
 
-describe('item.dropped', () => {
-  it('puts an item from the inventory into the current location', async () => {
-    expectOk(await world.take('brass lantern'));
-    expectOk(await world.move(LAMPLIGHT));
-    const event = expectOk(await world.drop('lantern'));
-    expect(event.payload).toEqual({ item: 'item:brass-lantern', to: LAMPLIGHT });
+describe('item.dropped and item.moved', () => {
+  it('puts an item from the inventory down here or into something here', async () => {
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
+    const event = expectOk(await world.setRelation('lantern', 'LOCATED_IN', LAMPLIGHT));
+    expect(event).toMatchObject({ kind: 'item.dropped', payload: { item: 'item:brass-lantern', to: LAMPLIGHT } });
     const scene = await world.scene();
     expect(scene.inventory).toEqual([]);
     expect(ids(scene.here)).toContain('item:brass-lantern');
   });
 
-  it('refuses what the player does not have', async () => {
-    expectError(await world.drop('brass lantern'), /does not have "brass lantern". Inventory: empty/);
+  it('refuses to put down what the player carries anywhere but here', async () => {
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectError(
+      await world.setRelation('brass lantern', 'LOCATED_IN', LAMPLIGHT),
+      /put brass lantern down only here \(The Rusty Gear Tavern\)/,
+    );
+    expect(ids(await world.state.inventory(PLAYER))).toEqual(['item:brass-lantern']);
+  });
+
+  it('lets the master move things that are not in the player\'s hands, and hand them over', async () => {
+    const moved = expectOk(await world.setRelation('brass lantern', 'LOCATED_IN', LAMPLIGHT));
+    expect(moved).toMatchObject({ kind: 'item.moved', payload: { item: 'item:brass-lantern', from: TAVERN, to: LAMPLIGHT } });
+    const given = expectOk(await world.setRelation('npc:mags-holloway', 'HAS_ITEM', 'item:brass-lantern'));
+    expect(given).toMatchObject({ kind: 'item.moved', payload: { from: LAMPLIGHT, to: 'npc:mags-holloway' } });
+    expect(ids(await world.state.inventory('npc:mags-holloway'))).toContain('item:brass-lantern');
+  });
+
+  it('gives what the player carries only to someone here', async () => {
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectError(await world.setRelation('npc:pip-quillon', 'HAS_ITEM', 'brass lantern'), /Pip Quillon is not here/);
+    expectOk(await world.setRelation('npc:mags-holloway', 'HAS_ITEM', 'brass lantern'));
+    expect(await world.state.inventory(PLAYER)).toEqual([]);
+  });
+
+  it('refuses places, paths and unknown relations', async () => {
+    expectError(await world.setRelation(LAMPLIGHT, 'LOCATED_IN', TAVERN), /places stay where the story put them/);
+    expectError(await world.setRelation(TAVERN, 'LEADS_TO', 'loc:orrery-vault'), /Paths between places come from the story/);
+    expectError(await world.setRelation('player', 'OWNS', 'brass lantern'), /Unknown relation OWNS/);
+    expectError(await world.setRelation('brass lantern', 'LOCATED_IN', 'npc:mags-holloway'), /use HAS_ITEM/);
   });
 });
 
 describe('entity.added', () => {
-  it('adds a new thing to the scene or the inventory', async () => {
+  it('creates a new thing in the current location; set_relation puts it in hand', async () => {
     const event = expectOk(
-      await world.addEntity({ name: 'Spilled Ale', type: 'OTHER', description: 'A sticky puddle.' }),
+      await world.setEntity({ name: 'Spilled Ale', type: 'OTHER', description: 'A sticky puddle.' }),
     );
     expect(event.payload).toEqual({
       entity: 'ent:spilled-ale',
@@ -212,51 +239,49 @@ describe('entity.added', () => {
     });
     expect(ids((await world.scene()).here)).toContain('ent:spilled-ale');
 
-    expectOk(
-      await world.addEntity({ name: 'Copper Coin', type: 'ITEM', description: '', inInventory: true }),
-    );
+    expectOk(await world.setEntity({ name: 'Copper Coin', type: 'item', description: '' }));
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'copper coin'));
     expect(ids((await world.scene()).inventory)).toEqual(['item:copper-coin']);
   });
 
-  it('refuses duplicates, new locations and people in pockets', async () => {
+  it('refuses duplicates, new locations and creating without all fields', async () => {
     expectError(
-      await world.addEntity({ name: 'the Brass Lantern', type: 'ITEM', description: '' }),
+      await world.setEntity({ name: 'the Brass Lantern', type: 'ITEM', description: '' }),
       /already exists \(item:brass-lantern\)/,
     );
-    expectError(await world.addEntity({ name: 'Secret Room', type: 'LOCATION', description: '' }), /Cannot add a LOCATION/);
-    expectError(
-      await world.addEntity({ name: 'Tiny Man', type: 'NPC', description: '', inInventory: true }),
-      /cannot be put in the inventory/,
-    );
+    expectError(await world.setEntity({ name: 'Secret Room', type: 'LOCATION', description: '' }), /Cannot create a LOCATION/);
+    expectError(await world.setEntity({ name: 'Tiny Man', type: 'npc' }), /give its name, type and description/);
+    expectError(await world.setEntity({ id: 'item:nothing-like-it', description: 'x' }), /leave out id/);
   });
 });
 
 describe('entity.edited', () => {
-  it('changes the description and merges props, keeping before/after', async () => {
-    const event = expectOk(
-      await world.editEntity('brass lantern', { description: 'Dented now.', props: { lit: true } }),
-    );
-    expect(event.payload).toMatchObject({
+  it('changes the fields given, keeping before/after', async () => {
+    const event = expectOk(await world.setEntity({ id: 'brass lantern', description: 'Dented now.' }));
+    expect(event.payload).toEqual({
       id: 'item:brass-lantern',
-      before: { props: {} },
-      after: { description: 'Dented now.', props: { lit: true } },
+      before: { description: expect.any(String) },
+      after: { description: 'Dented now.' },
     });
-    expect(await world.state.entity('item:brass-lantern')).toMatchObject({
-      description: 'Dented now.',
-      props: { lit: true },
-    });
+    expect(await world.state.entity('item:brass-lantern')).toMatchObject({ description: 'Dented now.' });
+    const renamed = expectOk(await world.setEntity({ id: 'item:brass-lantern', name: 'Dented Lantern' }));
+    expect(renamed.payload).toMatchObject({ after: { name: 'Dented Lantern' } });
   });
 
-  it('leaves the player to update_player and needs a change', async () => {
-    expectError(await world.editEntity(PLAYER, { description: 'x' }), /update_player/);
-    expectError(await world.editEntity('brass lantern', {}), /Nothing to change/);
+  it('keeps the type, refuses taken names, and needs a change', async () => {
+    expectError(await world.setEntity({ id: 'brass lantern', type: 'npc' }), /type cannot change/);
+    expectError(await world.setEntity({ id: 'brass lantern', name: 'Mags Holloway' }), /already exists/);
+    expectError(await world.setEntity({ id: 'brass lantern' }), /Nothing to change/);
   });
 });
 
-describe('player.updated and character.adapted', () => {
-  it('updates the player description', async () => {
-    const event = expectOk(await world.updatePlayer('Aria, soaked to the bone.'));
-    expect(event.payload).toEqual({ before: 'A wandering cartographer.', after: 'Aria, soaked to the bone.' });
+describe('the player as the entity "player" (ADR 43)', () => {
+  it('is changed like any entity', async () => {
+    const event = expectOk(await world.setEntity({ id: 'player', description: 'Aria, soaked to the bone.' }));
+    expect(event).toMatchObject({
+      kind: 'entity.edited',
+      payload: { id: PLAYER, before: { description: 'A wandering cartographer.' }, after: { description: 'Aria, soaked to the bone.' } },
+    });
     expect((await world.state.player())?.description).toBe('Aria, soaked to the bone.');
   });
 
@@ -285,7 +310,7 @@ describe('player.updated and character.adapted', () => {
 
 describe('npc.moved', () => {
   it('sends a person to any location, out of sight too; the story keeps its own placement', async () => {
-    const event = expectOk(await world.moveNpc('Mags Holloway', 'Orrery Vault'));
+    const event = expectOk(await world.setRelation('Mags Holloway', 'LOCATED_IN', 'Orrery Vault'));
     expect(event).toMatchObject({
       kind: 'npc.moved',
       payload: { npc: 'npc:mags-holloway', from: TAVERN, to: 'loc:orrery-vault' },
@@ -296,10 +321,12 @@ describe('npc.moved', () => {
     expect(await count(storyPlacement, ['npc:mags-holloway', TAVERN])).toBe(1);
   });
 
-  it('refuses the player, places that are not locations, and staying put', async () => {
-    expectError(await world.moveNpc(PLAYER, LAMPLIGHT), /no person or creature/);
-    expectError(await world.moveNpc('npc:mags-holloway', 'brass lantern'), /no location "brass lantern"/);
-    expectError(await world.moveNpc('npc:mags-holloway', TAVERN), /already in The Rusty Gear Tavern/);
+  it('refuses places that are not locations, and staying put', async () => {
+    expectError(
+      await world.setRelation('npc:mags-holloway', 'LOCATED_IN', 'brass lantern'),
+      /can only go to a location; brass lantern is not one/,
+    );
+    expectError(await world.setRelation('npc:mags-holloway', 'LOCATED_IN', TAVERN), /already in The Rusty Gear Tavern/);
     expect(await world.log.count('npc.moved')).toBe(0);
   });
 });
@@ -311,7 +338,7 @@ describe('relation.set and relation.cancelled', () => {
     (await world.state.ties(id)).find((t) => t.other.id === other)?.description;
 
   it('records a new tie, with the player too', async () => {
-    const event = expectOk(await world.setRelation(MAGS, 'Aria', 'refused to join the heist; not to be trusted'));
+    const event = expectOk(await world.setRelation(MAGS, 'INTERACTS_WITH', 'Aria', 'refused to join the heist; not to be trusted'));
     expect(event.payload).toEqual({
       src: MAGS,
       dst: PLAYER,
@@ -323,7 +350,7 @@ describe('relation.set and relation.cancelled', () => {
   });
 
   it("rewrites the story's tie between the two, whichever way it was written", async () => {
-    const event = expectOk(await world.setRelation(PIP, MAGS, 'quit her crew after the stranger walked away'));
+    const event = expectOk(await world.setRelation(PIP, 'INTERACTS_WITH', MAGS, 'quit her crew after the stranger walked away'));
     expect(event.payload).toMatchObject({ src: MAGS, dst: PIP, before: 'leader of the crew' });
     expect(await tieOf(PIP, MAGS)).toBe('quit her crew after the stranger walked away');
     expect((await world.state.ties(MAGS)).filter((t) => t.other.id === PIP)).toHaveLength(1);
@@ -340,11 +367,10 @@ describe('relation.set and relation.cancelled', () => {
     expectError(await world.cancelRelation(PIP, MAGS), /have no tie/);
   });
 
-  it('refuses placement, an empty tie and a tie with oneself', async () => {
-    expectError(await world.setRelation(MAGS, TAVERN, 'there', 'LOCATED_IN'), /LOCATED_IN is not a tie/);
-    expectError(await world.setRelation(MAGS, PIP, '  '), /Describe the tie/);
-    expectError(await world.setRelation(MAGS, 'Mags Holloway', 'self-respect'), /two different parties/);
-    expectError(await world.setRelation(MAGS, 'nobody at all', 'x'), /no "nobody at all"/);
+  it('refuses an empty tie and a tie with oneself', async () => {
+    expectError(await world.setRelation(MAGS, 'INTERACTS_WITH', PIP, '  '), /Describe the tie/);
+    expectError(await world.setRelation(MAGS, 'INTERACTS_WITH', 'Mags Holloway', 'self-respect'), /two different parties/);
+    expectError(await world.setRelation(MAGS, 'INTERACTS_WITH', 'nobody at all', 'x'), /no "nobody at all"/);
   });
 });
 
@@ -382,10 +408,10 @@ describe('notes and npc.reacted', () => {
 describe('journal', () => {
   it('keeps the last 5 events in order with turn numbers, and resumes the turn counter', async () => {
     world.beginTurn();
-    expectOk(await world.take('brass lantern'));
-    expectOk(await world.move(LAMPLIGHT));
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
     world.beginTurn();
-    expectOk(await world.drop('brass lantern'));
+    expectOk(await world.setRelation('brass lantern', 'LOCATED_IN', LAMPLIGHT));
     expectOk(await world.addNote('n1'));
     expectOk(await world.addNote('n2'));
 
@@ -404,7 +430,7 @@ describe('journal', () => {
   it('writes nothing when the state change fails mid-transaction', async () => {
     const failing = failOn(db, 'INSERT INTO dyn_relations');
     const broken = await World.open(failing);
-    await expect(broken.move(LAMPLIGHT)).rejects.toThrow('disk on fire');
+    await expect(broken.setRelation('player', 'LOCATED_IN', LAMPLIGHT)).rejects.toThrow('disk on fire');
     expect(await world.log.count()).toBe(1); // only session.started
     expect((await world.scene()).location?.id).toBe(TAVERN);
   });

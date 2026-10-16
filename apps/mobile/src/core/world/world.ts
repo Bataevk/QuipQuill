@@ -14,6 +14,7 @@ import {
   type Note,
   type Outcome,
   type Props,
+  PLAYER_ID,
   type Tie,
   TIE_TYPES,
   type WorldEvent,
@@ -185,7 +186,7 @@ export class World {
   }): Promise<Outcome> {
     return this.command('system', async ({ db, state, log }) => {
       if ((await log.count('session.started')) > 0) reject('The session has already started.');
-      const playerId = `player:${input.character.id ?? 'guest'}`;
+      const playerId = PLAYER_ID;
       const event = await log.append(this.turn, 'system', 'session.started', {
         story_id: input.storyId,
         character_id: input.character.id,
@@ -232,200 +233,95 @@ export class World {
     });
   }
 
-  /** `player.moved`: only along a `LEADS_TO` path from the current location. */
-  move(target: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }, player) => {
-      const here = await state.locationOf(player.id);
-      if (!here) reject('The player is nowhere; the session has not placed them.');
-      const exits = await state.exits(here.id);
-      const to = pick(
-        state.resolve(target, exits.map((exit) => exit.to)),
-        target,
-        () =>
-          `There is no path from ${here.name} to "${target}". Exits: ${
-            exits.map((exit) => describeExit(exit)).join('; ') || 'none'
-          }.`,
-      );
-      const event = await log.append(this.turn, this.actor, 'player.moved', { from: here.id, to: to.id });
-      await unlocate(db, event.seq, player.id);
-      await relate(db, event.seq, player.id, to.id, 'LOCATED_IN');
-      return event;
-    });
+  /**
+   * `set_relation` (ADR 43): makes `a -type-> b` true, by the world's rules for that type.
+   * - `LOCATED_IN` — `a` is in `b`: the player walks only along an exit (`player.moved`); a
+   *   person or creature goes to any location (`npc.moved`); a thing from the player's hands is
+   *   put down here or into something here (`item.dropped`); any other thing the master moves
+   *   (`relation.set`). One place at a time: the old one goes.
+   * - `HAS_ITEM` — `a` carries `b`: the player takes a portable, unfixed thing that is here, or
+   *   one a person here holds once that person reacted this turn (`item.taken`, ADR 32, 34);
+   *   someone else gets it from wherever it is — from the player only when they are here
+   *   (`relation.set`). Into a place or a container it is `LOCATED_IN`.
+   * - `INTERACTS_WITH`, `HAS_ATTRIBUTE` — a tie (`relation.set`, 6.2c).
+   * Paths (`LEADS_TO`) come only from the story.
+   */
+  setRelation(a: string, type: string, b: string, description = ''): Promise<Outcome> {
+    const kind = type.trim().toUpperCase();
+    if (kind === 'LOCATED_IN') return this.command('gm', (tx, player) => this.place(tx, player, a, b));
+    if (kind === 'HAS_ITEM') return this.command('gm', (tx, player) => this.give(tx, player, a, b));
+    if ((TIE_TYPES as readonly string[]).includes(kind)) {
+      return this.command('gm', (tx, player) => this.tie(tx, player, a, b, kind, description));
+    }
+    return Promise.resolve(
+      fail(
+        kind === 'LEADS_TO'
+          ? 'Paths between places come from the story; they cannot be added or moved.'
+          : `Unknown relation ${type}; use LOCATED_IN, HAS_ITEM, ${TIE_TYPES.join(', ')}.`,
+      ),
+    );
   }
 
   /**
-   * `item.taken`: a portable item that lies here, or inside something that lies here. An item
-   * an NPC here holds only after a played-out attempt (ADR 32, 34): this turn already has that
-   * NPC's `npc.reacted`, and the master decided the attempt worked.
+   * `set_entity` (ADR 43): with `id`, changes the fields given (name, description; the type
+   * stays) of any entity, the player (`player`) too — `entity.edited`. Without `id`, creates
+   * something new in the current location — name, type and description required; only small
+   * things and beings, never places — `entity.added`.
    */
-  take(target: string): Promise<Outcome> {
+  setEntity(input: { id?: string; name?: string; type?: string; description?: string }): Promise<Outcome> {
     return this.command('gm', async ({ db, state, log }, player) => {
-      const owned = state.resolve(target, await state.inventory(player.id));
-      if (owned.kind === 'found') reject(`The player already has ${owned.entity.name}.`);
-      const reachable = await this.reachable(state, player);
-      const held = await this.heldByNpcsHere(state, player);
-      const item = pick(
-        state.resolve(target, [...reachable, ...held.map((h) => h.item)]),
-        target,
-        () => `There is no "${target}" here to take.`,
-      );
-      if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
-      if (item.props.fixed === true) reject(`${item.name} is fixed in place and cannot be taken.`);
-      const holder = held.find((h) => h.item.id === item.id)?.npc;
-      if (holder && !(await log.reacted(this.turn, holder.id))) {
-        reject(
-          `${holder.name} has ${item.name}. Play out the attempt first: call npc_react for ` +
-            `${holder.name}, then take it only if the attempt succeeds.`,
-        );
-      }
-      const [from = ''] = await state.placesOf(item.id);
-      const event = await log.append(this.turn, this.actor, 'item.taken', { item: item.id, from });
-      await unplace(db, event.seq, item.id);
-      await relate(db, event.seq, player.id, item.id, 'HAS_ITEM');
-      return event;
-    });
-  }
-
-  /** `item.dropped`: from the inventory to the current location. */
-  drop(target: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }, player) => {
-      const inventory = await state.inventory(player.id);
-      const item = pick(state.resolve(target, inventory), target, () =>
-        `The player does not have "${target}". Inventory: ${names(inventory) || 'empty'}.`,
-      );
-      const here = await state.locationOf(player.id);
-      if (!here) reject('The player is nowhere; the session has not placed them.');
-      const event = await log.append(this.turn, this.actor, 'item.dropped', { item: item.id, to: here.id });
-      await unplace(db, event.seq, item.id);
-      await relate(db, event.seq, item.id, here.id, 'LOCATED_IN');
-      return event;
-    });
-  }
-
-  /** `entity.added`: something new in the current scene (or in the player's hands). */
-  addEntity(input: {
-    name: string;
-    type: EntityType;
-    description: string;
-    inInventory?: boolean;
-  }): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }, player) => {
-      const name = input.name.trim();
-      if (!name) reject('The new entity needs a name.');
-      if (!ADDABLE.includes(input.type)) {
-        reject(`Cannot add a ${input.type}; allowed types: ${ADDABLE.join(', ')}.`);
-      }
-      if (input.inInventory && !PORTABLE.includes(input.type)) {
-        reject(`A ${input.type} cannot be put in the inventory.`);
-      }
+      const name = input.name?.trim();
+      const type = input.type?.trim().toUpperCase() as EntityType | undefined;
       const all = await state.allEntities();
-      const clash = all.find((e) => normalizeName(e.name) === normalizeName(name));
-      if (clash) reject(`Something named "${clash.name}" already exists (${clash.id}).`);
+      const clash = (exceptId?: string) =>
+        name ? all.find((e) => e.id !== exceptId && normalizeName(e.name) === normalizeName(name)) : undefined;
+
+      if (input.id?.trim()) {
+        const entity = await this.find(state, player, input.id, () =>
+          `There is no "${input.id}". To create something new, leave out id.`,
+        );
+        if (type && type !== entity.type) reject(`${entity.name} is a ${entity.type}; its type cannot change.`);
+        const after: EntityPatch = {};
+        const before: EntityPatch = {};
+        if (name && name !== entity.name) {
+          const other = clash(entity.id);
+          if (other) reject(`Something named "${other.name}" already exists (${other.id}).`);
+          before.name = entity.name;
+          after.name = name;
+        }
+        if (input.description !== undefined && input.description !== entity.description) {
+          before.description = entity.description;
+          after.description = input.description;
+        }
+        if (Object.keys(after).length === 0) reject('Nothing to change.');
+        const event = await log.append(this.turn, this.actor, 'entity.edited', { id: entity.id, before, after });
+        await putEntity(db, event.seq, {
+          ...entity,
+          name: after.name ?? entity.name,
+          description: after.description ?? entity.description,
+        });
+        return event;
+      }
+
+      if (!name || !type || input.description === undefined) {
+        reject('To create something, give its name, type and description (or an id to change something).');
+      }
+      if (!ADDABLE.includes(type)) reject(`Cannot create a ${type}; allowed types: ${ADDABLE.join(', ')}.`);
+      const other = clash();
+      if (other) reject(`Something named "${other.name}" already exists (${other.id}).`);
       const here = await state.locationOf(player.id);
       if (!here) reject('The player is nowhere; the session has not placed them.');
-
       const ids = new Set(all.map((e) => e.id));
-      const base = `${ID_PREFIX[input.type]}:${slugify(name)}`;
+      const base = `${ID_PREFIX[type]}:${slugify(name)}`;
       let id = base;
       for (let n = 2; ids.has(id); n++) id = `${base}-${n}`;
-      const relation = input.inInventory
-        ? { type: 'HAS_ITEM', target: player.id }
-        : { type: 'LOCATED_IN', target: here.id };
-      const event = await log.append(this.turn, this.actor, 'entity.added', { entity: id, relation });
-      await putEntity(db, event.seq, {
-        id,
-        type: input.type,
-        subtype: null,
-        name,
-        description: input.description,
-        props: { added: true },
+      const event = await log.append(this.turn, this.actor, 'entity.added', {
+        entity: id,
+        relation: { type: 'LOCATED_IN', target: here.id },
       });
-      if (input.inInventory) await relate(db, event.seq, player.id, id, 'HAS_ITEM');
-      else await relate(db, event.seq, id, here.id, 'LOCATED_IN');
-      return event;
-    });
-  }
-
-  /** `entity.edited`: description and/or props (merged) of a visible entity, or any by id. */
-  editEntity(target: string, patch: EntityPatch): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }) => {
-      if (patch.description === undefined && patch.props === undefined) reject('Nothing to change.');
-      const entity =
-        (await state.entity(target)) ??
-        pick(state.resolve(target, await state.visible()), target, () => `"${target}" is not here.`);
-      if (entity.type === 'PLAYER') reject('Change the player with update_player.');
-      const before: EntityPatch = {};
-      const after: EntityPatch = {};
-      if (patch.description !== undefined) {
-        before.description = entity.description;
-        after.description = patch.description;
-      }
-      if (patch.props !== undefined) {
-        before.props = entity.props;
-        after.props = { ...entity.props, ...patch.props };
-      }
-      const event = await log.append(this.turn, this.actor, 'entity.edited', { id: entity.id, before, after });
-      await putEntity(db, event.seq, {
-        ...entity,
-        description: after.description ?? entity.description,
-        props: after.props ?? entity.props,
-      });
-      return event;
-    });
-  }
-
-  /**
-   * `npc.moved`: a person or creature goes to any location — walking off, fleeing, taken away,
-   * or about their own business out of sight (ADR 42). Found by id or name anywhere.
-   */
-  moveNpc(target: string, destination: string): Promise<Outcome> {
-    return this.command('gm', async ({ state, log, db }) => {
-      const all = await state.allEntities();
-      const npc = pick(
-        state.resolve(target, all.filter((e) => BEINGS.includes(e.type))),
-        target,
-        () => `There is no person or creature "${target}".`,
-      );
-      const to = pick(
-        state.resolve(destination, all.filter((e) => e.type === 'LOCATION')),
-        destination,
-        () => `There is no location "${destination}".`,
-      );
-      const from = await state.locationOf(npc.id);
-      if (from?.id === to.id) reject(`${npc.name} is already in ${to.name}.`);
-      const event = await log.append(this.turn, this.actor, 'npc.moved', {
-        npc: npc.id,
-        from: from?.id ?? '',
-        to: to.id,
-      });
-      await unlocate(db, event.seq, npc.id);
-      await relate(db, event.seq, npc.id, to.id, 'LOCATED_IN');
-      return event;
-    });
-  }
-
-  /**
-   * `relation.set`: writes or rewrites a tie between two entities (anywhere, the player too):
-   * allegiance, grudge, debt, trust. An existing tie between them, in either direction, gets
-   * the new description; otherwise a new one goes from `a` to `b`.
-   */
-  setRelation(a: string, b: string, description: string, type: string = 'INTERACTS_WITH'): Promise<Outcome> {
-    return this.command('gm', async ({ state, log, db }) => {
-      if (!(TIE_TYPES as readonly string[]).includes(type)) {
-        reject(`${type} is not a tie; allowed: ${TIE_TYPES.join(', ')}. Places and possessions change by moving.`);
-      }
-      if (!description.trim()) reject('Describe the tie: how one stands with the other now.');
-      const [one, other] = await this.pair(state, a, b);
-      const existing = (await this.tiesBetween(db, one.id, other.id)).find((t) => t.type === type);
-      const [src, dst] = existing ? [existing.src, existing.dst] : [one.id, other.id];
-      const event = await log.append(this.turn, this.actor, 'relation.set', {
-        src,
-        dst,
-        type,
-        description: description.trim(),
-        before: existing?.description ?? null,
-      });
-      await relate(db, event.seq, src, dst, type, description.trim());
+      const description = input.description;
+      await putEntity(db, event.seq, { id, type, subtype: null, name, description, props: { added: true } });
+      await relate(db, event.seq, id, here.id, 'LOCATED_IN');
       return event;
     });
   }
@@ -436,8 +332,8 @@ export class World {
    * deleted (ADR 42).
    */
   cancelRelation(a: string, b: string, type?: string): Promise<Outcome> {
-    return this.command('gm', async ({ state, log, db }) => {
-      const [one, other] = await this.pair(state, a, b);
+    return this.command('gm', async ({ state, log, db }, player) => {
+      const [one, other] = await this.pair(state, player, a, b);
       const ties = (await this.tiesBetween(db, one.id, other.id)).filter((t) => !type || t.type === type);
       if (ties.length === 0) reject(`${one.name} and ${other.name} have no tie${type ? ` of type ${type}` : ''}.`);
       const event = await log.append(this.turn, this.actor, 'relation.cancelled', {
@@ -446,18 +342,6 @@ export class World {
         removed: ties,
       });
       for (const t of ties) await unrelate(db, event.seq, t.src, t.dst, t.type);
-      return event;
-    });
-  }
-
-  /** `player.updated`: the player's description (wounds, clothes, reputation…). */
-  updatePlayer(description: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, log }, player) => {
-      const event = await log.append(this.turn, this.actor, 'player.updated', {
-        before: player.description,
-        after: description,
-      });
-      await putEntity(db, event.seq, { ...player, description });
       return event;
     });
   }
@@ -500,13 +384,173 @@ export class World {
 
   // --- internals -----------------------------------------------------------------------------
 
-  /** Two different entities, each by id or name anywhere in the world. */
-  private async pair(state: WorldState, a: string, b: string): Promise<[Entity, Entity]> {
-    const all = await state.allEntities();
-    const find = async (target: string) =>
-      (await state.entity(target)) ?? pick(state.resolve(target, all), target, () => `There is no "${target}".`);
-    const one = await find(a);
-    const other = await find(b);
+  /** `LOCATED_IN`: the player walks, a being goes anywhere, a thing is put down or moved. */
+  private async place(tx: Tx, player: Entity, a: string, b: string): Promise<WorldEvent> {
+    const { db, state, log } = tx;
+    const thing = await this.find(state, player, a);
+    if (thing.id === player.id) return this.walk(tx, player, b);
+    const where = await this.find(state, player, b);
+    if (thing.id === where.id) reject(`${thing.name} cannot be inside itself.`);
+    if (BEINGS.includes(thing.type)) {
+      if (where.type !== 'LOCATION') reject(`${thing.name} can only go to a location; ${where.name} is not one.`);
+      const from = await state.locationOf(thing.id);
+      if (from?.id === where.id) reject(`${thing.name} is already in ${where.name}.`);
+      const event = await log.append(this.turn, this.actor, 'npc.moved', {
+        npc: thing.id,
+        from: from?.id ?? '',
+        to: where.id,
+      });
+      await unlocate(db, event.seq, thing.id);
+      await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+      return event;
+    }
+    if (thing.type === 'LOCATION') reject(`${thing.name} is a place; places stay where the story put them.`);
+    if (BEINGS.includes(where.type) || where.type === 'PLAYER') {
+      reject(`To give ${thing.name} to ${where.name}, use HAS_ITEM: ${where.name} has ${thing.name}.`);
+    }
+    if ((await state.inventory(player.id)).some((e) => e.id === thing.id)) {
+      const here = await state.locationOf(player.id);
+      if (!here) reject('The player is nowhere; the session has not placed them.');
+      const near = [here, ...(await this.reachable(state, player)), ...(await state.inventory(player.id))];
+      if (!near.some((e) => e.id === where.id)) {
+        reject(`The player can put ${thing.name} down only here (${here.name}) or into something here.`);
+      }
+      const event = await log.append(this.turn, this.actor, 'item.dropped', { item: thing.id, to: where.id });
+      await unplace(db, event.seq, thing.id);
+      await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+      return event;
+    }
+    const [from = ''] = await state.placesOf(thing.id);
+    if (from === where.id) reject(`${thing.name} is already in ${where.name}.`);
+    const event = await log.append(this.turn, this.actor, 'item.moved', { item: thing.id, from, to: where.id });
+    await unplace(db, event.seq, thing.id);
+    await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+    return event;
+  }
+
+  /** The player goes only along an exit of the current location (`player.moved`). */
+  private async walk({ db, state, log }: Tx, player: Entity, target: string): Promise<WorldEvent> {
+    const here = await state.locationOf(player.id);
+    if (!here) reject('The player is nowhere; the session has not placed them.');
+    if (target === here.id || normalizeName(target) === normalizeName(here.name)) {
+      reject(`The player is already in ${here.name}.`);
+    }
+    const exits = await state.exits(here.id);
+    const to = pick(
+      state.resolve(target, exits.map((exit) => exit.to)),
+      target,
+      () =>
+        `There is no path from ${here.name} to "${target}". Exits: ${
+          exits.map((exit) => describeExit(exit)).join('; ') || 'none'
+        }.`,
+    );
+    const event = await log.append(this.turn, this.actor, 'player.moved', { from: here.id, to: to.id });
+    await unlocate(db, event.seq, player.id);
+    await relate(db, event.seq, player.id, to.id, 'LOCATED_IN');
+    return event;
+  }
+
+  /** `HAS_ITEM`: the player takes, someone else gets a thing; into a place it is `LOCATED_IN`. */
+  private async give(tx: Tx, player: Entity, a: string, b: string): Promise<WorldEvent> {
+    const { db, state, log } = tx;
+    const holder = await this.find(state, player, a);
+    if (holder.id === player.id) return this.take(tx, player, b);
+    if (!BEINGS.includes(holder.type)) return this.place(tx, player, b, a); // a place or a container
+    const item = await this.find(state, player, b);
+    if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
+    if ((await state.inventory(holder.id)).some((e) => e.id === item.id)) {
+      reject(`${holder.name} already has ${item.name}.`);
+    }
+    if ((await state.inventory(player.id)).some((e) => e.id === item.id)) {
+      const here = await state.locationOf(player.id);
+      if ((await state.locationOf(holder.id))?.id !== here?.id) {
+        reject(`${holder.name} is not here to receive ${item.name}.`);
+      }
+    }
+    const [from = ''] = await state.placesOf(item.id);
+    const event = await log.append(this.turn, this.actor, 'item.moved', { item: item.id, from, to: holder.id });
+    await unplace(db, event.seq, item.id);
+    await relate(db, event.seq, holder.id, item.id, 'HAS_ITEM');
+    return event;
+  }
+
+  /**
+   * `item.taken`: a portable item that lies here, or inside something that lies here. An item
+   * an NPC here holds only after a played-out attempt (ADR 32, 34): this turn already has that
+   * NPC's `npc.reacted`, and the master decided the attempt worked.
+   */
+  private async take({ db, state, log }: Tx, player: Entity, target: string): Promise<WorldEvent> {
+    const owned = state.resolve(target, await state.inventory(player.id));
+    if (owned.kind === 'found') reject(`The player already has ${owned.entity.name}.`);
+    const reachable = await this.reachable(state, player);
+    const held = await this.heldByNpcsHere(state, player);
+    const item = pick(
+      state.resolve(target, [...reachable, ...held.map((h) => h.item)]),
+      target,
+      () => `There is no "${target}" here to take.`,
+    );
+    if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
+    if (item.props.fixed === true) reject(`${item.name} is fixed in place and cannot be taken.`);
+    const holder = held.find((h) => h.item.id === item.id)?.npc;
+    if (holder && !(await log.reacted(this.turn, holder.id))) {
+      reject(
+        `${holder.name} has ${item.name}. Play out the attempt first: call npc_react for ` +
+          `${holder.name}, then take it only if the attempt succeeds.`,
+      );
+    }
+    const [from = ''] = await state.placesOf(item.id);
+    const event = await log.append(this.turn, this.actor, 'item.taken', { item: item.id, from });
+    await unplace(db, event.seq, item.id);
+    await relate(db, event.seq, player.id, item.id, 'HAS_ITEM');
+    return event;
+  }
+
+  /**
+   * `relation.set`: writes or rewrites a tie between two entities (anywhere, the player too):
+   * allegiance, grudge, debt, trust. An existing tie of this type between them, in either
+   * direction, gets the new description; otherwise a new one goes from `a` to `b`.
+   */
+  private async tie(
+    { db, state, log }: Tx,
+    player: Entity,
+    a: string,
+    b: string,
+    type: string,
+    description: string,
+  ): Promise<WorldEvent> {
+    if (!description.trim()) reject('Describe the tie: how one stands with the other now.');
+    const [one, other] = await this.pair(state, player, a, b);
+    const existing = (await this.tiesBetween(db, one.id, other.id)).find((t) => t.type === type);
+    const [src, dst] = existing ? [existing.src, existing.dst] : [one.id, other.id];
+    const event = await log.append(this.turn, this.actor, 'relation.set', {
+      src,
+      dst,
+      type,
+      description: description.trim(),
+      before: existing?.description ?? null,
+    });
+    await relate(db, event.seq, src, dst, type, description.trim());
+    return event;
+  }
+
+  /** An entity by exact id, else by name: what the player can see first, then the whole world. */
+  private async find(
+    state: WorldState,
+    player: Entity,
+    target: string,
+    notFound = () => `There is no "${target}".`,
+  ): Promise<Entity> {
+    const byId = await state.entity(target.trim());
+    if (byId) return byId;
+    const near = state.resolve(target, await state.visible()); // the player is among them
+    if (near.kind !== 'none') return pick(near, target, notFound);
+    return pick(state.resolve(target, await state.allEntities()), target, notFound);
+  }
+
+  /** Two different entities, each by id or name. */
+  private async pair(state: WorldState, player: Entity, a: string, b: string): Promise<[Entity, Entity]> {
+    const one = await this.find(state, player, a);
+    const other = await this.find(state, player, b);
     if (one.id === other.id) reject(`A tie needs two different parties; both are ${one.name}.`);
     return [one, other];
   }

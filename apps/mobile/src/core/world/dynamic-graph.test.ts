@@ -61,12 +61,12 @@ async function storyGraph(of: Db) {
 
 describe('the static graph', () => {
   it('stays exactly as the story file has it after a playthrough', async () => {
-    expectOk(await world.take('brass lantern'));
-    expectOk(await world.editEntity(MAGS, { description: 'Wary of the stranger now.', props: { angry: true } }));
-    expectOk(await world.addEntity({ name: 'Spilled Ale', type: 'OTHER', description: 'A sticky puddle.' }));
-    expectOk(await world.updatePlayer('Aria, soaked.'));
-    expectOk(await world.move(LAMPLIGHT));
-    expectOk(await world.drop('brass lantern'));
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
+    expectOk(await world.setEntity({ id: MAGS, description: 'Wary of the stranger now.' }));
+    expectOk(await world.setEntity({ name: 'Spilled Ale', type: 'OTHER', description: 'A sticky puddle.' }));
+    expectOk(await world.setEntity({ id: 'player', description: 'Aria, soaked.' }));
+    expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
+    expectOk(await world.setRelation('brass lantern', 'LOCATED_IN', LAMPLIGHT));
     await write(async (tx) => {
       await unrelate(tx, 99, MAGS, PIP, 'INTERACTS_WITH');
       await relate(tx, 99, MAGS, 'npc:silas-ashcombe', 'INTERACTS_WITH', 'made peace with Silas');
@@ -111,24 +111,24 @@ describe('CANCEL', () => {
 
   it('is lifted when the relation is written again: the story relation comes back as it was', async () => {
     const [before] = await between('item:brass-lantern', TAVERN);
-    expectOk(await world.take('brass lantern'));
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'brass lantern'));
     expect(await between('item:brass-lantern', TAVERN)).toEqual([]);
-    expectOk(await world.drop('brass lantern'));
+    expectOk(await world.setRelation('brass lantern', 'LOCATED_IN', TAVERN));
 
     expect(await between('item:brass-lantern', TAVERN)).toEqual([before]);
     expect(await db.all("SELECT * FROM dyn_relations WHERE src = 'item:brass-lantern'")).toEqual([]);
   });
 
   it('is not needed for a dynamic relation: that one is simply removed', async () => {
-    expectOk(await world.addEntity({ name: 'Copper Coin', type: 'ITEM', description: '' }));
-    expectOk(await world.take('copper coin'));
+    expectOk(await world.setEntity({ name: 'Copper Coin', type: 'ITEM', description: '' }));
+    expectOk(await world.setRelation('player', 'HAS_ITEM', 'copper coin'));
     expect(await db.all("SELECT type FROM dyn_relations WHERE src = 'item:copper-coin'")).toEqual([]);
   });
 });
 
 describe('the dynamic graph', () => {
   it('overrides a story entity as a whole, the story row stays', async () => {
-    expectOk(await world.editEntity(MAGS, { description: 'Done with conspiracies.' }));
+    expectOk(await world.setEntity({ id: MAGS, description: 'Done with conspiracies.' }));
     expect(await world.state.entity(MAGS)).toMatchObject({
       name: 'Mags Holloway',
       type: 'NPC',
@@ -153,9 +153,9 @@ describe('the dynamic graph', () => {
     const order = (await world.state.ties(MAGS)).map((t) => t.other.id);
     await write(async (tx) => {
       await unrelate(tx, 99, MAGS, PIP, 'INTERACTS_WITH');
-      await relate(tx, 99, MAGS, 'player:c1', 'INTERACTS_WITH', 'turned down her offer to join the crew');
+      await relate(tx, 99, MAGS, 'player', 'INTERACTS_WITH', 'turned down her offer to join the crew');
     });
     const ties = await world.state.ties(MAGS);
-    expect(ties.map((t) => t.other.id)).toEqual([...order.filter((id) => id !== PIP), 'player:c1']);
+    expect(ties.map((t) => t.other.id)).toEqual([...order.filter((id) => id !== PIP), 'player']);
   });
 });

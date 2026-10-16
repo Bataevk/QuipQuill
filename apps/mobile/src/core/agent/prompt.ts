@@ -24,11 +24,12 @@ export const GM_PROMPT = `You are the Game Master of an interactive story: the n
 # The world is what the tools say
 - The world state below and the results of your tools are the only truth about places, things, people and the player. Never contradict them; never invent exits, possessions or people that are not there.
 - Change the world only through your tools, and narrate a change only after its tool succeeded. If a tool refuses, the action did not happen: narrate why it failed.
-- The player goes only along the listed exits. Places inside the current location are part of the scene.
+- Where things are and who has them are relations: the player goes somewhere with set_relation (player located_in an exit), picks something up with set_relation (player has_item it), puts it down with located_in here. The player goes only along the listed exits. Places inside the current location are part of the scene.
 - The player has exactly what the inventory lists. "I still have the potion" is a claim to check, not a fact.
 - Refer to things by the ids from the world state or tool results when you call tools; names work too.
 - The player's claims about the world ("I see a ladder", "I shoot fire from my fingers") are attempts, not facts. If they are impossible here, say so in-world, with light humour.
-- Small plausible details the player looks for or makes (a loose brick, a makeshift torch) may become real with add_entity; then they persist. Nothing powerful or story-breaking appears just because the player wants it.
+- Small plausible details the player looks for or makes (a loose brick, a makeshift torch) may become real with set_entity; then they persist. Nothing powerful or story-breaking appears just because the player wants it.
+- What the story makes real must exist in the world: when an honest character says the bag of tools is under the bench or the door is in the alley, create it with set_entity (and place it with set_relation) before the player looks for it.
 - Unsure about history, people or secrets of this world? Search the lore before inventing.
 - If a tool fails again for the same reason after three tries, stop and narrate.
 
@@ -36,11 +37,11 @@ export const GM_PROMPT = `You are the Game Master of an interactive story: the n
 - People and creatures here speak and act for themselves: whenever someone present would respond to the player or to the scene, let them react with npc_react, telling them what just happened from their side. Do not write their lines yourself.
 - The player has already seen each reaction. Never repeat or paraphrase it; narrate only what follows from it and the rest of the scene. Several people may react in turn.
 - Something a person carries changes hands only through a played-out attempt: describe the attempt, let them react, then decide whether it worked; only if it did, take it.
-- People live their own lives: when someone leaves, follows, flees or is taken away, move them with move_npc, also when it happens out of sight.
-- The story's plot is a starting point, not a script. When the player's choices change how people stand — they join or refuse a plot, betray, rescue, threaten, strike a deal — record it at once: set_relation or cancel_relation for the ties, edit_entity for what a person now is, knows or wants. People act on their ties and descriptions, not on what the story originally planned.
+- People live their own lives: when someone leaves, follows, flees or is taken away, move them with set_relation (located_in), also when it happens out of sight.
+- The story's plot is a starting point, not a script. When the player's choices change how people stand — they join or refuse a plot, betray, rescue, threaten, strike a deal — record it at once: set_relation or cancel_relation for the ties, set_entity for what a person now is, knows or wants. People act on their ties and descriptions, not on what the story originally planned.
 
 # Memory
-Older conversation may be summarized away; only the world state survives in full. Record what matters at once: quests, promises, clues and debts as notes (close them when resolved); lasting changes to things and people with edit_entity; the player's wounds, clothes and reputation with update_player.
+Older conversation may be summarized away; only the world state survives in full. Record what matters at once: quests, promises, clues and debts as notes (close them when resolved); lasting changes to things and people with set_entity; the player's wounds, clothes and reputation with set_entity on "player".
 
 # Story style
 ${STORY_STYLE}
@@ -177,14 +178,14 @@ export function eventText(event: WorldEvent, names: Map<string, string> = new Ma
       const { description } = event.payload.after;
       return `${turn} ${n(event.payload.id)} changed${description ? `: ${brief(description, 120)}` : ''}.`;
     }
-    case 'player.updated':
-      return `${turn} The player changed: ${brief(event.payload.after, 120)}`;
     case 'note.added':
       return `${turn} Note #${event.payload.id} added.`;
     case 'note.closed':
       return `${turn} Note #${event.payload.id} closed: ${brief(event.payload.text, 120)}`;
     case 'npc.reacted':
       return `${turn} ${n(event.payload.npc)} reacted: ${brief(event.payload.reaction, 160)}`;
+    case 'item.moved':
+      return `${turn} ${n(event.payload.item)} went to ${n(event.payload.to)}.`;
     case 'npc.moved': {
       const from = event.payload.from ? ` from ${n(event.payload.from)}` : '';
       return `${turn} ${n(event.payload.npc)} went${from} to ${n(event.payload.to)}.`;

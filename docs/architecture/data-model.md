@@ -141,14 +141,14 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 
 | `kind` | `payload` | Изменение состояния |
 |---|---|---|
-| `session.started` | `{story_id, character_id, player}` | история не копируется; в `dyn_entities` — сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
+| `session.started` | `{story_id, character_id, player}` | история не копируется; в `dyn_entities` — сущность игрока `player` (ровно этот id, ADR 43; тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
 | `character.adapted` | `{original, adapted, choice}`; `choice` — `adapted` или `alternative N` | имя, описание, `props.race` и `props.age` игрока (ADR 37) |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
 | `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `npc.reacted` (ADR 32, 34); `from` — NPC |
-| `item.dropped` | `{item, to}` | `HAS_ITEM` → `LOCATED_IN` текущей локации |
-| `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации или `player HAS_ITEM` |
-| `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
-| `player.updated` | `{before, after}` | описание игрока |
+| `item.dropped` | `{item, to}` | из рук игрока → `LOCATED_IN` текущей локации или контейнера здесь |
+| `item.moved` | `{item, from, to}` | вещь, которую переносит или передаёт мастер (не рука игрока): все прежние размещения → `item LOCATED_IN to` или `to HAS_ITEM item`; из рук игрока — только тому, кто рядом (ADR 43) |
+| `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации; в руки — следующим `set_relation` (`item.taken`) |
+| `entity.edited` | `{id, before, after}` | имя и/или описание; игрок — тоже (`id = player`, ADR 43) |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
 | `npc.moved` | `{npc, from, to}`; `from` пуст, если NPC нигде не был | `LOCATED_IN` NPC или существа: прежнее место снимается (связь истории — `CANCEL`) + новое; цель — любая `LOCATION` (ADR 42) |
 | `relation.set` | `{src, dst, type, description, before}`; `before` — `null` для новой | связь-отношение (`INTERACTS_WITH` / `HAS_ATTRIBUTE`); уже существующая между теми же сторонами (в любую сторону) получает новое описание, её `src`/`dst` сохраняются; иначе новая в `dyn_relations` |

@@ -3,6 +3,7 @@ import { joinPath, type FileStore } from '../storage/files';
 import { migrate } from '../storage/migrate';
 import { newId, nowIso } from '../util/ids';
 import type { AppRepository, SaveRecord } from './app-db';
+import { PLAYER_ID } from '../world/model';
 import { OUTDATED_SAVE_VERSION, SAVE_SCHEMA_STEPS } from './save-schema';
 
 export const SAVES_DIR = 'saves';
@@ -19,8 +20,8 @@ export class SaveMissingError extends Error {
 }
 
 /**
- * The save was played on an older world schema (a full copy of the story, ADR 4) and cannot be
- * carried over to the dynamic graph (ADR 42). It can be started over or deleted.
+ * The save was played on an older world (a full copy of the story, ADR 4; the player as
+ * `player:<id>`, ADR 43) and cannot be carried over. It can be started over or deleted.
  */
 export class SaveOutdatedError extends Error {
   readonly saveId: string;
@@ -146,9 +147,13 @@ export class SaveManager {
   }
 }
 
-/** A save on the old schema (state_* copies) that has already started: nothing to migrate it to. */
+/**
+ * A save that has started on an older world: the state_* copies (schema v1), or a player that is
+ * not the entity `player` (before ADR 43). Nothing to carry it over to.
+ */
 async function isOutdated(db: Db): Promise<boolean> {
   const version = Number((await db.get<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0);
-  if (version !== OUTDATED_SAVE_VERSION) return false;
-  return !!(await db.get('SELECT 1 FROM events LIMIT 1'));
+  if (version === OUTDATED_SAVE_VERSION) return !!(await db.get('SELECT 1 FROM events LIMIT 1'));
+  if (version < 2) return false;
+  return !!(await db.get("SELECT 1 FROM dyn_entities WHERE type = 'PLAYER' AND id <> ? LIMIT 1", [PLAYER_ID]));
 }

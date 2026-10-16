@@ -110,7 +110,12 @@ describe('session start: an elf in a world without elves', () => {
 
     // the choice: character.adapted, the adaptation chat is gone, the master opens the story
     master.push(
-      { toolCalls: [{ name: 'add_entity', args: { name: 'short bow', type: 'item', description: 'Yew, well oiled.', place: 'inventory' } }] },
+      {
+        toolCalls: [
+          { name: 'set_entity', args: { name: 'short bow', type: 'item', description: 'Yew, well oiled.' } },
+          { name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'short bow' } },
+        ],
+      },
       (messages) => {
         const state = systemText(messages);
         return {
@@ -126,7 +131,7 @@ describe('session start: an elf in a world without elves', () => {
       'Smoke hangs low in the Rusty Gear. Mags Holloway looks up from the plan: "You must be the archer."',
     );
     const kinds = (await world.log.recent(10)).map((e) => e.kind);
-    expect(kinds).toEqual(['session.started', 'character.adapted', 'entity.added']);
+    expect(kinds).toEqual(['session.started', 'character.adapted', 'entity.added', 'item.taken']);
     const adaptedEvent = (await world.log.recent(10))[1];
     expect(adaptedEvent.payload).toMatchObject({ adapted: ADAPTED, choice: 'alternative 1', original: ELF });
     const player = (await world.state.player())!;

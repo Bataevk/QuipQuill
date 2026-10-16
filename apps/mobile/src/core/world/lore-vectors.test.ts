@@ -76,7 +76,7 @@ describe('lore search over the dynamic graph', () => {
     const oldMeaning = await storyVector(MAGS, 'desc');
     expect(await top(oldMeaning)).toBe(MAGS);
 
-    expectOk(await world.editEntity(MAGS, { description: NEW_MAGS }));
+    expectOk(await world.setEntity({ id: MAGS, description: NEW_MAGS }));
     await world.refreshLore();
 
     expect(await top(oldMeaning)).not.toBe(MAGS);
@@ -89,7 +89,7 @@ describe('lore search over the dynamic graph', () => {
   });
 
   it('computes the vectors in the background after the change', async () => {
-    expectOk(await world.editEntity(MAGS, { description: NEW_MAGS }));
+    expectOk(await world.setEntity({ id: MAGS, description: NEW_MAGS }));
     await vi.waitFor(async () => {
       expect(await db.all('SELECT kind FROM dyn_embeddings')).toEqual([{ kind: 'desc' }]);
     });
@@ -99,7 +99,7 @@ describe('lore search over the dynamic graph', () => {
   it('works without network: the rewritten text is skipped until its vector is computed', async () => {
     online = false;
     const oldMeaning = await storyVector(MAGS, 'desc');
-    expectOk(await world.editEntity(MAGS, { description: NEW_MAGS }));
+    expectOk(await world.setEntity({ id: MAGS, description: NEW_MAGS }));
     await expect(world.refreshLore()).rejects.toThrow('network is down');
 
     expect(await top(oldMeaning)).not.toBe(MAGS);
@@ -112,17 +112,17 @@ describe('lore search over the dynamic graph', () => {
   });
 
   it('does not use a vector of an earlier rewrite', async () => {
-    expectOk(await world.editEntity(MAGS, { description: 'First rewrite.' }));
+    expectOk(await world.setEntity({ id: MAGS, description: 'First rewrite.' }));
     await world.refreshLore();
     online = false;
-    expectOk(await world.editEntity(MAGS, { description: 'Second rewrite.' }));
+    expectOk(await world.setEntity({ id: MAGS, description: 'Second rewrite.' }));
     await world.refreshLore().catch(() => 0);
 
     expect(await scoreOf(MAGS, fakeEmbedding('Mags Holloway: First rewrite.')) ?? 0).toBeLessThan(0.9);
   });
 
   it('makes added entities searchable by name and description', async () => {
-    expectOk(await world.addEntity({ name: 'Copper Coin', type: 'ITEM', description: 'A dented coin.' }));
+    expectOk(await world.setEntity({ name: 'Copper Coin', type: 'ITEM', description: 'A dented coin.' }));
     await world.refreshLore();
 
     expect(await top(fakeEmbedding('Copper Coin'))).toBe('item:copper-coin');
@@ -139,14 +139,14 @@ describe('lore search over the dynamic graph', () => {
   });
 
   it('leaves the player out: their description is not lore', async () => {
-    expectOk(await world.updatePlayer('Aria, soaked to the bone.'));
+    expectOk(await world.setEntity({ id: 'player', description: 'Aria, soaked to the bone.' }));
     expect(await world.refreshLore()).toBe(0);
     expect(embedded).toEqual([]);
   });
 
   it('catches up on vectors that were missing when the save is opened again', async () => {
     online = false;
-    expectOk(await world.editEntity(MAGS, { description: NEW_MAGS }));
+    expectOk(await world.setEntity({ id: MAGS, description: NEW_MAGS }));
     await world.refreshLore().catch(() => 0);
 
     online = true;

@@ -22,19 +22,13 @@ export interface GmToolDeps {
 }
 
 export const GM_TOOL_NAMES = [
-  'move',
   'inspect',
-  'take',
-  'drop',
   'search_lore',
-  'add_entity',
-  'edit_entity',
-  'update_player',
-  'note',
-  'npc_react',
-  'move_npc',
+  'set_entity',
   'set_relation',
   'cancel_relation',
+  'note',
+  'npc_react',
 ] as const;
 
 const LORE_HITS = 5;
@@ -55,24 +49,6 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
         }
       });
   const name = async (id: string) => (await world.state.entity(id))?.name ?? id;
-
-  const move = tool(
-    guarded('move', async ({ to }: { to: string }) =>
-      result(await world.move(to), async (e) =>
-        e.kind === 'player.moved'
-          ? `The player is now in ${await name(e.payload.to)} [${e.payload.to}]. ` +
-            'The world state shows the new scene.'
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'move',
-      description:
-        'Move the player to an adjacent location, along one of the exits listed in the world state. ' +
-        'Call it only when the player goes there; then describe the arrival from the updated world state.',
-      schema: z.object({ to: z.string().describe('Exit id (loc:…) or name of the destination') }),
-    },
-  );
 
   const inspect = tool(
     guarded('inspect', async ({ target }: { target: string }) => {
@@ -95,41 +71,6 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     },
   );
 
-  const take = tool(
-    guarded('take', async ({ item }: { item: string }) =>
-      result(await world.take(item), async (e) =>
-        e.kind === 'item.taken'
-          ? `The player now has ${await name(e.payload.item)} [${e.payload.item}]` +
-            (e.payload.from ? ` (taken from ${await name(e.payload.from)}).` : '.')
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'take',
-      description:
-        'Put an item into the player\'s inventory: one lying here, or inside a container that is here. ' +
-        'Things fixed in place, people and locations cannot be taken. Something an NPC here carries ' +
-        'can be taken only after a played-out attempt: first npc_react for that NPC, then take only if ' +
-        'you decide the attempt succeeded.',
-      schema: z.object({ item: z.string().describe('Item id or name') }),
-    },
-  );
-
-  const drop = tool(
-    guarded('drop', async ({ item }: { item: string }) =>
-      result(await world.drop(item), async (e) =>
-        e.kind === 'item.dropped'
-          ? `${await name(e.payload.item)} [${e.payload.item}] now lies in ${await name(e.payload.to)}.`
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'drop',
-      description: 'Leave an item from the inventory in the current location (dropped, put down, set aside).',
-      schema: z.object({ item: z.string().describe('Item id or name from the inventory') }),
-    },
-  );
-
   const searchLore = tool(
     guarded('search_lore', async ({ query }: { query: string }) => {
       if (!embed) return 'Error: lore search is not available right now. Rely on the world state.';
@@ -149,70 +90,77 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     },
   );
 
-  const addEntity = tool(
-    guarded(
-      'add_entity',
-      async (args: { name: string; type: Addable; description: string; place?: 'here' | 'inventory' }) =>
-        result(
-          await world.addEntity({
-            name: args.name,
-            type: args.type.toUpperCase() as EntityType,
-            description: args.description,
-            inInventory: args.place === 'inventory',
-          }),
-          async (e) =>
-            e.kind === 'entity.added'
-              ? `Added ${await name(e.payload.entity)} [${e.payload.entity}] ${
-                  e.payload.relation.type === 'HAS_ITEM' ? 'to the inventory' : 'here'
-                }. It is now a lasting part of the world.`
-              : 'Done.',
-        ),
+  const setEntity = tool(
+    guarded('set_entity', async (args: { id?: string; name?: string; type?: Creatable; description?: string }) =>
+      result(await world.setEntity(args), (e) => said(e)),
     ),
     {
-      name: 'add_entity',
+      name: 'set_entity',
       description:
-        'Make a new detail real in the current scene, or in the player\'s hands: a small plausible thing ' +
-        'the player finds or makes (a loose brick, a makeshift torch), a passer-by, a stray cat. ' +
-        'It persists afterwards. Not for places, and not for anything powerful or story-breaking.',
+        'Make something real, or change it. With id: change the fields you give of anything — a thing, a person, ' +
+        'a place, or the player (id "player": wounds, clothes, disguise, reputation); a description replaces the ' +
+        'old one whole. Without id: create something new in the current location — name, type and description ' +
+        "are all required; it persists, and set_relation can put it in someone's hands. Use it as soon as the " +
+        'story makes something real: what an honest character said is there, what the player finds or makes. ' +
+        'Nothing powerful or story-breaking, never places.',
       schema: z.object({
-        name: z.string().describe('Short unique name, e.g. "makeshift torch"'),
+        id: z.string().optional().describe('Id or name of what to change; leave it out to create something new'),
+        name: z.string().optional().describe('Short unique name, e.g. "bag of tools" (required to create)'),
         type: z
-          .enum(ADDABLE)
-          .describe('item or document: can be carried; npc, creature; other: anything else'),
-        description: z.string().describe('What it is and looks like, one or two sentences'),
-        place: z.enum(['here', 'inventory']).optional().describe('Default: here'),
+          .enum(CREATABLE)
+          .optional()
+          .describe('Required to create. item or document: can be carried; npc, creature; other: anything else'),
+        description: z.string().optional().describe('The whole description: what it is, looks like, its state'),
       }),
     },
   );
 
-  const editEntity = tool(
-    guarded('edit_entity', async ({ target, description }: { target: string; description: string }) =>
-      result(await world.editEntity(target, { description }), async (e) =>
-        e.kind === 'entity.edited' ? `${await name(e.payload.id)} [${e.payload.id}] is updated.` : 'Done.',
-      ),
+  const setRelation = tool(
+    guarded(
+      'set_relation',
+      async ({ a, relation, b, description }: { a: string; relation: RelationName; b: string; description?: string }) =>
+        result(await world.setRelation(a, relation.toUpperCase(), b, description), (e) => said(e)),
     ),
     {
-      name: 'edit_entity',
+      name: 'set_relation',
       description:
-        'Record a lasting change to a thing, person or place: broken, opened, lit, angry, gone quiet. ' +
-        'Give the whole new description (it replaces the old one). Not for the player: use update_player.',
+        'Make a relation true; the world checks its rules and refuses what cannot happen. ' +
+        'located_in — a is in b: the player goes to b (only along a listed exit); a person or creature goes to ' +
+        'any location, in sight or not; something is put down here or into a container. ' +
+        'has_item — a carries b: the player takes something here (from a person here only after npc_react and ' +
+        'a played-out attempt); someone gets or is given a thing. ' +
+        "interacts_with — how a stands with b now (allegiance, grudge, debt, trust), told from a's side; it " +
+        'replaces the old tie between them. has_attribute — a lasting quality b of a. ' +
+        'Something is in one place at a time: the old place goes by itself.',
       schema: z.object({
-        target: z.string().describe('Id or name'),
-        description: z.string().describe('The full new description'),
+        a: z.string().describe('Id or name: who or what the relation is about ("player" for the player)'),
+        relation: z.enum(RELATIONS),
+        b: z.string().describe('Id or name of the other side: a place, a container, a thing, a person'),
+        description: z
+          .string()
+          .optional()
+          .describe(
+            'For interacts_with and has_attribute: the tie as it is now, e.g. ' +
+              '"the stranger refused to join the heist; she no longer trusts them"',
+          ),
       }),
     },
   );
 
-  const updatePlayer = tool(
-    guarded('update_player', async ({ description }: { description: string }) =>
-      result(await world.updatePlayer(description), async () => "The player's description is updated."),
+  const cancelRelation = tool(
+    guarded('cancel_relation', async ({ a, b }: { a: string; b: string }) =>
+      result(await world.cancelRelation(a, b), (e) => said(e)),
     ),
     {
-      name: 'update_player',
+      name: 'cancel_relation',
       description:
-        "Record a lasting change to the player character: wounds, clothes, disguise, reputation. " +
-        'Give the whole new description (it replaces the old one).',
-      schema: z.object({ description: z.string().describe("The player character's full new description") }),
+        'End a tie that is no longer true — someone left a crew, broke an alliance, no longer serves or is owed. ' +
+        'Use it after set_relation, when the old tie stays behind as a lie (set_relation already rewrites a tie ' +
+        'of the same kind between the two). People stop acting on it.',
+      schema: z.object({
+        a: z.string().describe('Id or name of one side'),
+        b: z.string().describe('Id or name of the other side'),
+      }),
     },
   );
 
@@ -280,97 +228,44 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     },
   );
 
-  const moveNpc = tool(
-    guarded('move_npc', async ({ who, to }: { who: string; to: string }) =>
-      result(await world.moveNpc(who, to), async (e) =>
-        e.kind === 'npc.moved'
-          ? `${await name(e.payload.npc)} [${e.payload.npc}] is now in ` +
-            `${await name(e.payload.to)} [${e.payload.to}].`
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'move_npc',
-      description:
-        'Send a person or creature to another location — any place in the world, in sight or not: ' +
-        'they walk off, flee, are taken away, or go about their own business. Call it when they leave ' +
-        '(or arrive); afterwards they are found there. Not for the player: use move.',
-      schema: z.object({
-        who: z.string().describe('Id or name of the person or creature'),
-        to: z.string().describe('Id or name of the destination location'),
-      }),
-    },
-  );
+  /** What a world change means, for the model (names with ids). */
+  async function said(e: WorldEvent): Promise<string> {
+    const n = async (id: string) => `${await name(id)} [${id}]`;
+    switch (e.kind) {
+      case 'player.moved':
+        return `The player is now in ${await n(e.payload.to)}. The world state shows the new scene.`;
+      case 'npc.moved':
+        return `${await n(e.payload.npc)} is now in ${await n(e.payload.to)}.`;
+      case 'item.taken':
+        return `The player now has ${await n(e.payload.item)}${
+          e.payload.from ? ` (taken from ${await name(e.payload.from)})` : ''
+        }.`;
+      case 'item.dropped':
+        return `${await n(e.payload.item)} now lies in ${await name(e.payload.to)}.`;
+      case 'item.moved':
+        return `${await n(e.payload.item)} is now with ${await n(e.payload.to)}.`;
+      case 'entity.added':
+        return `Created ${await n(e.payload.entity)} here. It is now a lasting part of the world.`;
+      case 'entity.edited':
+        return `${await n(e.payload.id)} is updated.`;
+      case 'relation.set':
+        return `${await name(e.payload.src)} — ${await name(e.payload.dst)}: ${
+          e.payload.before === null ? 'tie recorded' : 'tie rewritten'
+        }. They will act on it.`;
+      case 'relation.cancelled':
+        return `${await name(e.payload.a)} and ${await name(e.payload.b)} are no longer tied.`;
+      default:
+        return 'Done.';
+    }
+  }
 
-  const setRelation = tool(
-    guarded('set_relation', async ({ a, b, description }: { a: string; b: string; description: string }) =>
-      result(await world.setRelation(a, b, description), async (e) =>
-        e.kind === 'relation.set'
-          ? `${await name(e.payload.src)} — ${await name(e.payload.dst)}: ${
-              e.payload.before === null ? 'tie recorded' : 'tie rewritten'
-            }. They will act on it.`
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'set_relation',
-      description:
-        'Record or rewrite how someone stands with another person, a group, a thing or the player: ' +
-        'allegiance, grudge, debt, trust, a deal. Use it as soon as a choice changes a relationship ' +
-        '(the player joins or refuses a plot, betrays, rescues, threatens). The description replaces ' +
-        'the old one and is what that person knows about the tie from now on.',
-      schema: z.object({
-        a: z.string().describe('Id or name of the one who holds the tie (usually the person)'),
-        b: z.string().describe('Id or name of the other side (a person, group, thing, or the player)'),
-        description: z
-          .string()
-          .describe(
-            'The tie as it is now, from a\'s side, e.g. ' +
-              '"the stranger refused to join the heist; she no longer trusts them"',
-          ),
-      }),
-    },
-  );
-
-  const cancelRelation = tool(
-    guarded('cancel_relation', async ({ a, b }: { a: string; b: string }) =>
-      result(await world.cancelRelation(a, b), async (e) =>
-        e.kind === 'relation.cancelled'
-          ? `${await name(e.payload.a)} and ${await name(e.payload.b)} are no longer tied.`
-          : 'Done.',
-      ),
-    ),
-    {
-      name: 'cancel_relation',
-      description:
-        'Remove a tie that is no longer true: someone left a crew, broke an alliance, no longer serves ' +
-        'or is owed. People stop acting on it. To change a tie rather than end it, use set_relation.',
-      schema: z.object({
-        a: z.string().describe('Id or name of one side'),
-        b: z.string().describe('Id or name of the other side'),
-      }),
-    },
-  );
-
-  return [
-    move,
-    inspect,
-    take,
-    drop,
-    searchLore,
-    addEntity,
-    editEntity,
-    updatePlayer,
-    note,
-    npcReact,
-    moveNpc,
-    setRelation,
-    cancelRelation,
-  ];
+  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, npcReact];
 }
 
-const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
-type Addable = (typeof ADDABLE)[number];
+const CREATABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
+type Creatable = (typeof CREATABLE)[number];
+const RELATIONS = ['located_in', 'has_item', 'interacts_with', 'has_attribute'] as const;
+type RelationName = (typeof RELATIONS)[number];
 
 async function result(outcome: Outcome, success: (event: WorldEvent) => Promise<string>): Promise<string> {
   return outcome.ok ? success(outcome.value) : `Error: ${outcome.error}`;

@@ -15,7 +15,7 @@ const TAVERN = 'loc:rusty-gear-tavern';
 const LAMPLIGHT = 'loc:lamplight-row';
 const MAGS = 'npc:mags-holloway';
 const PIP = 'npc:pip-quillon';
-const PLAYER = 'player:c1';
+const PLAYER = 'player';
 const CHARACTER = { id: 'c1', name: 'Aria', description: 'A cartographer.' };
 const TURN = {
   turn: 1,
@@ -61,7 +61,7 @@ describe('generator', () => {
     expect(stable.cache_control).toEqual({ type: 'ephemeral' });
     expect(stable.text).toMatch(/^You keep the world of an interactive story true to what happens in it\./);
     expect(stable.text).toContain(`Title: ${meta.title}`);
-    expect(context.text).toContain('# World state\nPlayer: Aria [player:c1].');
+    expect(context.text).toContain('# World state\nPlayer: Aria [player].');
     expect(context.text).toContain('# People involved\n- Mags Holloway [npc:mags-holloway] (npc), in The Rusty Gear');
     expect(context.text).toContain('  - Pip Quillon [npc:pip-quillon]: leader of the crew');
     expect(context.text).toContain(`Player: ${TURN.input}`);

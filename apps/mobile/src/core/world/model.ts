@@ -27,7 +27,10 @@ export interface Exit {
   description: string;
 }
 
-/** 'player:<id>' | 'gm' | 'generator' | 'npc:<id>' | 'system' */
+/** The player character's entity id (ADR 43): one player per playthrough. */
+export const PLAYER_ID = 'player';
+
+/** 'gm' | 'generator' | 'npc:<id>' | 'system' */
 export type Actor = string;
 
 /** Payload of each event kind. One event = one transaction with its state change. */
@@ -39,9 +42,10 @@ export interface EventPayloads {
   'item.dropped': { item: string; to: string };
   'entity.added': { entity: string; relation: { type: string; target: string } };
   'entity.edited': { id: string; before: EntityPatch; after: EntityPatch };
-  'player.updated': { before: string; after: string };
   'note.added': { id: number; text: string };
   'note.closed': { id: number; text: string };
+  /** A thing the master moved or handed over, not by the player's own hand (ADR 43). */
+  'item.moved': { item: string; from: string; to: string };
   /** A person or creature went to another location, in sight or not (ADR 42). */
   'npc.moved': { npc: string; from: string; to: string };
   /** A tie was written or rewritten; `before` is its old description, null if it is new. */
@@ -77,6 +81,7 @@ export interface Tie {
 export const TIE_TYPES = ['INTERACTS_WITH', 'HAS_ATTRIBUTE'] as const;
 
 export interface EntityPatch {
+  name?: string;
   description?: string;
   props?: Props;
 }

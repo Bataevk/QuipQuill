@@ -121,6 +121,21 @@ describe('SaveManager', () => {
     }
   });
 
+  it('refuses a game whose player is not the entity "player" (before ADR 43)', async () => {
+    env = await makeTestEnv();
+    await env.library.importer.import(DEMO_STORY);
+    const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: null, title: 'Old' });
+    const db = await env.library.saves.open(save.id);
+    await db.run(
+      "INSERT INTO dyn_entities (id, type, name, description, props, updated_seq) VALUES ('player:c1', 'PLAYER', 'Aria', '', '{}', 1)",
+    );
+    await db.close();
+
+    await expect(env.library.saves.open(save.id)).rejects.toBeInstanceOf(SaveOutdatedError);
+    await env.library.saves.restart(save.id);
+    await (await env.library.saves.open(save.id)).close();
+  });
+
   it('carries over an old-schema save that never started', async () => {
     env = await makeTestEnv();
     await env.library.importer.import(DEMO_STORY);

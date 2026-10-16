@@ -125,7 +125,8 @@ export function sessionStartCommand(character: CharacterOption, meta: Pick<Story
   return [
     `[session_start] "${meta.title}" begins now.`,
     `The player's character: ${character.name}${race ? `, ${race}` : ''}. ${character.description}`,
-    'First give the player the few possessions their description mentions, with add_entity (place: inventory). ' +
+    'First give the player the few possessions their description mentions: create each with set_entity, then ' +
+      'put it in their hands with set_relation (player has_item it). ' +
       "Then open the story with a vivid scene at the player's location from the world state: where they are, " +
       'who is there and what is at stake, ending where the player can act.',
   ].join('\n');

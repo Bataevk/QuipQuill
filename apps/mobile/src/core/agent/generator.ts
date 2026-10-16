@@ -11,7 +11,7 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 
 import type { StoryMeta } from '../story/story-meta';
-import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
+import { fail, PLAYER_ID, type Entity, type EntityType, type Outcome, type WorldEvent } from '../world/model';
 import type { World } from '../world/world';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
 import { exclusive } from './turn-lock';
@@ -196,17 +196,27 @@ export async function applyChanges(world: World, changes: WorldChanges): Promise
   await world.actingAs('generator', async () => {
     for (const c of changes.cancelled) await apply(`cancel ${c.a} — ${c.b}`, world.cancelRelation(c.a, c.b));
     for (const r of changes.relations) {
-      await apply(`relation ${r.a} — ${r.b}`, world.setRelation(r.a, r.b, r.description));
+      await apply(`relation ${r.a} — ${r.b}`, world.setRelation(r.a, 'INTERACTS_WITH', r.b, r.description));
     }
-    for (const m of changes.moves) await apply(`move ${m.who} → ${m.to}`, world.moveNpc(m.who, m.to));
+    for (const m of changes.moves) {
+      const who = await world.state.entity(m.who);
+      await apply(
+        `move ${m.who} → ${m.to}`,
+        who?.type === 'PLAYER'
+          ? refuse('the player moves only by their own choice')
+          : world.setRelation(m.who, 'LOCATED_IN', m.to),
+      );
+    }
     for (const e of changes.edits) {
-      await apply(`edit ${e.target}`, world.editEntity(e.target, { description: e.description }));
+      await apply(
+        `edit ${e.target}`,
+        e.target === PLAYER_ID
+          ? refuse('the master keeps the player')
+          : world.setEntity({ id: e.target, description: e.description }),
+      );
     }
     for (const a of changes.additions) {
-      await apply(
-        `add ${a.name}`,
-        world.addEntity({ name: a.name, type: a.type.toUpperCase() as EntityType, description: a.description }),
-      );
+      await apply(`add ${a.name}`, world.setEntity({ name: a.name, type: a.type, description: a.description }));
     }
   });
   return result;
@@ -243,3 +253,5 @@ function idsOf(event: WorldEvent): string[] {
     .map((key) => p[key])
     .filter((v): v is string => typeof v === 'string' && v.includes(':'));
 }
+
+const refuse = (why: string): Promise<Outcome> => Promise.resolve(fail(why));
