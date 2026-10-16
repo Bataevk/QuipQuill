@@ -14,5 +14,6 @@ fi
 
 docker compose pull --quiet
 docker compose up -d --wait --remove-orphans
-docker image prune -f >/dev/null
+# Old releases are dropped (the disk is 10 GB); a rollback pulls its tag from GHCR again.
+docker image prune -af >/dev/null
 docker compose ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}'
