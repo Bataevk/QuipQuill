@@ -27,7 +27,7 @@ export interface Exit {
   description: string;
 }
 
-/** 'player:<id>' | 'gm' | 'npc:<id>' | 'system' */
+/** 'player:<id>' | 'gm' | 'generator' | 'npc:<id>' | 'system' */
 export type Actor = string;
 
 /** Payload of each event kind. One event = one transaction with its state change. */

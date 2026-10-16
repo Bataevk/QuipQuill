@@ -41,6 +41,24 @@
 
 **Решение владельца:** LangChain JS — [ADR 25](../architecture/decisions.md#25-агент-мастера-на-langchain-js-v1-с-обходами-для-hermes).
 
+## 6.2d Живой прогон «отказ от ограбления»
+**Проведён 2026-10-16.** `QQ_RUNS=0 npm run test:live` (`apps/mobile/src/core/game/demo.live.test.ts`, второй тест): Ada Finch, адаптация, выбор, затем 5 ходов — спросить Mags, отказаться («I'm out: I won't rob a bank for anyone»), попросить выпивку, уйти на Lamplight Row, спросить Pip, говорила ли о ней Mags. Haiku 5.5 через локальное облако, генератор после каждого хода игрока. До этого демо-сценарий 6.1 прошёл с генератором один раз без ошибок.
+
+| Шаг | Время, с | Стоимость, $ | Вызовы | События (gen: — генератор) |
+|---|---|---|---|---|
+| Спросить Mags | 12,6 | 0,0019 | guard 1, gm 2, npc 1, generator 1 | npc.reacted, note.added |
+| **Отказ** | 11,7 | 0,0021 | guard 1, gm 2, npc 1, generator 1 | npc.reacted, **relation.set** (мастер), note.added |
+| Попросить выпивку | 10,2 | 0,0023 | guard 1, gm 2, npc 1, generator 1 | npc.reacted, **gen:relation.set** |
+| Уйти на Lamplight Row | 12,1 | 0,0022 | guard 1, gm 2, generator 1 | player.moved |
+| Спросить Pip | 10,5 | 0,0024 | guard 1, gm 2, npc 1, generator 1 | npc.reacted |
+| **Средний ход игрока** | ~11,4 | **0,0022** | | |
+
+- **Мир следует за игроком.** На отказе мастер сам записал связь Mags → игрок («Ada refused to join the Clockheart heist and walked away from the crew…») — правило промпта 6.2c работает. На следующем ходу генератор её уточнил («Mags has softened slightly toward Ada; she pours her a drink… though she still does not expect her to join the heist»).
+- **NPC ведут себя по-новому.** Mags отвечает на отказ («every crew has a squall before the sailing… a locksmith with cold feet»), а на просьбу о выпивке наливает, но держит дистанцию. Pip уже знает: «Walked out on the job, did you? Heard the crew was grumblin' about that».
+- **Не сделано:** описание Mags («plans the heist, and recruited the player») никто не переписал — ни мастер, ни генератор, хотя промпт генератора просит. Формально это прошлое и остаётся правдой, но может тянуть NPC к старому сюжету. Это вопрос для настройки промптов (6.2).
+- **Стоимость.** Генератор добавляет ~$0,0003 за ход; средний ход ($0,0022) не дороже, чем в 6.1 ($0,0023), — сценарий короче, а кэш выше. Игрок генератор не ждёт: время ответа то же, ~10–12 с.
+- **Попутно:** vitest 5 не показывает `console.log` прошедших тестов, поэтому `npm run test:live` теперь идёт с `--silent=false`, иначе таблицы замеров пропадают.
+
 ## 6.1 Сквозной прогон демо-сценария и стоимость хода
 **Проведён 2026-10-16.** `npm run test:live` (`apps/mobile/src/core/game/demo.live.test.ts`): ядро в Node → локальное облако (`LLM_HANDLER=openrouter`, Bedrock первым) → `anthropic/claude-haiku-5.5`. Сценарий — `src/core/game/demo-script.ts`: новый персонаж (Ada Finch), адаптация, выбор, вступление и 7 ходов (осмотреться, спросить Mags, взять фонарь, уйти на Lamplight Row, спросить Pip, инвентарь, выхватить у Pip визитку).
 

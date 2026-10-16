@@ -4,7 +4,7 @@
  */
 export const PROTOCOL_VERSION = 1;
 
-export type Purpose = 'gm' | 'guard' | 'npc' | 'summary' | 'character';
+export type Purpose = 'gm' | 'guard' | 'npc' | 'summary' | 'character' | 'generator';
 
 // --- OpenAI-format chat payload (passed to the provider as is) --------------------------------
 

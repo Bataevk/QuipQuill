@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
 import type { Game, GamePhase, GameStep } from '@/core/game/game';
-import { LiveFeed, type LiveBubble } from '@/core/protocol/live-feed';
+import { isStoryChannel, LiveFeed, type LiveBubble } from '@/core/protocol/live-feed';
 import { formatUsage } from '@/core/protocol/usage-meter';
 import { getCloud, openGame } from '@/platform/services';
 
@@ -25,8 +25,11 @@ export interface GameView {
   stalled: boolean;
   /** The cloud connection is up; while it is not, requests wait and are sent on reconnect. */
   online: boolean;
-  /** Dev builds only (stage 6.1): what each action cost, shown after the line it ended on. */
-  costs: { afterSeq: number; text: string }[];
+  /**
+   * Dev builds only (stage 6.1): what each action cost, shown after the line it ended on; a
+   * player turn's line grows by the generator's cost when it finishes (stage 6.2d).
+   */
+  costs: { afterSeq: number; text: string; action: number }[];
   /** Dev builds only: what this game cost since the screen opened. */
   sessionCost: string | undefined;
   send(text: string): void;
@@ -71,7 +74,7 @@ export function useGame(saveId: string): GameView {
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string>();
   const [online, setOnline] = useState(() => getCloud().socket.status === 'ready');
-  const [costs, setCosts] = useState<{ afterSeq: number; text: string }[]>([]);
+  const [costs, setCosts] = useState<{ afterSeq: number; text: string; action: number }[]>([]);
   const [sessionCost, setSessionCost] = useState<string>();
 
   useEffect(() => getCloud().socket.onStatus((status) => setOnline(status === 'ready')), []);
@@ -101,7 +104,7 @@ export function useGame(saveId: string): GameView {
         if (__DEV__ && game.lastUsage && next) {
           const afterSeq = next.lines.at(-1)?.seq ?? 0;
           const line = formatUsage(game.lastUsage);
-          setCosts((list) => [...list, { afterSeq, text: line }]);
+          setCosts((list) => [...list, { afterSeq, text: line, action: game.actions }]);
           setSessionCost(formatUsage(game.sessionUsage));
         }
         setLive([]);
@@ -125,8 +128,18 @@ export function useGame(saveId: string): GameView {
       .then(async (game) => {
         if (closed) return game.close();
         gameRef.current = game;
-        off = game.onStream((event) => {
-          if (event.type === 'status') return setThinking(true);
+        const offGenerated = game.onGenerated(() => {
+          if (!__DEV__ || !game.lastUsage) return;
+          const text = formatUsage(game.lastUsage);
+          // Only the action the generator followed: a newer one has its own line.
+          setCosts((list) =>
+            list.at(-1)?.action === game.actions ? [...list.slice(0, -1), { ...list.at(-1)!, text }] : list,
+          );
+          setSessionCost(formatUsage(game.sessionUsage));
+        });
+        const offStream = game.onStream((event) => {
+          // The generator works between turns on its own channel: not something to wait for.
+          if (event.type === 'status') return isStoryChannel(event.channel) ? setThinking(true) : undefined;
           const change = feed.current.apply(event);
           if (!change) return;
           setThinking(false);
@@ -141,6 +154,10 @@ export function useGame(saveId: string): GameView {
             }
           }
         });
+        off = () => {
+          offStream();
+          offGenerated();
+        };
         const first = await snapshot(game);
         setState(first);
         setReady(true);

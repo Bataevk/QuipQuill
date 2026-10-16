@@ -83,6 +83,8 @@ export class World {
   private readonly db: Db;
   private readonly lore: LoreVectors;
   private turn = 0;
+  /** Who the master's commands are journaled for: 'gm', or 'generator' (actingAs). */
+  private actor: Actor = 'gm';
 
   private constructor(db: Db, lore: LoreVectors) {
     this.db = db;
@@ -109,6 +111,20 @@ export class World {
   beginTurn(): number {
     this.turn += 1;
     return this.turn;
+  }
+
+  /**
+   * Runs `fn` with the master's commands journaled for another actor — the background
+   * generator (stage 6.2d) uses the same rules, under the same turn number.
+   */
+  async actingAs<T>(actor: Actor, fn: () => Promise<T>): Promise<T> {
+    const previous = this.actor;
+    this.actor = actor;
+    try {
+      return await fn();
+    } finally {
+      this.actor = previous;
+    }
   }
 
   /** Goes back to an unfinished turn (a retry): its events keep one number. */
@@ -199,7 +215,7 @@ export class World {
     return this.command('gm', async ({ db, log }, player) => {
       if ((await log.count('character.adapted')) > 0) reject('The character is already settled.');
       const original = (player.props.original as Props | undefined) ?? {};
-      const event = await log.append(this.turn, 'gm', 'character.adapted', {
+      const event = await log.append(this.turn, this.actor, 'character.adapted', {
         original,
         adapted: input.adapted,
         choice: input.choice,
@@ -230,7 +246,7 @@ export class World {
             exits.map((exit) => describeExit(exit)).join('; ') || 'none'
           }.`,
       );
-      const event = await log.append(this.turn, 'gm', 'player.moved', { from: here.id, to: to.id });
+      const event = await log.append(this.turn, this.actor, 'player.moved', { from: here.id, to: to.id });
       await unlocate(db, event.seq, player.id);
       await relate(db, event.seq, player.id, to.id, 'LOCATED_IN');
       return event;
@@ -263,7 +279,7 @@ export class World {
         );
       }
       const [from = ''] = await state.placesOf(item.id);
-      const event = await log.append(this.turn, 'gm', 'item.taken', { item: item.id, from });
+      const event = await log.append(this.turn, this.actor, 'item.taken', { item: item.id, from });
       await unplace(db, event.seq, item.id);
       await relate(db, event.seq, player.id, item.id, 'HAS_ITEM');
       return event;
@@ -279,7 +295,7 @@ export class World {
       );
       const here = await state.locationOf(player.id);
       if (!here) reject('The player is nowhere; the session has not placed them.');
-      const event = await log.append(this.turn, 'gm', 'item.dropped', { item: item.id, to: here.id });
+      const event = await log.append(this.turn, this.actor, 'item.dropped', { item: item.id, to: here.id });
       await unplace(db, event.seq, item.id);
       await relate(db, event.seq, item.id, here.id, 'LOCATED_IN');
       return event;
@@ -315,7 +331,7 @@ export class World {
       const relation = input.inInventory
         ? { type: 'HAS_ITEM', target: player.id }
         : { type: 'LOCATED_IN', target: here.id };
-      const event = await log.append(this.turn, 'gm', 'entity.added', { entity: id, relation });
+      const event = await log.append(this.turn, this.actor, 'entity.added', { entity: id, relation });
       await putEntity(db, event.seq, {
         id,
         type: input.type,
@@ -348,7 +364,7 @@ export class World {
         before.props = entity.props;
         after.props = { ...entity.props, ...patch.props };
       }
-      const event = await log.append(this.turn, 'gm', 'entity.edited', { id: entity.id, before, after });
+      const event = await log.append(this.turn, this.actor, 'entity.edited', { id: entity.id, before, after });
       await putEntity(db, event.seq, {
         ...entity,
         description: after.description ?? entity.description,
@@ -377,7 +393,7 @@ export class World {
       );
       const from = await state.locationOf(npc.id);
       if (from?.id === to.id) reject(`${npc.name} is already in ${to.name}.`);
-      const event = await log.append(this.turn, 'gm', 'npc.moved', {
+      const event = await log.append(this.turn, this.actor, 'npc.moved', {
         npc: npc.id,
         from: from?.id ?? '',
         to: to.id,
@@ -402,7 +418,7 @@ export class World {
       const [one, other] = await this.pair(state, a, b);
       const existing = (await this.tiesBetween(db, one.id, other.id)).find((t) => t.type === type);
       const [src, dst] = existing ? [existing.src, existing.dst] : [one.id, other.id];
-      const event = await log.append(this.turn, 'gm', 'relation.set', {
+      const event = await log.append(this.turn, this.actor, 'relation.set', {
         src,
         dst,
         type,
@@ -424,7 +440,7 @@ export class World {
       const [one, other] = await this.pair(state, a, b);
       const ties = (await this.tiesBetween(db, one.id, other.id)).filter((t) => !type || t.type === type);
       if (ties.length === 0) reject(`${one.name} and ${other.name} have no tie${type ? ` of type ${type}` : ''}.`);
-      const event = await log.append(this.turn, 'gm', 'relation.cancelled', {
+      const event = await log.append(this.turn, this.actor, 'relation.cancelled', {
         a: one.id,
         b: other.id,
         removed: ties,
@@ -437,7 +453,7 @@ export class World {
   /** `player.updated`: the player's description (wounds, clothes, reputation…). */
   updatePlayer(description: string): Promise<Outcome> {
     return this.command('gm', async ({ db, log }, player) => {
-      const event = await log.append(this.turn, 'gm', 'player.updated', {
+      const event = await log.append(this.turn, this.actor, 'player.updated', {
         before: player.description,
         after: description,
       });
@@ -452,7 +468,7 @@ export class World {
       if (!text.trim()) reject('The note is empty.');
       const row = await db.get<{ id: number }>('SELECT coalesce(max(id), 0) + 1 AS id FROM notes');
       const id = Number(row?.id ?? 1);
-      const event = await log.append(this.turn, 'gm', 'note.added', { id, text: text.trim() });
+      const event = await log.append(this.turn, this.actor, 'note.added', { id, text: text.trim() });
       await db.run('INSERT INTO notes (id, text, created_seq) VALUES (?, ?, ?)', [id, text.trim(), event.seq]);
       return event;
     });
@@ -464,7 +480,7 @@ export class World {
       const note = await log.note(id);
       if (!note) reject(`There is no note #${id}.`);
       if (note.closed) reject(`Note #${id} is already closed.`);
-      const event = await log.append(this.turn, 'gm', 'note.closed', { id, text: note.text });
+      const event = await log.append(this.turn, this.actor, 'note.closed', { id, text: note.text });
       await db.run('UPDATE notes SET closed_seq = ? WHERE id = ?', [event.seq, id]);
       return event;
     });
@@ -478,7 +494,7 @@ export class World {
   recordNpcReaction(input: { npc: string; situation: string; reaction: string }): Promise<Outcome> {
     return this.command('gm', async ({ state, log }) => {
       if (!(await state.entity(input.npc))) reject(`There is no ${input.npc}.`);
-      return log.append(this.turn, 'gm', 'npc.reacted', input);
+      return log.append(this.turn, this.actor, 'npc.reacted', input);
     });
   }
 

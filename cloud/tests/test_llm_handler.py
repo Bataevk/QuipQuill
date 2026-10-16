@@ -131,6 +131,13 @@ def test_npc_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRouter) ->
     assert body["max_tokens"] == 800
 
 
+def test_generator_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
+    run(app_client, gm_request(purpose="generator"))
+    (body,) = fake.requests
+    assert body["extra_body"]["reasoning"] == {"effort": "low"}
+    assert body["max_tokens"] == 1200
+
+
 def test_tool_calls_are_assembled(app_client: TestClient, fake: FakeOpenRouter) -> None:
     fake.chunks = tool_stream()
     events = run(app_client, gm_request(tools=TOOLS))

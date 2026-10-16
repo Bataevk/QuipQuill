@@ -9,7 +9,9 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { CharacterProposal } from '../agent/character';
 import { lastProposal } from '../agent/character';
 import { ChatStore, GM_CHAT } from '../agent/chat-store';
+import { generate, type GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
+import { sourceOf } from '../agent/messages';
 import { queueModels } from '../agent/models';
 import { isUnfinished, retryTurn, runTurn, type TurnResult } from '../agent/run-turn';
 import {
@@ -54,7 +56,12 @@ export interface GameModels {
   summaryModel?: BaseChatModel;
   characterModel: BaseChatModel;
   npcModel: (npc: Entity) => BaseChatModel;
+  /** The background world generator after each player turn; without it there is none. */
+  generatorModel?: BaseChatModel;
 }
+
+/** The generator's call limit: the next action waits for it at most this long (stage 6.2d). */
+export const GENERATOR_TIMEOUT_MS = 30_000;
 
 /**
  * - `new`: the playthrough has not started (start it with `start()`);
@@ -92,6 +99,13 @@ export class Game {
   lastUsage: ActionUsage | undefined;
   /** What this game cost since it was opened. */
   sessionUsage: ActionUsage = emptyUsage();
+  /** Actions metered so far: which one `lastUsage` belongs to. */
+  actions = 0;
+  /** What the generator did after the last player turn (dev diagnostics). */
+  lastGeneration: GeneratorResult | { error: string } | undefined;
+  private readonly generatorModel: BaseChatModel | undefined;
+  private generation: { done: Promise<void>; controller: AbortController } | undefined;
+  private readonly generatedListeners = new Set<() => void>();
 
   private constructor(init: {
     save: SaveRecord;
@@ -125,6 +139,7 @@ export class Game {
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
       npc: { model: models.npcModel, chats: this.chats, transcript: this.transcript },
     });
+    this.generatorModel = models.generatorModel;
     this.sessionDeps = {
       world: init.world,
       chats: this.chats,
@@ -158,6 +173,8 @@ export class Game {
   }
 
   async close(): Promise<void> {
+    this.generation?.controller.abort();
+    await this.settle();
     await this.db.close();
   }
 
@@ -197,22 +214,32 @@ export class Game {
   }
 
   /** Starts the playthrough with the save's character: the first proposal. */
-  start(signal?: AbortSignal): Promise<CharacterProposal> {
+  async start(signal?: AbortSignal): Promise<CharacterProposal> {
+    await this.settle();
     return this.metered(() =>
       beginSession({ ...this.sessionDeps, signal }, { storyId: this.save.storyId, character: this.sheet() }),
     );
   }
 
-  clarify(wishes: string, signal?: AbortSignal): Promise<CharacterProposal> {
+  async clarify(wishes: string, signal?: AbortSignal): Promise<CharacterProposal> {
+    await this.settle();
     return this.metered(() => clarifyCharacter({ ...this.sessionDeps, signal }, wishes));
   }
 
-  choose(index: number, signal?: AbortSignal): Promise<TurnResult> {
+  async choose(index: number, signal?: AbortSignal): Promise<TurnResult> {
+    await this.settle();
     return this.metered(() => this.touched(chooseCharacter({ ...this.sessionDeps, agent: this.agent, signal }, index)));
   }
 
-  send(input: string, signal?: AbortSignal): Promise<TurnResult> {
-    return this.metered(() => this.touched(runTurn({ ...this.turnDeps(signal), input })));
+  /**
+   * A player turn. When it ends, the generator brings the world in line with it in the
+   * background (`whenGenerated`); the next action waits for it first.
+   */
+  async send(input: string, signal?: AbortSignal): Promise<TurnResult> {
+    await this.settle();
+    const result = await this.metered(() => this.touched(runTurn({ ...this.turnDeps(signal), input })));
+    this.startGenerator(result);
+    return result;
   }
 
   /**
@@ -220,17 +247,31 @@ export class Game {
    * opens the story after the choice, or finishes the last turn. Undefined: nothing to do.
    */
   async recover(signal?: AbortSignal): Promise<TurnResult | CharacterProposal | undefined> {
+    await this.settle();
     switch (await this.phase()) {
       case 'new':
       case 'adapting':
         return this.start(signal); // idempotent: returns the pending proposal
       case 'opening':
         return this.metered(() => this.touched(startStory({ ...this.sessionDeps, agent: this.agent, signal })));
-      case 'playing':
-        return (await this.unfinished())
-          ? this.metered(() => this.touched(retryTurn(this.turnDeps(signal))))
-          : undefined;
+      case 'playing': {
+        if (!(await this.unfinished())) return undefined;
+        const result = await this.metered(() => this.touched(retryTurn(this.turnDeps(signal))));
+        this.startGenerator(result);
+        return result;
+      }
     }
+  }
+
+  /** Resolves when the generator of the last turn (if any) has finished, failed or timed out. */
+  whenGenerated(): Promise<void> {
+    return this.settle();
+  }
+
+  /** Called when the generator finishes: `lastUsage` / `sessionUsage` now include its cost. */
+  onGenerated(listener: () => void): () => void {
+    this.generatedListeners.add(listener);
+    return () => this.generatedListeners.delete(listener);
   }
 
   /** Live events of this playthrough's generations (deltas, replays, statuses…). */
@@ -270,9 +311,57 @@ export class Game {
       return await work();
     } finally {
       off();
+      this.actions += 1;
       this.lastUsage = meter.total;
       this.sessionUsage = addUsage(this.sessionUsage, meter.total);
     }
+  }
+
+  /**
+   * After a player's turn: the generator in the background, under the turn lock. Its cost joins
+   * the turn's (`lastUsage`); a refused change or a failure goes to the developer's log, never
+   * to the player. Turns the Guard rejected and system turns (the opening) have nothing to read.
+   */
+  private startGenerator(result: TurnResult): void {
+    const input = result.messages[0];
+    if (!this.generatorModel || result.rejected || !input || sourceOf(input) !== 'player') return;
+    const controller = new AbortController();
+    const meter = new UsageMeter();
+    const off = this.onStream((event) => meter.apply(event));
+    const done = generate(
+      {
+        model: this.generatorModel,
+        world: this.world,
+        meta: this.meta,
+        signal: controller.signal,
+        timeoutMs: GENERATOR_TIMEOUT_MS,
+      },
+      { turn: result.turn, input: input.text, reply: result.reply },
+    )
+      .then((generated) => {
+        this.lastGeneration = generated;
+        for (const r of generated.rejected) console.warn(`[generator] turn ${result.turn}: ${r.change}: ${r.error}`);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.lastGeneration = { error: message };
+        console.warn(`[generator] turn ${result.turn} failed: ${message}`);
+      })
+      .finally(() => {
+        off();
+        this.lastUsage = addUsage(this.lastUsage ?? emptyUsage(), meter.total);
+        this.sessionUsage = addUsage(this.sessionUsage, meter.total);
+        this.generatedListeners.forEach((listener) => listener());
+      });
+    this.generation = { done, controller };
+  }
+
+  /** Waits for the running generator; it ends by itself within GENERATOR_TIMEOUT_MS. */
+  private async settle(): Promise<void> {
+    const running = this.generation;
+    if (!running) return;
+    await running.done;
+    if (this.generation === running) this.generation = undefined;
   }
 
   private async touched<T>(work: Promise<T>): Promise<T> {

@@ -137,7 +137,7 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 
 ### События
 
-Одно событие = одна транзакция: `INSERT INTO events` + изменение `dyn_*`. `actor` генератора (6.2d) — `generator`.
+Одно событие = одна транзакция: `INSERT INTO events` + изменение `dyn_*`. `actor` фонового генератора — `generator` (те же команды, тот же номер хода).
 
 | `kind` | `payload` | Изменение состояния |
 |---|---|---|

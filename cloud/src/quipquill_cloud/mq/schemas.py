@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 PROTOCOL_VERSION = 1
 
 Id = Annotated[str, Field(min_length=1, max_length=128)]
-Purpose = Literal["gm", "guard", "npc", "summary", "character"]
+Purpose = Literal["gm", "guard", "npc", "summary", "character", "generator"]
 
 
 class _Message(BaseModel):

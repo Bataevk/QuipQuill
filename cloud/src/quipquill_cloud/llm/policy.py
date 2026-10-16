@@ -19,6 +19,8 @@ PURPOSES: dict[str, CallParams] = {
     "guard": CallParams(effort="low", max_tokens=200),
     "summary": CallParams(effort="low", max_tokens=1500),
     "character": CallParams(effort="low", max_tokens=1500),
+    # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.
+    "generator": CallParams(effort="low", max_tokens=1200),
 }
 
 

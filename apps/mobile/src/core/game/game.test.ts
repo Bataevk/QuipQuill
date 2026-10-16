@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScriptedChatModel } from '@/core/agent/testing/scripted-model';
 import type { CloudSocket } from '@/core/net/cloud-socket';
@@ -17,6 +19,8 @@ let master: ScriptedChatModel;
 let character: ScriptedChatModel;
 let npc: ScriptedChatModel;
 let listeners: Set<(event: ServerEvent) => void>;
+/** The background generator's model for the next `open()`; none by default. */
+let generator: BaseChatModel | undefined;
 
 async function open(): Promise<Game> {
   const socket = {
@@ -32,6 +36,7 @@ async function open(): Promise<Game> {
       model: master,
       characterModel: character,
       npcModel: (_npc: Entity) => npc,
+      generatorModel: generator,
     }),
   };
   const saves = await env.library.repository.listSaves();
@@ -47,6 +52,7 @@ beforeEach(async () => {
   character = new ScriptedChatModel([]);
   npc = new ScriptedChatModel([]);
   listeners = new Set();
+  generator = undefined;
   game = await open();
 });
 
@@ -169,5 +175,105 @@ describe('Game', () => {
       false,
       false,
     ]);
+  });
+
+  describe('the background generator (stage 6.2d)', () => {
+    const MAGS = 'npc:mags-holloway';
+    const EDIT = JSON.stringify({
+      relations: [],
+      cancelled: [],
+      moves: [],
+      edits: [{ target: MAGS, description: 'She no longer counts on the stranger.' }],
+      additions: [],
+    });
+    const emit = (event: ServerEvent) => listeners.forEach((l) => l(event));
+
+    /** A generator model that answers only when `release()` is called, and can be aborted. */
+    function gatedGenerator() {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const calls: BaseMessage[][] = [];
+      const model = {
+        invoke: async (messages: BaseMessage[], options: { signal: AbortSignal }) => {
+          if (options.signal.aborted) throw new Error('aborted');
+          calls.push(messages);
+          const requestId = `gen-${calls.length}`;
+          const routed = { v: 1 as const, requestId, sessionId: game.save.id, channel: 'generator' };
+          emit({ ...routed, type: 'status', status: 'thinking' });
+          await Promise.race([
+            gate,
+            new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted')))),
+          ]);
+          emit({
+            ...routed,
+            type: 'done',
+            message: { role: 'assistant', content: EDIT },
+            finishReason: 'stop',
+            usage: { input: 2000, output: 100, cacheRead: 0, costUsd: 0.001 },
+          });
+          return new AIMessage(EDIT);
+        },
+      } as unknown as BaseChatModel;
+      return { model, calls, release };
+    }
+
+    async function playing(model: BaseChatModel) {
+      generator = model;
+      await game.close();
+      game = await open();
+      character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+      await game.start();
+      master.push({ text: 'It begins.' });
+      await game.choose(0);
+    }
+
+    it('follows a player turn without holding it up; the next turn waits for it', async () => {
+      const gen = gatedGenerator();
+      await playing(gen.model);
+      expect(gen.calls).toHaveLength(0); // the opening is not the player's turn
+
+      master.push({ text: 'Mags shrugs.' });
+      expect((await game.send("I won't join.")).reply).toBe('Mags shrugs.');
+      await vi.waitFor(() => expect(gen.calls).toHaveLength(1));
+      expect((await game.world.state.entity(MAGS))?.description).not.toContain('no longer counts');
+
+      master.push({ text: 'She looks away.' });
+      const next = game.send('I wave.');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(master.calls).toHaveLength(2); // still waiting for the generator
+      gen.release();
+      expect((await next).reply).toBe('She looks away.');
+
+      expect(game.lastGeneration).toMatchObject({ rejected: [] });
+      expect((await game.world.state.entity(MAGS))?.description).toBe('She no longer counts on the stranger.');
+      // the master's next call already sees what the generator recorded
+      expect(JSON.stringify(master.calls[2][0].content)).toContain('Mags Holloway changed: She no longer counts');
+    });
+
+    it("adds its cost to the turn's", async () => {
+      const gen = gatedGenerator();
+      await playing(gen.model);
+      let notified = 0;
+      game.onGenerated(() => (notified += 1));
+      master.push({ text: 'Mags shrugs.' });
+      await game.send("I won't join.");
+      gen.release();
+      await game.whenGenerated();
+
+      expect(notified).toBe(1);
+      expect(game.lastUsage?.byChannel.generator).toEqual({ calls: 1, costUsd: 0.001 });
+      expect(game.sessionUsage.byChannel.generator).toEqual({ calls: 1, costUsd: 0.001 });
+    });
+
+    it('is stopped when the game closes', async () => {
+      const gen = gatedGenerator();
+      await playing(gen.model);
+      master.push({ text: 'Mags shrugs.' });
+      await game.send("I won't join.");
+      await vi.waitFor(() => expect(gen.calls).toHaveLength(1));
+      await game.close(); // must not wait for an answer that never comes
+      expect(game.lastGeneration).toEqual({ error: 'aborted' });
+      game = await open();
+    });
   });
 });

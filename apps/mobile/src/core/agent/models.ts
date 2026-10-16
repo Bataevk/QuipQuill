@@ -1,6 +1,7 @@
 import type { QueueChatModel } from '../net/queue-chat-model';
 import type { Entity } from '../world/model';
 import { CHARACTER_RESPONSE_FORMAT } from './character';
+import { GENERATOR_RESPONSE_FORMAT } from './generator';
 import { GUARD_RESPONSE_FORMAT } from './middleware/guard';
 import { npcChatId } from './npc';
 
@@ -20,6 +21,13 @@ export function queueModels(base: QueueChatModel) {
       channel: 'system',
       purpose: 'character',
       responseFormat: CHARACTER_RESPONSE_FORMAT,
+    }),
+    /** The background world generator after each turn (stage 6.2d): not a story channel. */
+    generatorModel: base.with({
+      ...plain,
+      channel: 'generator',
+      purpose: 'generator',
+      responseFormat: GENERATOR_RESPONSE_FORMAT,
     }),
     /** Each NPC streams on its own channel, with its name for the speech bubble. */
     npcModel: (npc: Entity) =>
