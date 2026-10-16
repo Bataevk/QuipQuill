@@ -44,3 +44,21 @@ export async function makeTestEnv(options: { vec?: boolean } = {}): Promise<Test
     },
   };
 }
+
+/**
+ * A stand-in for the story's embedding model: a fixed pseudo-random unit vector per text, so a
+ * query made from the same text matches it exactly (score 1) and other texts barely at all.
+ */
+export function fakeEmbedding(text: string, dim = 1536): Float32Array {
+  let seed = 2166136261;
+  for (let i = 0; i < text.length; i++) seed = Math.imul(seed ^ text.charCodeAt(i), 16777619) >>> 0;
+  const vector = new Float32Array(dim);
+  let sum = 0;
+  for (let i = 0; i < dim; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    vector[i] = seed / 2 ** 32 - 0.5;
+    sum += vector[i] * vector[i];
+  }
+  const norm = Math.sqrt(sum);
+  return vector.map((x) => x / norm);
+}

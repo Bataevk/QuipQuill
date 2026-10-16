@@ -48,7 +48,8 @@ describe('SaveManager', () => {
         ]),
       );
       expect((await db.get<{ n: number }>('SELECT count(*) AS n FROM entities'))?.n).toBe(74);
-      expect((await db.get<{ user_version: number }>('PRAGMA user_version'))?.user_version).toBe(2);
+      const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+      expect(version?.user_version).toBe(SAVE_SCHEMA_STEPS.length);
     } finally {
       await db.close();
     }
@@ -113,7 +114,8 @@ describe('SaveManager', () => {
     await env.library.saves.restart(save.id);
     const db = await env.library.saves.open(save.id);
     try {
-      expect((await db.get<{ user_version: number }>('PRAGMA user_version'))?.user_version).toBe(2);
+      const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+      expect(version?.user_version).toBe(SAVE_SCHEMA_STEPS.length);
     } finally {
       await db.close();
     }

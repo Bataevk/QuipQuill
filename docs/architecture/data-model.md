@@ -85,8 +85,11 @@ CREATE TABLE dyn_relations  ( id, src, dst, type, description, updated_seq );
 -- id = id связи истории, которую строка заменяет или отменяет, у новых — выше всех id истории
 --   (порядок связей NPC в промпте остаётся порядком истории, новые — в конце);
 -- без внешних ключей: src/dst бывают и в истории, и в dyn_entities — проверяют команды мира
-CREATE TABLE dyn_embeddings ( entity_id, kind, vector, PRIMARY KEY (entity_id, kind) );  -- этап 6.2b
--- векторы новых и переписанных сущностей; считаются после коммита, перебором в JS
+CREATE TABLE dyn_embeddings ( entity_id, kind, text, vector, PRIMARY KEY (entity_id, kind) );
+-- векторы новых и переписанных сущностей (кроме игрока), тексты — как у builder: имя, «имя: описание»;
+-- строка действует, только пока text совпадает с текущим текстом сущности: устаревшая пропускается
+-- поиском и пересчитывается. Считаются после коммита entity.added / entity.edited (в фоне, вне
+-- транзакции) и при открытии партии; без сети — позже. Код: src/core/world/lore-vectors.ts
 
 CREATE VIEW world_entities  AS  -- dyn_entities ∪ (entities, которых нет в dyn_entities)
 CREATE VIEW world_relations AS  -- dyn_relations без CANCEL
@@ -128,8 +131,8 @@ CREATE TABLE transcript (            -- то, что видел игрок; то
 
 CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 -- строится при импорте в копии истории; rowid = rowid строки embeddings; без расширения — перебор в JS (ADR 26)
--- поиск (после 6.2b): vec_entities ∪ перебор dyn_embeddings; вектор истории, чьё имя или описание
--- переписано в dyn_entities, отфильтровывается на выходе (ADR 42)
+-- поиск: vec_entities ∪ перебор dyn_embeddings; вектор истории, чьё имя или описание переписано
+-- в dyn_entities, отфильтровывается на выходе — и пока новый ещё не посчитан (ADR 42)
 ```
 
 ### События

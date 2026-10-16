@@ -73,7 +73,7 @@ graph TD
 | `inspect` | `target` | сущность видна (здесь, внутри контейнера здесь, в инвентаре, выход) — по id или имени; вне видимости — только по точному id (из `search_lore` или событий) | — |
 | `take` | `item` | предмет лежит здесь (или в контейнере здесь); предмет **у NPC рядом** — только если в этом ходу уже был его `npc.reacted` (ADR 32, 34) | `item.taken` |
 | `drop` | `item` | предмет в инвентаре | `item.dropped` |
-| `search_lore` | `query` | — (векторный поиск по эмбеддингам истории, запрос — через облако) | — |
+| `search_lore` | `query` | — (векторный поиск по эмбеддингам истории и партии: переписанное ищется по новому тексту, не по старому, ADR 42; запрос — через облако) | — |
 | `add_entity` | `name, type (item·document·npc·creature·other), description, place (here·inventory)` | имя уникально; только в текущей локации или в руках игрока | `entity.added` |
 | `edit_entity` | `target, description` (новое описание целиком) | сущность видна или задана точным id; не игрок | `entity.edited` |
 | `update_player` | `description` (целиком) | — | `player.updated` |

@@ -231,7 +231,10 @@ describe('tools', () => {
       'Note #1 is closed.',
       'Error: give the text of a new note, or close_id to close one.',
     ]);
-    expect(texts[7].split('\n')[0]).toMatch(/^- Mags Holloway \[npc:mags-holloway\] \(npc\): /);
+    // the query is her story description, which edit_entity has just rewritten: the lore no
+    // longer finds her by it (ADR 42); the rest of the lore answers
+    expect(texts[7].split('\n')[0]).toMatch(/^- .+ \[[a-z]+:[a-z-]+\] \([a-z]+\): /);
+    expect(texts[7]).not.toContain('[npc:mags-holloway]');
     expect(result.events.map((e) => e.kind)).toEqual([
       'entity.added',
       'entity.edited',

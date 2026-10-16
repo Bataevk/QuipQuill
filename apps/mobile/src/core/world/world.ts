@@ -2,6 +2,7 @@ import type { Db } from '../storage/db';
 import type { VectorIndex } from '../vector/vector-index';
 import { putEntity, relate, unlocate, unplace } from './dynamic-graph';
 import { EventLog } from './event-log';
+import { LoreVectors, type Embed } from './lore-vectors';
 import {
   fail,
   ok,
@@ -77,18 +78,22 @@ export class World {
   readonly state: WorldState;
   readonly log: EventLog;
   private readonly db: Db;
-  private readonly vectors: VectorIndex | undefined;
+  private readonly lore: LoreVectors;
   private turn = 0;
 
-  private constructor(db: Db, vectors: VectorIndex | undefined) {
+  private constructor(db: Db, lore: LoreVectors) {
     this.db = db;
-    this.vectors = vectors;
+    this.lore = lore;
     this.state = new WorldState(db);
     this.log = new EventLog(db);
   }
 
-  static async open(db: Db, options: { vectors?: VectorIndex } = {}): Promise<World> {
-    const world = new World(db, options.vectors);
+  /**
+   * `vectors`: the story's index; without it there is no lore search. `embed`: computes the
+   * vectors of new and rewritten entities (stage 6.2b); without it they are not searchable.
+   */
+  static async open(db: Db, options: { vectors?: VectorIndex; embed?: Embed } = {}): Promise<World> {
+    const world = new World(db, new LoreVectors(db, options.vectors, options.embed));
     world.turn = await world.log.lastTurn();
     return world;
   }
@@ -126,10 +131,13 @@ export class World {
     };
   }
 
-  /** Lore search by meaning (story embeddings), best match per entity. */
+  /**
+   * Lore search by meaning, best match per entity: the story's vectors and the playthrough's
+   * own; an entity found by text the playthrough has rewritten is not returned (ADR 42).
+   */
   async searchLore(query: Float32Array, limit = 5): Promise<Outcome<LoreHit[]>> {
-    if (!this.vectors) return fail('Lore search is not available in this playthrough.');
-    const hits = await this.vectors.search(query, limit * 2);
+    if (!this.lore.available) return fail('Lore search is not available in this playthrough.');
+    const hits = await this.lore.search(query, limit * 2);
     const best = new Map<string, number>();
     for (const hit of hits) best.set(hit.entityId, Math.max(best.get(hit.entityId) ?? -1, hit.score));
     const result: LoreHit[] = [];
@@ -138,6 +146,14 @@ export class World {
       if (entity) result.push({ entity, score });
     }
     return ok(result.sort((a, b) => b.score - a.score).slice(0, limit));
+  }
+
+  /**
+   * Computes the vectors of new and rewritten entities that are still missing (after a change,
+   * and when a save opens). Rejects without network; the next call tries again.
+   */
+  refreshLore(): Promise<number> {
+    return this.lore.refresh();
   }
 
   // --- commands ------------------------------------------------------------------------------
@@ -418,19 +434,22 @@ export class World {
     actor: Actor,
     body: (tx: Tx, player: Entity) => Promise<WorldEvent>,
   ): Promise<Outcome> {
+    let event: WorldEvent;
     try {
-      return ok(
-        await this.db.transaction(async (db) => {
-          const tx = { db, state: new WorldState(db), log: new EventLog(db) };
-          const player = actor === 'system' ? undefined : await tx.state.player();
-          if (actor !== 'system' && !player) reject('The session has not started.');
-          return body(tx, player as Entity);
-        }),
-      );
+      event = await this.db.transaction(async (db) => {
+        const tx = { db, state: new WorldState(db), log: new EventLog(db) };
+        const player = actor === 'system' ? undefined : await tx.state.player();
+        if (actor !== 'system' && !player) reject('The session has not started.');
+        return body(tx, player as Entity);
+      });
     } catch (error) {
       if (error instanceof Rejected) return fail(error.reason);
       throw error;
     }
+    // New or rewritten text: its vectors in the background, after the commit. Without network
+    // they stay missing until the next change or the next time the save opens.
+    if (event.kind === 'entity.added' || event.kind === 'entity.edited') void this.refreshLore().catch(() => 0);
+    return ok(event);
   }
 }
 

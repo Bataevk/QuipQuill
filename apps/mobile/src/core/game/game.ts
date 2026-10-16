@@ -34,11 +34,16 @@ import type { Entity } from '../world/model';
 import type { CharacterSheet } from '../world/world';
 import { World } from '../world/world';
 
+type Embeddings = { embed(texts: string[]): Promise<Float32Array[]> };
+
 export interface GameServices {
   library: Library;
   socket: CloudSocket;
-  /** Query embeddings with the story's model (CloudEmbeddings); without it no lore search. */
-  embeddings?: (model: string) => { embed(texts: string[]): Promise<Float32Array[]> };
+  /**
+   * Embeddings with the story's model (CloudEmbeddings): lore search queries and the vectors of
+   * new and rewritten entities; without it no lore search.
+   */
+  embeddings?: (model: string) => Embeddings;
   /** The models; default: `queueModels` over the socket (tests pass scripted ones). */
   models?: (sessionId: string) => GameModels;
 }
@@ -95,6 +100,7 @@ export class Game {
     world: World;
     character: Character | undefined;
     services: GameServices;
+    embeddings: Embeddings | undefined;
   }) {
     this.save = init.save;
     this.db = init.db;
@@ -109,7 +115,7 @@ export class Game {
       queueModels(
         new QueueChatModel({ socket: init.services.socket, sessionId: init.save.id, channel: 'gm', purpose: 'gm' }),
       );
-    const embeddings = init.services.embeddings?.(init.meta.embedModel);
+    const embeddings = init.embeddings;
     this.agent = createGmAgent({
       model: models.model,
       guardModel: models.guardModel,
@@ -135,10 +141,16 @@ export class Game {
     const db = await saves.open(saveId);
     try {
       const meta = await readStoryMeta(db);
-      const world = await World.open(db, { vectors: await openVectorIndex(db) });
+      const embeddings = services.embeddings?.(meta.embedModel);
+      const world = await World.open(db, {
+        vectors: await openVectorIndex(db),
+        embed: embeddings && ((texts) => embeddings.embed(texts)),
+      });
+      // Vectors that could not be computed last time (no network): catch up in the background.
+      void world.refreshLore().catch(() => 0);
       const characters = await repository.listCharacters();
       const character = characters.find((c) => c.id === save.characterId);
-      return new Game({ save, db, meta, world, character, services });
+      return new Game({ save, db, meta, world, character, services, embeddings });
     } catch (error) {
       await db.close();
       throw error;

@@ -96,6 +96,15 @@ export const SAVE_SCHEMA_STEPS = [
         SELECT 1 FROM dyn_relations d
          WHERE d.src = r.src AND d.dst = r.dst
            AND (d.type = r.type OR (d.type = 'CANCEL' AND d.description = r.type)));`,
+  // v3 (stage 6.2b): vectors of new and rewritten entities. A row is valid only while `text` is
+  // what the entity's name / "name: description" is now; a stale one is skipped and recomputed.
+  `CREATE TABLE dyn_embeddings (
+     entity_id TEXT NOT NULL,
+     kind      TEXT NOT NULL CHECK (kind IN ('name', 'desc')),
+     text      TEXT NOT NULL,
+     vector    BLOB NOT NULL,
+     PRIMARY KEY (entity_id, kind)
+   ) STRICT;`,
 ] as const;
 
 /** The schema version whose saves can no longer be played once started (state_* copies). */
