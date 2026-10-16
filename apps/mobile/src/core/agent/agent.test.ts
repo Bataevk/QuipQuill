@@ -1,4 +1,4 @@
-import { AIMessage, type BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Db } from '@/core/storage/db';
@@ -12,7 +12,7 @@ import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent, type GmAgent } from './gm-agent';
 import { runTurn } from './run-turn';
 import { TranscriptStore } from './transcript';
-import { DEMO_TURNS, lastToolText, playDemoScenario, systemText } from './testing/demo-scenario';
+import { conversation, DEMO_TURNS, lastToolText, playDemoScenario, systemText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
 import { GM_TOOL_NAMES } from './tools';
 
@@ -98,33 +98,42 @@ describe('demo scenario: look → go → take → inventory', () => {
     ]);
     // the last model call got the whole history (all but its own reply) after the system prompt
     const lastCall = model.calls.at(-1)!;
-    expect(lastCall.slice(1).map((m) => m.text)).toEqual(stored.slice(0, -1).map((m) => m.text));
+    expect(conversation(lastCall).map((m) => m.text)).toEqual(stored.slice(0, -1).map((m) => m.text));
     expect((stored[1] as AIMessage).tool_calls?.[0]).toMatchObject({ name: 'inspect' });
     expect(DEMO_TURNS).toHaveLength(4);
   });
 });
 
 describe('system prompt', () => {
-  it('puts the cache breakpoint after the story style and rebuilds the world state every call', async () => {
+  it('caches system + history: the world state goes last and is rebuilt every call (ADR 46)', async () => {
     await turn(
       'I go upstairs.',
       { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'located_in', b: LAMPLIGHT } }] },
       { text: 'Up you go.' },
     );
-    const [first, second] = model.calls.map((call) => call[0] as SystemMessage);
-    const parts = first.content as { type: string; text: string; cache_control?: unknown }[];
-    expect(parts).toHaveLength(2);
+    const [first, second] = model.calls;
+    const parts = first[0].content as { type: string; text: string; cache_control?: unknown }[];
+    expect(parts).toHaveLength(1);
     expect(parts[0].cache_control).toEqual({ type: 'ephemeral' });
-    expect(parts[0].text).toContain('# Story style\nTitle: The Brass Vault');
-    expect(parts[0].text).toMatch(/steampunk/);
+    expect(parts[0].text).toMatch(/# Story style\nTitle: The Brass Vault[\s\S]*steampunk/);
     expect(parts[0].text).not.toContain('{{');
-    expect(parts[1].text).toMatch(/^Player: Aria \(human, female, age 27\) \[player\]/);
-    expect(parts[1].text).toContain('Location: The Rusty Gear Tavern [loc:rusty-gear-tavern]');
-    // the second call sees the result of the move, with the same cached prefix
-    const secondParts = second.content as { text: string }[];
-    expect(secondParts[0].text).toBe(parts[0].text);
-    expect(secondParts[1].text).toContain('Location: Lamplight Row [loc:lamplight-row]');
-    expect(secondParts[1].text).toContain('The player went from The Rusty Gear Tavern to Lamplight Row.');
+    expect(parts[0].text).not.toContain('Location:');
+    // the history ends with a breakpoint; the world state follows it
+    const world1 = first.at(-1)!;
+    expect(world1.text).toMatch(/^# World state\n[\s\S]*Player: Aria \(human, female, age 27\) \[player\]/);
+    expect(world1.text).toContain('Location: The Rusty Gear Tavern [loc:rusty-gear-tavern]');
+    const input = first.at(-2)!.content as { text: string; cache_control?: unknown }[];
+    expect(input).toEqual([{ type: 'text', text: 'I go upstairs.', cache_control: { type: 'ephemeral' } }]);
+    // the second call: the same system prompt, the same history as a prefix, the new world state last
+    expect(second[0].content).toEqual(first[0].content);
+    expect(second.slice(1, -3).map((m) => m.text)).toEqual(first.slice(1, -1).map((m) => m.text));
+    const result = second.at(-2)!.content as { text: string; cache_control?: unknown }[];
+    expect(result[0].cache_control).toEqual({ type: 'ephemeral' }); // on the tool result…
+    expect((second.at(-4)!.content as { cache_control?: unknown }[])[0].cache_control).toEqual({ type: 'ephemeral' }); // …and the input
+    expect(second.at(-1)!.text).toContain('Location: Lamplight Row [loc:lamplight-row]');
+    expect(second.at(-1)!.text).toContain('The player went from The Rusty Gear Tavern to Lamplight Row.');
+    // nothing of it is saved: the history has no breakpoints and no world state
+    expect(JSON.stringify(await chats.load(GM_CHAT))).not.toMatch(/cache_control|# World state/);
   });
 
   it('lists exits, things here with what is inside them, inventory and notes', async () => {

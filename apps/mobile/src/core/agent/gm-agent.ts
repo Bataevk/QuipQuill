@@ -37,7 +37,7 @@ export interface GmAgentOptions {
 
 /**
  * Middleware order (agent.md): `before*` hooks run in this order, `after*` in reverse.
- * BugGuard → Guard (beforeAgent); Context (beforeModel); WorldPrompt, Packs (wrapModelCall);
+ * BugGuard → Guard (beforeAgent); Context (beforeModel); Packs, WorldPrompt (wrapModelCall);
  * InvalidToolCalls → ToolLimit, Packs (afterModel). Packs only with an actor (react_entity).
  */
 export function createGmAgent(options: GmAgentOptions) {
@@ -61,8 +61,9 @@ export function createGmAgent(options: GmAgentOptions) {
       contextMiddleware({ ...options.context, model: options.summaryModel }),
       toolLimitMiddleware(options.toolLimit),
       invalidToolCallsMiddleware(),
-      worldPromptMiddleware(world, renderStoryStyle(meta)),
+      // Packs outside WorldPrompt: the actor pack is a call of its own, not the master's prompt.
       ...(actor ? [packsMiddleware({ world, ...actor })] : []),
+      worldPromptMiddleware(world, renderStoryStyle(meta)),
     ],
   });
 }

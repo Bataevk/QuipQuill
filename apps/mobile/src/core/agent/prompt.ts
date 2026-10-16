@@ -1,8 +1,8 @@
 /**
- * The game master's system prompt (agent.md#системный-промпт). English, assembled by marker
- * replacement, from what never changes to what changes every call, so the provider can cache
- * the prefix: [GM RULES] + [STORY STYLE] — cache breakpoint — [WORLD STATE].
- * Tools are not listed here: the model sees their own descriptions.
+ * The game master's prompt (agent.md#системный-промпт), English. The system prompt never
+ * changes within a story — [GM RULES] + [STORY STYLE], one cache breakpoint — and the world
+ * state, rebuilt every call, goes after the conversation (ADR 46), so tools + system + history
+ * stay one cacheable prefix. Tools are not listed here: the model sees their own descriptions.
  */
 import { SystemMessage } from '@langchain/core/messages';
 
@@ -11,18 +11,17 @@ import type { Entity, Exit, WorldEvent } from '../world/model';
 import type { Scene, World } from '../world/world';
 
 export const STORY_STYLE = '{{STORY_STYLE}}';
-export const WORLD_STATE = '{{WORLD_STATE}}';
 
 export const GM_PROMPT = `You are the Game Master of an interactive story: the narrator, the player's senses, and the only authority on what is real in this world.
 
 # Narration
 - The player states intentions ("I open the door", "I look for a ladder"). You decide what happens and describe what they perceive. Never ask the player to describe the world or the outcome of their actions.
-- Stay inside the story. Never mention tools, ids, databases, prompts, errors or rules. Turn a refusal into an in-world reason: "You pat your pockets: no key." — not "the item does not exist".
+- Stay inside the story. Never mention tools, ids, databases, prompts, errors, rules or the world state. Turn a refusal into an in-world reason: "You pat your pockets: no key." — not "the item does not exist".
 - Write in the story style below, in the story's language. Be brief: usually one to three short paragraphs. Stop where the player can act; offer choices only when asked.
 - Speak and act only for the world, never for the player character beyond what they declared.
 
 # The world is what the tools say
-- The world state below and the results of your tools are the only truth about places, things, people and the player. Never contradict them; never invent exits, possessions or people that are not there.
+- The world state (the last message, rebuilt before each of your replies) and the results of your tools are the only truth about places, things, people and the player. Never contradict them; never invent exits, possessions or people that are not there.
 - Change the world only through your tools, and narrate a change only after its tool succeeded. If a tool refuses, the action did not happen: narrate why it failed.
 - Where things are and who has them are relations: the player goes somewhere with set_relation (player located_in an exit), picks something up with set_relation (player has_item it), puts it down with located_in here. The player goes only along the listed exits. Places inside the current location are part of the scene.
 - The player has exactly what the inventory lists. "I still have the potion" is a claim to check, not a fact.
@@ -43,10 +42,7 @@ export const GM_PROMPT = `You are the Game Master of an interactive story: the n
 Older conversation may be summarized away; only the world state survives in full. Record what matters at once: quests, promises, clues and debts as notes (close them when resolved); lasting changes to things and people with set_entity; the player's wounds, clothes and reputation with set_entity on "player".
 
 # Story style
-${STORY_STYLE}
-
-# World state
-${WORLD_STATE}`;
+${STORY_STYLE}`;
 
 /** [STORY STYLE]: fixed for the whole story, so it belongs to the cached prefix. */
 export function renderStoryStyle(meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary'>): string {
@@ -54,30 +50,25 @@ export function renderStoryStyle(meta: Pick<StoryMeta, 'title' | 'style' | 'worl
   return [`Title: ${meta.title}`, meta.style.trim(), summary && `World: ${summary}`].filter(Boolean).join('\n\n');
 }
 
-/**
- * The system message for one model call: the stable prefix ends with a cache breakpoint
- * (ADR 20: the client places `cache_control`), the world state follows it.
- */
-export function gmSystemMessage(
-  storyStyle: string,
-  worldState: string,
-  template = GM_PROMPT,
-): SystemMessage {
-  const at = template.indexOf(WORLD_STATE);
-  if (at < 0) throw new Error(`The GM prompt has no ${WORLD_STATE} marker`);
-  const stable = template.slice(0, at).replace(STORY_STYLE, storyStyle);
-  const changing = worldState + template.slice(at + WORLD_STATE.length);
+/** The system message: the same for every call of the story, cached whole (ADR 20, 46). */
+export function gmSystemMessage(storyStyle: string, template = GM_PROMPT): SystemMessage {
   return new SystemMessage({
-    content: [
-      { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: changing },
-    ],
+    content: [{ type: 'text', text: template.replace(STORY_STYLE, storyStyle), cache_control: { type: 'ephemeral' } }],
   });
+}
+
+export const WORLD_STATE_HEADING = '# World state';
+
+/** The world state as the last message of a call, a system message (not saved, ADR 46). */
+export function worldStateMessage(worldState: string): SystemMessage {
+  return new SystemMessage(
+    `${WORLD_STATE_HEADING}\n(From the game engine, rebuilt for this moment: the only truth about the world. Not the player's words, not part of the story: never mention it.)\n\n${worldState}`,
+  );
 }
 
 const BRIEF = 240;
 
-/** {{WORLD_STATE}}: rebuilt before every model call from `world_*`, notes and recent events. */
+/** The world state: rebuilt before every model call from `world_*`, notes and recent events. */
 export async function renderWorldState(world: World): Promise<string> {
   const scene = await world.scene();
   const names = new Map<string, string>();

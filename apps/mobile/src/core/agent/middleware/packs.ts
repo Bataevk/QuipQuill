@@ -28,14 +28,10 @@ export function actorOf(message: BaseMessage | undefined): Ref | undefined {
  * — so a retried turn picks up where it broke:
  * - **actor**: the master's last reply asked entities with react_entity, all its calls have
  *   results, and one of them has no line yet → that entity speaks, with its situation;
- * - **master**: entities have spoken this turn → the standard pack plus a short instruction
- *   right after the last line;
- * - **standard** otherwise.
+ * - **standard** otherwise: the master, with his usual prompt and tools (ADR 46: nothing is
+ *   added after a line, so the cached prefix holds).
  */
-export type Pack =
-  | { kind: 'standard' }
-  | { kind: 'actor'; entity: Ref; situation: string }
-  | { kind: 'master'; spoke: Ref[] };
+export type Pack = { kind: 'standard' } | { kind: 'actor'; entity: Ref; situation: string };
 
 export function packOf(messages: BaseMessage[]): Pack {
   const turn = messages.slice(Math.max(turnStart(messages), 0));
@@ -52,20 +48,7 @@ export function packOf(messages: BaseMessage[]): Pack {
       return { kind: 'actor', entity, situation: String(call.args.situation ?? '') };
     }
   }
-  const lines = turn.flatMap((m) => {
-    const ref = actorOf(m);
-    return ref && m.text.trim() ? [ref] : [];
-  });
-  if (lines.length) return { kind: 'master', spoke: [...new Map(lines.map((l) => [l.id, l])).values()] };
   return { kind: 'standard' };
-}
-
-export function masterInstruction(spoke: Ref[]): string {
-  const names = spoke.map((r) => r.name).join(' and ');
-  return [
-    `[Game Master] ${names} had their say; the player saw it.`,
-    'If how they stand with someone changed, record that tie with set_relation. Then answer the player: only what follows and the rest of the scene. Never repeat their words.',
-  ].join('\n');
 }
 
 /** A line as the master sees it: whose it is, so it is not taken for his own narration. */
@@ -91,8 +74,8 @@ export interface PacksOptions extends ActorDeps {
  * prompt, its own chat (`npc:<id>`) and the situation as messages, no tools — streamed in its
  * bubble. Then the middleware (only here) journals `entity.reacted`, adds the exchange to the
  * entity's chat and puts the line into the master's history as an AI message marked `qq_actor`.
- * Then the **master** pack: the standard one with, right after the last line, a short
- * instruction that is not saved. A new turn is the standard pack again.
+ * Then the master goes on with his standard prompt and tools; he sees each line as
+ * "Name [id]: …".
  */
 export function packsMiddleware({ world, chats, model }: PacksOptions) {
   /** The entity's line: its model on its chat, then journal and chat — once per situation. */
@@ -121,7 +104,6 @@ export function packsMiddleware({ world, chats, model }: PacksOptions) {
     name: 'Packs',
     wrapModelCall: async (request, handler) => {
       const pack = packOf(request.messages);
-      const messages = request.messages.map(shownLine);
       if (pack.kind === 'actor') {
         const signal = request.runtime?.signal;
         const tag = (extra: Record<string, unknown>) => ({ [ACTOR_LINE]: pack.entity, ...extra });
@@ -135,18 +117,7 @@ export function packsMiddleware({ world, chats, model }: PacksOptions) {
           return new AIMessage({ content: '', additional_kwargs: tag({ [ACTOR_FAILED]: (error as Error).message }) });
         }
       }
-      if (pack.kind === 'master') {
-        const at = request.messages.findLastIndex((m) => actorOf(m));
-        return handler({
-          ...request,
-          messages: [
-            ...messages.slice(0, at + 1),
-            new HumanMessage(masterInstruction(pack.spoke)),
-            ...messages.slice(at + 1),
-          ],
-        });
-      }
-      return handler({ ...request, messages });
+      return handler({ ...request, messages: request.messages.map(shownLine) });
     },
     afterModel: {
       canJumpTo: ['model'],

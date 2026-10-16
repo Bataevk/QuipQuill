@@ -29,6 +29,20 @@ describe('wire format', () => {
     ]);
   });
 
+  it('keeps a breakpoint on an assistant text or a tool result as parts (ADR 46)', () => {
+    const cached = (text: string) => [{ type: 'text', text, cache_control: { type: 'ephemeral' as const } }];
+    const wire = toWireMessages([
+      new AIMessage({ content: cached('"Below the bank."') }),
+      new ToolMessage({ content: cached('Noted.'), tool_call_id: 'c1' }),
+      new ToolMessage({ content: 'plain', tool_call_id: 'c2' }),
+    ]);
+    expect(wire).toEqual([
+      { role: 'assistant', content: cached('"Below the bank."') },
+      { role: 'tool', content: cached('Noted.'), tool_call_id: 'c1' },
+      { role: 'tool', content: 'plain', tool_call_id: 'c2' },
+    ]);
+  });
+
   it('turns done into an AIMessage with parsed tool calls, usage and bad arguments flagged', () => {
     const done: DoneEvent = {
       ...routed,

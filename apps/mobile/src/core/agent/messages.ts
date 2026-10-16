@@ -5,6 +5,8 @@
  */
 import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
+const CACHE = { type: 'ephemeral' } as const;
+
 export type InputSource = 'player' | 'system' | 'summary';
 
 const SOURCE = 'qq_source';
@@ -55,4 +57,40 @@ export function estimateTokens(messages: BaseMessage[]): number {
     }
   }
   return Math.ceil(chars / 4);
+}
+
+/**
+ * Cache breakpoints for one call (ADR 46): on the last message with text, so the provider
+ * caches everything up to it; when that last message is a tool result, also on the last input
+ * or AI text before it (should the provider ignore a breakpoint in a tool result). Copies;
+ * the history itself is not changed.
+ */
+export function withCacheBreakpoints(messages: BaseMessage[]): BaseMessage[] {
+  const marked = [...messages];
+  const last = marked.findLastIndex((m) => m.text.trim());
+  if (last < 0) return marked;
+  marked[last] = withBreakpoint(marked[last]);
+  if (ToolMessage.isInstance(messages[last])) {
+    const before = messages.findLastIndex((m, i) => i < last && !ToolMessage.isInstance(m) && m.text.trim());
+    if (before >= 0) marked[before] = withBreakpoint(marked[before]);
+  }
+  return marked;
+}
+
+function withBreakpoint(message: BaseMessage): BaseMessage {
+  const content = [{ type: 'text' as const, text: message.text, cache_control: CACHE }];
+  const common = { id: message.id, content, additional_kwargs: message.additional_kwargs };
+  if (ToolMessage.isInstance(message)) {
+    return new ToolMessage({ ...common, tool_call_id: message.tool_call_id, name: message.name, status: message.status });
+  }
+  if (AIMessage.isInstance(message)) {
+    return new AIMessage({
+      ...common,
+      tool_calls: message.tool_calls,
+      usage_metadata: message.usage_metadata,
+      response_metadata: message.response_metadata,
+    });
+  }
+  if (HumanMessage.isInstance(message)) return new HumanMessage(common);
+  return message;
 }

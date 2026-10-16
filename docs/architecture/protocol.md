@@ -89,7 +89,7 @@ graph LR
 - `heartbeat` приходит, только пока в подписанных сессиях идёт генерация и сокет молчал дольше интервала (по умолчанию 2 с); `ping` → `heartbeat` всегда.
 - Коды `error`: `rate_limited` (30/мин на пользователя, повторяемо), `request_too_large` (> ~95K токенов), `too_many_tools` (> 32), `bad_request` (в т.ч. провайдер отверг запрос), `message_too_large`, `queue_unavailable`, `provider_error` (повторяемо), `timeout` (повторяемо), `limit_exceeded` (дневной лимит тарифа; приходит **без** `status`, модель не вызывается).
 - Порядок событий генерации: `status` → `delta`* → `tool_call`* (все вызовы — после текста, каждый целиком) → `done`; либо один `error`.
-- `messages`, `tools`, `responseFormat` передаются провайдеру как есть (формат OpenAI). Точки кэширования ставит **клиент**: `cache_control: {type: "ephemeral"}` на content-part в конце стабильной части промпта (Haiku 5.5 кэширует префиксы от 512 токенов).
+- `messages`, `tools`, `responseFormat` передаются провайдеру как есть (формат OpenAI). Точки кэширования ставит **клиент**: `cache_control: {type: "ephemeral"}` на content-part — в конце системного промпта и на последнем сообщении истории, в том числе у ответа ассистента или результата инструмента (тогда их `content` — массив частей, ADR 46). Haiku 5.5 кэширует префиксы от 512 токенов.
 - Модель, `max_tokens` и effort выбирает сервер по `purpose` и тарифу ([llm/policy.py](../../cloud/src/quipquill_cloud/llm/policy.py)): `gm` — effort medium, 2000; `npc` — low, 800; `guard` — low, 200; `summary`/`character` — low, 1500; `generator` (фоновый генератор мира после хода, ADR 42) — low, 1200.
 - `statusKey` — ключ строки интерфейса (локализация на клиенте), `error.<code>`.
 

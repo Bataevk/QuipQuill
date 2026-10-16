@@ -24,8 +24,8 @@ export interface WireToolCall {
 export type WireMessage =
   | { role: 'system'; content: string | TextPart[] }
   | { role: 'user'; content: string | TextPart[] }
-  | { role: 'assistant'; content: string | null; tool_calls?: WireToolCall[] }
-  | { role: 'tool'; content: string; tool_call_id: string };
+  | { role: 'assistant'; content: string | TextPart[] | null; tool_calls?: WireToolCall[] }
+  | { role: 'tool'; content: string | TextPart[]; tool_call_id: string };
 
 export interface WireTool {
   type: 'function';

@@ -11,7 +11,7 @@ import { createGmAgent, type GmAgentOptions } from '../gm-agent';
 import { estimateTokens, inputMessage, sourceOf } from '../messages';
 import { NothingToRetryError, retryTurn, runTurn } from '../run-turn';
 import { TurnInProgressError } from '../turn-lock';
-import { lastToolText, systemText } from '../testing/demo-scenario';
+import { conversation, lastToolText, systemText } from '../testing/demo-scenario';
 import { ScriptedChatModel, type Step } from '../testing/scripted-model';
 import { TranscriptStore } from '../transcript';
 import { repairDanglingToolCalls } from './bug-guard';
@@ -105,7 +105,7 @@ describe('BugGuard', () => {
     const result = await play('Who is Mags?', [
       (messages) => {
         // the model never sees the dangling call
-        expect(types(messages.slice(1))).toEqual(['human', 'human']);
+        expect(types(conversation(messages))).toEqual(['human', 'human']);
         return { text: 'Mags runs the crew.' };
       },
     ]);
@@ -389,7 +389,7 @@ describe('retryTurn', () => {
     const agent = createGmAgent({ model, world, meta });
     model.push((messages) => {
       // BugGuard dropped the unanswered search; the note and its result are still there
-      expect(messages.slice(1).map((m) => m.getType())).toEqual(['human', 'ai', 'tool']);
+      expect(conversation(messages).map((m) => m.getType())).toEqual(['human', 'ai', 'tool']);
       return { text: 'Mags runs the crew.' };
     });
     const result = await retryTurn({ agent, world, chats, transcript });

@@ -22,14 +22,15 @@ function toWireMessage(message: BaseMessage): WireMessage {
         type: 'function',
         function: { name: call.name, arguments: JSON.stringify(call.args ?? {}) },
       }));
-      const text = plainText(ai.content);
+      const text = cached(ai.content) ? toParts(ai.content) : plainText(ai.content);
       return toolCalls.length > 0
         ? { role: 'assistant', content: text || null, tool_calls: toolCalls }
         : { role: 'assistant', content: text };
     }
     case 'tool': {
       const tool = message as ToolMessage;
-      return { role: 'tool', content: plainText(tool.content), tool_call_id: tool.tool_call_id };
+      const content = cached(tool.content) ? toParts(tool.content) : plainText(tool.content);
+      return { role: 'tool', content, tool_call_id: tool.tool_call_id };
     }
     default:
       throw new Error(`Unsupported message type: ${message.getType()}`);
@@ -46,6 +47,11 @@ function toParts(content: BaseMessage['content']): string | TextPart[] {
       text: block.text as string,
       ...(block.cache_control ? { cache_control: block.cache_control } : {}),
     }));
+}
+
+/** Whether the content carries a cache breakpoint (then its text blocks are kept as parts). */
+function cached(content: BaseMessage['content']): boolean {
+  return typeof content !== 'string' && (content as ContentBlock[]).some((block) => block.cache_control);
 }
 
 function plainText(content: BaseMessage['content']): string {

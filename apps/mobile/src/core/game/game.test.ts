@@ -251,7 +251,7 @@ describe('Game', () => {
       expect(game.lastGeneration).toMatchObject({ rejected: [] });
       expect((await game.world.state.entity(MAGS))?.description).toBe('She no longer counts on the stranger.');
       // the master's next call already sees what the generator recorded
-      expect(JSON.stringify(master.calls[2][0].content)).toContain('Mags Holloway changed: She no longer counts');
+      expect(master.calls[2].at(-1)!.text).toContain('Mags Holloway changed: She no longer counts');
     });
 
     it("adds its cost to the turn's", async () => {

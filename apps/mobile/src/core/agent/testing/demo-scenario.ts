@@ -9,13 +9,21 @@ import type { TranscriptStore } from '../transcript';
 import type { GmAgent } from '../gm-agent';
 import { runTurn, type TurnResult } from '../run-turn';
 import type { World } from '../../world/world';
+import { WORLD_STATE_HEADING } from '../prompt';
 import type { ScriptedChatModel, Step } from './scripted-model';
 
-/** Text of the last tool message the model was given, or of the system prompt. */
+/** Text of the last tool message the model was given. */
 export const lastToolText = (messages: BaseMessage[]) =>
   messages.findLast((m) => m.getType() === 'tool')?.text ?? '';
+const isWorldState = (m: BaseMessage | undefined) => !!m && m.getType() === 'system' && m.text.startsWith(WORLD_STATE_HEADING);
+/** What the model was told around the conversation: the system prompt and the world state (ADR 46). */
 export const systemText = (messages: BaseMessage[]) =>
-  messages[0]?.getType() === 'system' ? messages[0].text : '';
+  [messages[0]?.getType() === 'system' ? messages[0].text : '', isWorldState(messages.at(-1)) ? messages.at(-1)!.text : '']
+    .filter(Boolean)
+    .join('\n\n');
+/** The conversation the model was given: no system prompt, no world state. */
+export const conversation = (messages: BaseMessage[]) =>
+  messages.filter((m, i) => !(i === 0 && m.getType() === 'system') && !(i === messages.length - 1 && isWorldState(m)));
 
 export const DEMO_TURNS: { input: string; steps: Step[] }[] = [
   {

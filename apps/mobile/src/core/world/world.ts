@@ -31,7 +31,7 @@ export interface CharacterSheet {
   description: string;
 }
 
-/** What the master sees each call ({{WORLD_STATE}}, agent.md). */
+/** What the master sees each call (the world state, agent.md). */
 export interface Scene {
   player: Entity;
   location: Entity | undefined;

@@ -15,7 +15,7 @@ import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
 import { isUnfinished, retryTurn, runTurn } from './run-turn';
-import { lastToolText } from './testing/demo-scenario';
+import { conversation, lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
 import { TranscriptStore } from './transcript';
 
@@ -96,8 +96,9 @@ describe('react_entity and the actor pack (ADR 45)', () => {
       react('Mags Holloway', 'The new recruit asks you about the vault.'),
       (messages) => {
         expect(lastToolText(messages)).toBe('Mags Holloway [npc:mags-holloway] reacts now.');
-        expect(messages.at(-2)!.text).toBe(`Mags Holloway [npc:mags-holloway]: ${line}`);
-        expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway had their say; the player saw it\./);
+        // her line, shown as hers; nothing added after it (ADR 46: the cached prefix holds)
+        expect(conversation(messages).at(-1)!.text).toBe(`Mags Holloway [npc:mags-holloway]: ${line}`);
+        expect(master.boundTools).not.toContain('actor_note');
         return { text: 'The tavern noise swallows the rest.' };
       },
     );
@@ -171,7 +172,7 @@ describe('react_entity and the actor pack (ADR 45)', () => {
   it('a stone stays silent: no bubble, the master is told it does not react', async () => {
     says('item:crate', SILENCE);
     const result = await play('I ask the crate where the gold is.', react('crate', 'Someone asks you where the gold is.'), (messages) => {
-      expect(messages.at(-1)!.text).toBe('crate [item:crate] does not react.');
+      expect(conversation(messages).at(-1)!.text).toBe('crate [item:crate] does not react.');
       return { text: 'The crate keeps its counsel.' };
     });
     expect(result.events.map((e) => e.payload)).toEqual([
@@ -212,7 +213,10 @@ describe('react_entity and the actor pack (ADR 45)', () => {
         ],
       },
       (messages) => {
-        expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway and innkeeper had their say/);
+        expect(conversation(messages).slice(-2).map((m) => m.text)).toEqual([
+          'Mags Holloway [npc:mags-holloway]: "No."',
+          'innkeeper [npc:innkeeper]: *He wipes the table, pointedly.*',
+        ]);
         return { text: 'No room tonight.' };
       },
     );
@@ -262,7 +266,7 @@ describe('react_entity and the actor pack (ADR 45)', () => {
       react('Silas Ashcombe', 'Someone shouts your name.'),
       react('Mags Holloway', 'The recruit shouts for Silas Ashcombe.'),
       (messages) => {
-        expect(messages.at(-1)!.text).toMatch(/^Error: Mags Holloway \[npc:mags-holloway\] could not react right now \(npc:mags-holloway was not expected/);
+        expect(conversation(messages).at(-1)!.text).toMatch(/^Error: Mags Holloway \[npc:mags-holloway\] could not react right now \(npc:mags-holloway was not expected/);
         return { text: 'Nobody answers.' };
       },
     );
@@ -302,7 +306,9 @@ describe('a turn cut in the middle (retryTurn)', () => {
     expect(saved.at(-1)!.additional_kwargs?.qq_actor).toEqual({ id: MAGS, name: 'Mags Holloway' });
     expect(isUnfinished(saved)).toBe(true);
 
-    master.push((messages) => ({ text: messages.at(-1)!.text.startsWith('[Game Master]') ? 'She turns away.' : '?' }));
+    master.push((messages) => ({
+      text: conversation(messages).at(-1)!.text === 'Mags Holloway [npc:mags-holloway]: "Shove off."' ? 'She turns away.' : '?',
+    }));
     const result = await retry();
     expect(result.reply).toBe('She turns away.');
     expect(actorCalls).toHaveLength(1);

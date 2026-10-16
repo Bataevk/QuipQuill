@@ -149,7 +149,8 @@ it('stages 6.2d, 6.2h: after the player refuses the heist, the world and the peo
   const mags = 'npc:mags-holloway';
   try {
     await timed('adaptation', () => game.start());
-    await timed('choice + opening scene', () => game.choose(0));
+    const opening = (await timed('choice + opening scene', () => game.choose(0))) as TurnResult;
+    if (!opening.reply) console.log('Empty opening:', opening.messages.map(describeMessage));
     for (const move of REFUSAL) await timed(move, () => game.send(move));
     console.log(table('Refusal', steps));
 
