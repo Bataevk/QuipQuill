@@ -41,6 +41,13 @@
 
 **Решение владельца:** LangChain JS — [ADR 25](../architecture/decisions.md#25-агент-мастера-на-langchain-js-v1-с-обходами-для-hermes).
 
+## 6.2i Живой прогон «отказ от ограбления» с генератором в afterAgent
+**Проведён 2026-10-17.** `QQ_RUNS=0 npm run test:live`: «отказ» на Haiku 5.5 — без ошибок; генератор и `note_entity` запускает middleware `AfterTurn`.
+
+- На ходу отказа генератор записал связь Mags → игрок («accepted Ada's refusal… respects her honesty») и **переписал описание Mags**: «…still plans to steal the Clockheart, though Ada has refused to join her» — пробел 6.2d (описание не переписывалось) в этот раз закрыт.
+- Один отказ мира: генератор назвал сущности id «mags-holloway — ada-finch» (без префикса, игрок по имени) — изменение отброшено, остальное применено.
+- Средний ход — $0,0021 (6.2h3 — $0,0019; разброс прогонов); кэш входа ~55%.
+
 ## 6.2h3 Живой прогон с кэшем истории
 **Проведён 2026-10-17.** `QQ_RUNS=1 npm run test:live`: демо и «отказ» на Haiku 5.5 — оба без ошибок (ADR 46).
 

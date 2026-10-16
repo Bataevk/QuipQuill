@@ -9,8 +9,8 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { CharacterProposal } from '../agent/character';
 import { lastProposal } from '../agent/character';
 import { ChatStore, GM_CHAT } from '../agent/chat-store';
-import { noteEntities } from '../agent/entity-memory';
-import { generate, type GeneratorResult } from '../agent/generator';
+import { BackgroundWork } from '../agent/background';
+import type { GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
 import { sourceOf } from '../agent/messages';
 import { queueModels } from '../agent/models';
@@ -64,9 +64,6 @@ export interface GameModels {
   memoryModel?: BaseChatModel;
 }
 
-/** The generator's call limit: the next action waits for it at most this long (stage 6.2d). */
-export const GENERATOR_TIMEOUT_MS = 30_000;
-
 /**
  * - `new`: the playthrough has not started (start it with `start()`);
  * - `adapting`: the character is being fitted to the world (cards: `proposal()`);
@@ -107,9 +104,10 @@ export class Game {
   actions = 0;
   /** What the generator did after the last player turn (dev diagnostics). */
   lastGeneration: GeneratorResult | { error: string } | undefined;
-  private readonly generatorModel: BaseChatModel | undefined;
-  private readonly memoryModel: BaseChatModel | undefined;
-  private generation: { done: Promise<void>; controller: AbortController } | undefined;
+  /** The generator and entity memory after a player's turn (AfterTurn middleware, stage 6.2i). */
+  private readonly background: BackgroundWork;
+  /** The running action's metering; background work adds its cost after it. */
+  private acting: Promise<void> = Promise.resolve();
   private readonly generatedListeners = new Set<() => void>();
 
   private constructor(init: {
@@ -135,6 +133,7 @@ export class Game {
         new QueueChatModel({ socket: init.services.socket, sessionId: init.save.id, channel: 'gm', purpose: 'gm' }),
       );
     const embeddings = init.embeddings;
+    this.background = new BackgroundWork({ around: (work) => this.meteredBackground(work) });
     this.agent = createGmAgent({
       model: models.model,
       guardModel: models.guardModel,
@@ -143,9 +142,14 @@ export class Game {
       meta: init.meta,
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
       actor: { model: models.actorModel, chats: this.chats },
+      afterTurn: {
+        chats: this.chats,
+        work: this.background,
+        generatorModel: models.generatorModel,
+        memoryModel: models.memoryModel,
+        onGenerated: (result) => (this.lastGeneration = result),
+      },
     });
-    this.generatorModel = models.generatorModel;
-    this.memoryModel = models.memoryModel;
     this.sessionDeps = {
       world: init.world,
       chats: this.chats,
@@ -179,7 +183,7 @@ export class Game {
   }
 
   async close(): Promise<void> {
-    this.generation?.controller.abort();
+    this.background.cancel();
     await this.settle();
     await this.db.close();
   }
@@ -243,9 +247,7 @@ export class Game {
    */
   async send(input: string, signal?: AbortSignal): Promise<TurnResult> {
     await this.settle();
-    const result = await this.metered(() => this.touched(runTurn({ ...this.turnDeps(signal), input })));
-    this.startGenerator(result);
-    return result;
+    return this.metered(() => this.touched(runTurn({ ...this.turnDeps(signal), input })));
   }
 
   /**
@@ -262,9 +264,7 @@ export class Game {
         return this.metered(() => this.touched(startStory({ ...this.sessionDeps, agent: this.agent, signal })));
       case 'playing': {
         if (!(await this.unfinished())) return undefined;
-        const result = await this.metered(() => this.touched(retryTurn(this.turnDeps(signal))));
-        this.startGenerator(result);
-        return result;
+        return this.metered(() => this.touched(retryTurn(this.turnDeps(signal))));
       }
     }
   }
@@ -313,6 +313,8 @@ export class Game {
   private async metered<T>(work: () => Promise<T>): Promise<T> {
     const meter = new UsageMeter();
     const off = this.onStream((event) => meter.apply(event));
+    let done!: () => void;
+    this.acting = new Promise((resolve) => (done = resolve));
     try {
       return await work();
     } finally {
@@ -320,68 +322,31 @@ export class Game {
       this.actions += 1;
       this.lastUsage = meter.total;
       this.sessionUsage = addUsage(this.sessionUsage, meter.total);
+      done();
     }
   }
 
-  /**
-   * After a player's turn: the generator in the background, under the turn lock. Its cost joins
-   * the turn's (`lastUsage`); a refused change or a failure goes to the developer's log, never
-   * to the player. Turns the Guard rejected and system turns (the opening) have nothing to read.
-   */
-  private startGenerator(result: TurnResult): void {
-    const input = result.messages[0];
-    if (result.rejected || !input || sourceOf(input) !== 'player') return;
-    if (!this.generatorModel && !this.memoryModel) return;
-    const controller = new AbortController();
-    const meter = new UsageMeter();
-    const off = this.onStream((event) => meter.apply(event));
-    const generator = this.generatorModel;
-    const memory = this.memoryModel;
-    const generated = generator
-      ? generate(
-          { model: generator, world: this.world, meta: this.meta, signal: controller.signal, timeoutMs: GENERATOR_TIMEOUT_MS },
-          { turn: result.turn, input: input.text, reply: result.reply },
-        )
-          .then((done) => {
-            this.lastGeneration = done;
-            for (const r of done.rejected) console.warn(`[generator] turn ${result.turn}: ${r.change}: ${r.error}`);
-          })
-          .catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error);
-            this.lastGeneration = { error: message };
-            console.warn(`[generator] turn ${result.turn} failed: ${message}`);
-          })
-      : Promise.resolve();
-    // Entity memory after the generator: both take the turn lock, one at a time.
-    const done = generated
-      .then(() =>
-        memory
-          ? noteEntities(
-              { model: memory, world: this.world, chats: this.chats, signal: controller.signal, timeoutMs: GENERATOR_TIMEOUT_MS },
-              result.turn,
-            ).then((noted) => {
-              for (const r of noted.rejected) console.warn(`[memory] turn ${result.turn}: ${r.entity}: ${r.error}`);
-            })
-          : undefined,
-      )
-      .catch((error: unknown) => {
-        console.warn(`[memory] turn ${result.turn} failed: ${error instanceof Error ? error.message : String(error)}`);
-      })
-      .finally(() => {
-        off();
-        this.lastUsage = addUsage(this.lastUsage ?? emptyUsage(), meter.total);
-        this.sessionUsage = addUsage(this.sessionUsage, meter.total);
-        this.generatedListeners.forEach((listener) => listener());
-      });
-    this.generation = { done, controller };
+  /** Waits for the background work of the last turn; it ends by itself within AFTER_TURN_TIMEOUT_MS. */
+  private settle(): Promise<void> {
+    return this.background.settle();
   }
 
-  /** Waits for the running generator; it ends by itself within GENERATOR_TIMEOUT_MS. */
-  private async settle(): Promise<void> {
-    const running = this.generation;
-    if (!running) return;
-    await running.done;
-    if (this.generation === running) this.generation = undefined;
+  /**
+   * Meters one background job: its cost joins the turn's (`lastUsage`) once the turn's own
+   * metering is done, then `onGenerated` listeners hear of it.
+   */
+  private async meteredBackground(work: () => Promise<void>): Promise<void> {
+    const meter = new UsageMeter();
+    const off = this.onStream((event) => meter.apply(event));
+    try {
+      await work();
+    } finally {
+      off();
+      await this.acting;
+      this.lastUsage = addUsage(this.lastUsage ?? emptyUsage(), meter.total);
+      this.sessionUsage = addUsage(this.sessionUsage, meter.total);
+      this.generatedListeners.forEach((listener) => listener());
+    }
   }
 
   private async touched<T>(work: Promise<T>): Promise<T> {

@@ -8,6 +8,7 @@ import { createAgent } from 'langchain';
 
 import type { StoryMeta } from '../story/story-meta';
 import type { World } from '../world/world';
+import { afterTurnMiddleware, type AfterTurnOptions } from './middleware/after-turn';
 import { bugGuardMiddleware } from './middleware/bug-guard';
 import { contextMiddleware, type ContextOptions } from './middleware/context';
 import { guardMiddleware, type GuardOptions } from './middleware/guard';
@@ -33,12 +34,15 @@ export interface GmAgentOptions {
   context?: Omit<ContextOptions, 'model'>;
   toolLimit?: number;
   onGuardError?: GuardOptions['onError'];
+  /** Background work after a player's turn: generator and entity memory (stage 6.2i). */
+  afterTurn?: Omit<AfterTurnOptions, 'world' | 'meta'>;
 }
 
 /**
  * Middleware order (agent.md): `before*` hooks run in this order, `after*` in reverse.
  * BugGuard → Guard (beforeAgent); Context (beforeModel); Packs, WorldPrompt (wrapModelCall);
- * InvalidToolCalls → ToolLimit, Packs (afterModel). Packs only with an actor (react_entity).
+ * InvalidToolCalls → ToolLimit, Packs (afterModel); AfterTurn (afterAgent, last). Packs only with an
+ * actor (react_entity), AfterTurn only with background work.
  */
 export function createGmAgent(options: GmAgentOptions) {
   const { model, world, meta, embed, actor } = options;
@@ -52,6 +56,7 @@ export function createGmAgent(options: GmAgentOptions) {
         }),
       ]
     : [];
+  const afterTurn = options.afterTurn ? [afterTurnMiddleware({ world, meta, ...options.afterTurn })] : [];
   return createAgent({
     model,
     tools: createGmTools({ world, embed, actor }),
@@ -64,6 +69,8 @@ export function createGmAgent(options: GmAgentOptions) {
       // Packs outside WorldPrompt: the actor pack is a call of its own, not the master's prompt.
       ...(actor ? [packsMiddleware({ world, ...actor })] : []),
       worldPromptMiddleware(world, renderStoryStyle(meta)),
+      // Last: a conditional spread at the head breaks createAgent's type inference.
+      ...afterTurn,
     ],
   });
 }

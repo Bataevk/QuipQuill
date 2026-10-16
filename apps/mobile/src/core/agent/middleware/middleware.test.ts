@@ -6,6 +6,7 @@ import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
+import { BackgroundWork } from '../background';
 import { ChatStore, GM_CHAT } from '../chat-store';
 import { createGmAgent, type GmAgentOptions } from '../gm-agent';
 import { estimateTokens, inputMessage, sourceOf } from '../messages';
@@ -408,5 +409,65 @@ describe('retryTurn', () => {
     await expect(retryTurn({ agent: createGmAgent({ model, world, meta }), world, chats, transcript })).rejects.toThrow(
       NothingToRetryError,
     );
+  });
+});
+
+describe('AfterTurn (stage 6.2i)', () => {
+  const EMPTY = JSON.stringify({ relations: [], cancelled: [], moves: [], edits: [], additions: [] });
+  const verdict = (v: 'pass' | 'reject', reply = '') => ({ text: JSON.stringify({ verdict: v, reason: 'r', reply }) });
+
+  function background() {
+    const generatorModel = new ScriptedChatModel([]);
+    const work = new BackgroundWork();
+    const generated: unknown[] = [];
+    const afterTurn = { chats, work, generatorModel, onGenerated: (r: unknown) => generated.push(r) };
+    return { generatorModel, work, generated, afterTurn };
+  }
+
+  it('starts the generator after a player turn, once the turn has released its lock', async () => {
+    const { generatorModel, work, generated, afterTurn } = background();
+    let lockedWhileGenerating: boolean | undefined;
+    generatorModel.push(() => {
+      // the turn is over: another turn could take the lock now
+      lockedWhileGenerating = false;
+      return { text: EMPTY };
+    });
+    const result = await play('I wave to Mags.', [{ text: 'She nods.' }], { afterTurn });
+    await work.settle();
+    expect(lockedWhileGenerating).toBe(false);
+    expect(generated).toEqual([{ applied: [], rejected: [] }]); // not a TurnInProgressError
+    const context = generatorModel.calls[0][1].text;
+    expect(context).toContain(`# This turn (${result.turn})\nPlayer: I wave to Mags.\nGame Master: She nods.`);
+  });
+
+  it('does nothing after a system turn or a turn the Guard rejected', async () => {
+    const { generatorModel, work, afterTurn } = background();
+    model.push({ text: 'The tavern smokes.' });
+    await runTurn({ agent: createGmAgent({ model, world, meta, afterTurn }), world, chats, transcript, input: 'session_start', source: 'system' });
+    const guardModel = new ScriptedChatModel([verdict('reject', 'No sword here.')]);
+    await play('I draw my legendary sword.', [], { guardModel, afterTurn });
+    await work.settle();
+    expect(generatorModel.calls).toEqual([]);
+  });
+
+  it('holds the turn lock while it runs: a turn that does not wait for it is refused', async () => {
+    const { generatorModel, work, afterTurn } = background();
+    let started = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = {
+      invoke: async () => {
+        started = true;
+        await gate;
+        return new AIMessage(EMPTY);
+      },
+    } as unknown as ScriptedChatModel;
+    await play('I wave.', [{ text: 'She nods.' }], { afterTurn: { ...afterTurn, generatorModel: slow } });
+    await vi.waitFor(() => expect(started).toBe(true));
+    await expect(play('Again.', [], { afterTurn })).rejects.toBeInstanceOf(TurnInProgressError);
+    release();
+    await work.settle(); // what Game does before the next action
+    generatorModel.push({ text: EMPTY });
+    expect((await play('Again.', [{ text: 'Fine.' }], { afterTurn })).reply).toBe('Fine.');
   });
 });

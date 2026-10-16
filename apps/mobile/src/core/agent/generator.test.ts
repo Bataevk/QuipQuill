@@ -55,6 +55,7 @@ describe('generator', () => {
     expectOk(
       await world.recordReaction({ entity: MAGS, situation: 'The stranger refuses.', reaction: '"Suit yourself."' }),
     );
+    expectOk(await world.addActorNote(MAGS, 'The stranger turned me down; I plan alone now.'));
     const [system, context] = await generatorMessages({ world, meta }, TURN);
 
     const [stable] = system.content as { text: string; cache_control?: unknown }[];
@@ -64,10 +65,12 @@ describe('generator', () => {
     expect(context.text).toContain('# World state\nPlayer: Aria [player].');
     expect(context.text).toContain('# People involved\n- Mags Holloway [npc:mags-holloway] (npc), in The Rusty Gear');
     expect(context.text).toContain('  - Pip Quillon [npc:pip-quillon]: leader of the crew');
+    expect(context.text).toContain('  Remembers:\n  - The stranger turned me down; I plan alone now.');
+    expect(stable.text).toContain('What a person remembers (their notes) is their own view');
     expect(context.text).toContain(`Player: ${TURN.input}`);
     expect(context.text).toContain(`Game Master: ${TURN.reply}`);
     expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Suit yourself."');
-    expect(context.text).toContain('Already recorded this turn:\n- nothing');
+    expect(context.text).toContain('Already recorded this turn:\n- [turn 1] Mags Holloway decided: The stranger turned me down');
   });
 
   it('applies the changes through the world, journaled for the generator', async () => {

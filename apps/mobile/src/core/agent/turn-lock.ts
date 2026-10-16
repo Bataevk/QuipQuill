@@ -9,6 +9,7 @@ export class TurnInProgressError extends Error {
 }
 
 const busy = new WeakSet<World>();
+const waiting = new WeakMap<World, (() => void)[]>();
 
 /**
  * One turn at a time per playthrough: two at once would interleave their world changes and
@@ -22,5 +23,14 @@ export async function exclusive<T>(world: World, fn: () => Promise<T>): Promise<
     return await fn();
   } finally {
     busy.delete(world);
+    const resolvers = waiting.get(world) ?? [];
+    waiting.delete(world);
+    resolvers.forEach((resolve) => resolve());
   }
+}
+
+/** Resolves once no turn holds the lock of this playthrough (at once if none does). */
+export function released(world: World): Promise<void> {
+  if (!busy.has(world)) return Promise.resolve();
+  return new Promise((resolve) => waiting.set(world, [...(waiting.get(world) ?? []), resolve]));
 }

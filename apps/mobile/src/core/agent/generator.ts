@@ -31,6 +31,7 @@ Compare what people said and what the narration showed with the world state. Whe
 - Record only what this turn established. Never invent new plot, never contradict the narration, never undo what is already recorded.
 - Do not repeat changes listed under "Already recorded this turn".
 - Leave the player character alone: the Game Master keeps their description.
+- What a person remembers (their notes) is their own view: use it to understand them, not as fact about the world.
 - Refer to people, things and places by the ids in square brackets.
 - Most turns change nothing lasting: then answer with empty lists.
 - Answer with JSON only, in the given shape.
@@ -89,6 +90,8 @@ export type WorldChanges = z.infer<typeof Changes>;
 
 /** People in the turn's context at most: those here, then those the turn touched. */
 const MAX_PEOPLE = 8;
+/** The latest actor notes shown for each person (ADR 45). */
+const PERSON_NOTES = 5;
 const BEINGS: readonly EntityType[] = ['NPC', 'CREATURE'];
 
 export interface GeneratorDeps {
@@ -256,10 +259,14 @@ async function personText(world: World, npc: Entity): Promise<string> {
     (t) => `  - ${t.other.name} [${t.other.id}]${t.description ? `: ${brief(t.description, 200)}` : ''}`,
   );
   const place = where ? `${where.name} [${where.id}]` : 'no known place';
+  const notes = await world.log.actorNotes(npc.id, PERSON_NOTES);
   return [
     `- ${npc.name} [${npc.id}] (${npc.type.toLowerCase()}), in ${place}: ${brief(npc.description, 700)}`,
     ties.length ? `  Ties:\n${ties.join('\n')}` : '  Ties: none',
-  ].join('\n');
+    notes.length ? `  Remembers:\n${notes.map((n) => `  - ${brief(n.text, 200)}`).join('\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function idsOf(event: WorldEvent): string[] {
