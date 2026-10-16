@@ -1,5 +1,6 @@
 import type { Db } from '../storage/db';
 import type { VectorIndex } from '../vector/vector-index';
+import { putEntity, relate, unlocate, unplace } from './dynamic-graph';
 import { EventLog } from './event-log';
 import {
   fail,
@@ -68,7 +69,8 @@ type Tx = { db: Db; state: WorldState; log: EventLog };
 
 /**
  * The playthrough's world over an open save. Every change is a command: rules are checked, then
- * the event and the `state_*` change are written in one transaction (data-model.md#события).
+ * the event and the change to the dynamic graph `dyn_*` are written in one transaction
+ * (data-model.md#события); the story's own tables are never written (ADR 42).
  * Broken rules come back as `{ ok: false, error }` with text meant for the model.
  */
 export class World {
@@ -140,7 +142,7 @@ export class World {
 
   // --- commands ------------------------------------------------------------------------------
 
-  /** `session.started`: copies the story into `state_*` and puts the player at the start. */
+  /** `session.started`: the player enters the dynamic graph at the start location. */
   startSession(input: {
     storyId: string;
     character: CharacterSheet;
@@ -154,20 +156,10 @@ export class World {
         character_id: input.character.id,
         player: playerId,
       });
-      await db.run(
-        `INSERT INTO state_entities (id, type, subtype, name, description, props, updated_seq)
-         SELECT id, type, subtype, name, description, props, ? FROM entities`,
-        [event.seq],
-      );
-      await db.run(
-        `INSERT INTO state_relations (id, src, dst, type, description, updated_seq)
-         SELECT id, src, dst, type, description, ? FROM relations`,
-        [event.seq],
-      );
       const start = await state.entity(input.startLocation);
       if (start?.type !== 'LOCATION') reject(`Start location ${input.startLocation} does not exist.`);
       const { id: _id, name, description, ...sheet } = input.character;
-      await insertEntity(db, event.seq, {
+      await putEntity(db, event.seq, {
         id: playerId,
         type: 'PLAYER',
         subtype: null,
@@ -195,16 +187,12 @@ export class World {
       });
       const { race, age } = input.adapted;
       const props = { ...player.props, ...(race ? { race } : {}), ...(typeof age === 'number' ? { age } : {}) };
-      await db.run(
-        'UPDATE state_entities SET name = ?, description = ?, props = ?, updated_seq = ? WHERE id = ?',
-        [
-          input.adapted.name ?? player.name,
-          input.adapted.description ?? player.description,
-          JSON.stringify(props),
-          event.seq,
-          player.id,
-        ],
-      );
+      await putEntity(db, event.seq, {
+        ...player,
+        name: input.adapted.name ?? player.name,
+        description: input.adapted.description ?? player.description,
+        props,
+      });
       return event;
     });
   }
@@ -224,7 +212,7 @@ export class World {
           }.`,
       );
       const event = await log.append(this.turn, 'gm', 'player.moved', { from: here.id, to: to.id });
-      await db.run("DELETE FROM state_relations WHERE src = ? AND type = 'LOCATED_IN'", [player.id]);
+      await unlocate(db, event.seq, player.id);
       await relate(db, event.seq, player.id, to.id, 'LOCATED_IN');
       return event;
     });
@@ -257,7 +245,7 @@ export class World {
       }
       const [from = ''] = await state.placesOf(item.id);
       const event = await log.append(this.turn, 'gm', 'item.taken', { item: item.id, from });
-      await unplace(db, item.id);
+      await unplace(db, event.seq, item.id);
       await relate(db, event.seq, player.id, item.id, 'HAS_ITEM');
       return event;
     });
@@ -273,7 +261,7 @@ export class World {
       const here = await state.locationOf(player.id);
       if (!here) reject('The player is nowhere; the session has not placed them.');
       const event = await log.append(this.turn, 'gm', 'item.dropped', { item: item.id, to: here.id });
-      await unplace(db, item.id);
+      await unplace(db, event.seq, item.id);
       await relate(db, event.seq, item.id, here.id, 'LOCATED_IN');
       return event;
     });
@@ -309,7 +297,7 @@ export class World {
         ? { type: 'HAS_ITEM', target: player.id }
         : { type: 'LOCATED_IN', target: here.id };
       const event = await log.append(this.turn, 'gm', 'entity.added', { entity: id, relation });
-      await insertEntity(db, event.seq, {
+      await putEntity(db, event.seq, {
         id,
         type: input.type,
         subtype: null,
@@ -342,15 +330,11 @@ export class World {
         after.props = { ...entity.props, ...patch.props };
       }
       const event = await log.append(this.turn, 'gm', 'entity.edited', { id: entity.id, before, after });
-      await db.run(
-        'UPDATE state_entities SET description = ?, props = ?, updated_seq = ? WHERE id = ?',
-        [
-          after.description ?? entity.description,
-          JSON.stringify(after.props ?? entity.props),
-          event.seq,
-          entity.id,
-        ],
-      );
+      await putEntity(db, event.seq, {
+        ...entity,
+        description: after.description ?? entity.description,
+        props: after.props ?? entity.props,
+      });
       return event;
     });
   }
@@ -362,11 +346,7 @@ export class World {
         before: player.description,
         after: description,
       });
-      await db.run('UPDATE state_entities SET description = ?, updated_seq = ? WHERE id = ?', [
-        description,
-        event.seq,
-        player.id,
-      ]);
+      await putEntity(db, event.seq, { ...player, description });
       return event;
     });
   }
@@ -475,29 +455,3 @@ function names(entities: Entity[]): string {
 function describeExit(exit: Exit): string {
   return exit.description ? `${exit.to.name} (${exit.description})` : exit.to.name;
 }
-
-async function insertEntity(db: Db, seq: number, entity: Entity): Promise<void> {
-  await db.run(
-    `INSERT INTO state_entities (id, type, subtype, name, description, props, updated_seq)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [entity.id, entity.type, entity.subtype, entity.name, entity.description, JSON.stringify(entity.props), seq],
-  );
-}
-
-async function relate(db: Db, seq: number, src: string, dst: string, type: string): Promise<void> {
-  await db.run(
-    `INSERT INTO state_relations (src, dst, type, description, updated_seq) VALUES (?, ?, ?, '', ?)
-     ON CONFLICT (src, dst, type) DO UPDATE SET updated_seq = excluded.updated_seq`,
-    [src, dst, type, seq],
-  );
-}
-
-/** Removes every placement of an item: `item LOCATED_IN x` and `x HAS_ITEM item`. */
-async function unplace(db: Db, itemId: string): Promise<void> {
-  await db.run(
-    `DELETE FROM state_relations
-      WHERE (src = ? AND type = 'LOCATED_IN') OR (dst = ? AND type = 'HAS_ITEM')`,
-    [itemId, itemId],
-  );
-}
-

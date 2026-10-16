@@ -56,8 +56,10 @@ const count = async (sql: string, params: SqlParams = []) =>
   Number((await db.get<{ n: number }>(sql, params))?.n);
 
 describe('session.started', () => {
-  it('copies the story into state and places the player at the start', async () => {
-    expect(await count('SELECT count(*) AS n FROM state_entities')).toBe(75); // 74 + player
+  it('places the player at the start, leaving the story in its own tables', async () => {
+    expect(await count('SELECT count(*) AS n FROM world_entities')).toBe(75); // 74 + player
+    expect(await count('SELECT count(*) AS n FROM dyn_entities')).toBe(1); // only the player
+    expect(await count('SELECT count(*) AS n FROM entities')).toBe(74);
     const scene = await world.scene();
     expect(scene.player).toMatchObject({ id: PLAYER, type: 'PLAYER', name: 'Aria' });
     expect(scene.player.props).toMatchObject({ race: 'elf', original: CHARACTER });
@@ -85,7 +87,7 @@ describe('player.moved', () => {
     expect(event).toMatchObject({ kind: 'player.moved', payload: { from: TAVERN, to: LAMPLIGHT } });
     expect((await world.scene()).location?.id).toBe(LAMPLIGHT);
     expect(
-      await count("SELECT updated_seq AS n FROM state_relations WHERE src = ? AND type = 'LOCATED_IN'", [
+      await count("SELECT updated_seq AS n FROM dyn_relations WHERE src = ? AND type = 'LOCATED_IN'", [
         PLAYER,
       ]),
     ).toBe(event.seq);
@@ -147,7 +149,8 @@ describe('item.taken', () => {
 
   it('takes an item out of a container that is here', async () => {
     await db.run(
-      "UPDATE state_relations SET dst = 'item:crate' WHERE src = 'item:smoke-canister' AND type = 'LOCATED_IN'",
+      // a story where the canister lies in the crate (the story's own graph, before the game reads it)
+      "UPDATE relations SET dst = 'item:crate' WHERE src = 'item:smoke-canister' AND type = 'LOCATED_IN'",
     );
     const event = expectOk(await world.take('smoke canister'));
     expect(event.payload).toEqual({ item: 'item:smoke-canister', from: 'item:crate' });
@@ -294,7 +297,7 @@ describe('notes and npc.reacted', () => {
   });
 
   it('journals an NPC reaction without touching the state', async () => {
-    const before = await count('SELECT sum(updated_seq) AS n FROM state_entities');
+    const before = await count('SELECT sum(updated_seq) AS n FROM dyn_entities');
     const event = expectOk(
       await world.recordNpcReaction({
         npc: 'npc:mags-holloway',
@@ -303,7 +306,7 @@ describe('notes and npc.reacted', () => {
       }),
     );
     expect(event.kind).toBe('npc.reacted');
-    expect(await count('SELECT sum(updated_seq) AS n FROM state_entities')).toBe(before);
+    expect(await count('SELECT sum(updated_seq) AS n FROM dyn_entities')).toBe(before);
     expectError(
       await world.recordNpcReaction({ npc: 'npc:nobody', situation: '?', reaction: '' }),
       /no npc:nobody/,
@@ -334,7 +337,7 @@ describe('journal', () => {
   });
 
   it('writes nothing when the state change fails mid-transaction', async () => {
-    const failing = failOn(db, 'INSERT INTO state_relations');
+    const failing = failOn(db, 'INSERT INTO dyn_relations');
     const broken = await World.open(failing);
     await expect(broken.move(LAMPLIGHT)).rejects.toThrow('disk on fire');
     expect(await world.log.count()).toBe(1); // only session.started

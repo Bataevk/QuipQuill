@@ -26,7 +26,8 @@ export type Resolution =
   | { kind: 'none' };
 
 /**
- * Read-only queries over the playthrough's current state (`state_*`). Relations follow the
+ * Read-only queries over the playthrough's world: the `world_*` views, where the dynamic graph
+ * overrides the story's (ADR 42). Relations follow the
  * story's conventions: `X LOCATED_IN place|container`, `holder HAS_ITEM item` (inventory, or a
  * container's contents), `place LEADS_TO place`.
  */
@@ -39,7 +40,7 @@ export class WorldState {
 
   async entity(id: string): Promise<Entity | undefined> {
     const row = await this.db.get<EntityRow>(
-      `SELECT ${ENTITY_COLUMNS} FROM state_entities e WHERE e.id = ?`,
+      `SELECT ${ENTITY_COLUMNS} FROM world_entities e WHERE e.id = ?`,
       [id],
     );
     return row && toEntity(row);
@@ -48,7 +49,7 @@ export class WorldState {
   /** The player's entity (single-player prototype: exactly one PLAYER after session start). */
   async player(): Promise<Entity | undefined> {
     const row = await this.db.get<EntityRow>(
-      `SELECT ${ENTITY_COLUMNS} FROM state_entities e WHERE e.type = 'PLAYER' LIMIT 1`,
+      `SELECT ${ENTITY_COLUMNS} FROM world_entities e WHERE e.type = 'PLAYER' LIMIT 1`,
     );
     return row && toEntity(row);
   }
@@ -56,7 +57,7 @@ export class WorldState {
   /** Where an entity is (`LOCATED_IN` target): a location for the player and NPCs. */
   async locationOf(id: string): Promise<Entity | undefined> {
     return this.one(
-      `SELECT ${ENTITY_COLUMNS} FROM state_relations r JOIN state_entities e ON e.id = r.dst
+      `SELECT ${ENTITY_COLUMNS} FROM world_relations r JOIN world_entities e ON e.id = r.dst
         WHERE r.src = ? AND r.type = 'LOCATED_IN' LIMIT 1`,
       [id],
     );
@@ -65,7 +66,7 @@ export class WorldState {
   async exits(locationId: string): Promise<Exit[]> {
     const rows = await this.db.all<EntityRow & { path: string }>(
       `SELECT ${ENTITY_COLUMNS}, r.description AS path
-         FROM state_relations r JOIN state_entities e ON e.id = r.dst
+         FROM world_relations r JOIN world_entities e ON e.id = r.dst
         WHERE r.src = ? AND r.type = 'LEADS_TO' ORDER BY e.name`,
       [locationId],
     );
@@ -75,10 +76,10 @@ export class WorldState {
   /** What is directly in a place or container (`LOCATED_IN` it, or held by it), minus players. */
   async contents(id: string): Promise<Entity[]> {
     return this.many(
-      `SELECT ${ENTITY_COLUMNS} FROM state_entities e
+      `SELECT ${ENTITY_COLUMNS} FROM world_entities e
         WHERE e.type <> 'PLAYER' AND e.id IN (
-          SELECT src FROM state_relations WHERE dst = ? AND type = 'LOCATED_IN'
-          UNION SELECT dst FROM state_relations WHERE src = ? AND type = 'HAS_ITEM')
+          SELECT src FROM world_relations WHERE dst = ? AND type = 'LOCATED_IN'
+          UNION SELECT dst FROM world_relations WHERE src = ? AND type = 'HAS_ITEM')
         ORDER BY e.type, e.name`,
       [id, id],
     );
@@ -86,7 +87,7 @@ export class WorldState {
 
   async inventory(holderId: string): Promise<Entity[]> {
     return this.many(
-      `SELECT ${ENTITY_COLUMNS} FROM state_relations r JOIN state_entities e ON e.id = r.dst
+      `SELECT ${ENTITY_COLUMNS} FROM world_relations r JOIN world_entities e ON e.id = r.dst
         WHERE r.src = ? AND r.type = 'HAS_ITEM' ORDER BY e.name`,
       [holderId],
     );
@@ -95,8 +96,8 @@ export class WorldState {
   /** Who or what holds an item or has it inside: ids from `LOCATED_IN` and `HAS_ITEM`. */
   async placesOf(itemId: string): Promise<string[]> {
     const rows = await this.db.all<{ id: string }>(
-      `SELECT dst AS id FROM state_relations WHERE src = ? AND type = 'LOCATED_IN'
-       UNION SELECT src AS id FROM state_relations WHERE dst = ? AND type = 'HAS_ITEM'`,
+      `SELECT dst AS id FROM world_relations WHERE src = ? AND type = 'LOCATED_IN'
+       UNION SELECT src AS id FROM world_relations WHERE dst = ? AND type = 'HAS_ITEM'`,
       [itemId, itemId],
     );
     return rows.map((row) => row.id);
@@ -110,7 +111,7 @@ export class WorldState {
   async ties(id: string): Promise<Tie[]> {
     const rows = await this.db.all<EntityRow & { tie: string; about: string }>(
       `SELECT ${ENTITY_COLUMNS}, r.type AS tie, r.description AS about
-         FROM state_relations r JOIN state_entities e ON e.id = CASE WHEN r.src = ? THEN r.dst ELSE r.src END
+         FROM world_relations r JOIN world_entities e ON e.id = CASE WHEN r.src = ? THEN r.dst ELSE r.src END
         WHERE (r.src = ? OR r.dst = ?) AND r.type NOT IN ('LEADS_TO', 'LOCATED_IN', 'HAS_ITEM')
         ORDER BY r.id`,
       [id, id, id],
@@ -119,7 +120,7 @@ export class WorldState {
   }
 
   async allEntities(): Promise<Entity[]> {
-    return this.many(`SELECT ${ENTITY_COLUMNS} FROM state_entities e ORDER BY e.name`);
+    return this.many(`SELECT ${ENTITY_COLUMNS} FROM world_entities e ORDER BY e.name`);
   }
 
   /**

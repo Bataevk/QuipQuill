@@ -72,14 +72,30 @@ CREATE TABLE embeddings (
 
 ## Сохранение партии (`saves/<id>.db`)
 
-Создаётся копированием `.qqstory`. Исходные `entities` и `relations` **не меняются** и нужны для перезапуска и сравнения. При старте добавляются таблицы:
+Создаётся копированием `.qqstory`. Исходные `entities`, `relations` и `embeddings` — **статический граф, он никогда не меняется**. Всё, что меняет партия, лежит в **динамическом графе** — вторых таблицах `dyn_*` того же файла, только новое и изменённое; запросы мира идут через представления, которые склеивают оба графа, динамический — в приоритете ([ADR 42](decisions.md#42-динамический-граф-поверх-истории-слой-изменений-связь-cancel-генератор), с этапа 6.2a; раньше — полная копия в `state_*`, ADR 4). При старте добавляются таблицы:
 
 ```sql
 -- Точная схема — apps/mobile/src/core/library/save-schema.ts (PRAGMA user_version сохранения).
-CREATE TABLE state_entities  ( ...как entities, без CHECK на type (появится игрок)..., updated_seq INTEGER NOT NULL );
-CREATE TABLE state_relations ( ...как relations..., updated_seq INTEGER NOT NULL );
--- Заполняются копией entities/relations при session.started.
--- Все запросы мира во время игры идут в state_*.
+CREATE TABLE dyn_entities   ( ...как entities, без CHECK на type (появится игрок)..., updated_seq INTEGER NOT NULL );
+-- строка целиком заменяет одноимённую сущность истории; новые сущности (игрок, add_entity) — только здесь
+CREATE TABLE dyn_relations  ( id, src, dst, type, description, updated_seq );
+-- связь заменяет связь истории с тем же (src, dst, type);
+-- type = 'CANCEL', description = '<тип>' — скрывает одну связь истории (src, dst, <тип>);
+-- уникальность: (src, dst, type) и для CANCEL ещё description — у пары можно отменить несколько связей;
+-- id = id связи истории, которую строка заменяет или отменяет, у новых — выше всех id истории
+--   (порядок связей NPC в промпте остаётся порядком истории, новые — в конце);
+-- без внешних ключей: src/dst бывают и в истории, и в dyn_entities — проверяют команды мира
+CREATE TABLE dyn_embeddings ( entity_id, kind, vector, PRIMARY KEY (entity_id, kind) );  -- этап 6.2b
+-- векторы новых и переписанных сущностей; считаются после коммита, перебором в JS
+
+CREATE VIEW world_entities  AS  -- dyn_entities ∪ (entities, которых нет в dyn_entities)
+CREATE VIEW world_relations AS  -- dyn_relations без CANCEL
+                                --   ∪ (relations без отменённых CANCEL и без замен из dyn_relations)
+-- Все запросы мира во время игры идут в world_*; пишут команды мира — только в dyn_*
+-- (src/core/world/dynamic-graph.ts). Сущности не удаляются: меняются описание и props.
+-- Снять связь: динамическая удаляется, связь истории получает CANCEL. Записать связь: её CANCEL
+-- снимается и связь истории возвращается как была; если её нет в истории или описание другое —
+-- строка в dyn_relations.
 
 CREATE TABLE events (
   seq     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,15 +128,17 @@ CREATE TABLE transcript (            -- то, что видел игрок; то
 
 CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 -- строится при импорте в копии истории; rowid = rowid строки embeddings; без расширения — перебор в JS (ADR 26)
+-- поиск (после 6.2b): vec_entities ∪ перебор dyn_embeddings; вектор истории, чьё имя или описание
+-- переписано в dyn_entities, отфильтровывается на выходе (ADR 42)
 ```
 
 ### События
 
-Одно событие = одна транзакция: `INSERT INTO events` + изменение `state_*`.
+Одно событие = одна транзакция: `INSERT INTO events` + изменение `dyn_*`. `actor` генератора (6.2d) — `generator`.
 
 | `kind` | `payload` | Изменение состояния |
 |---|---|---|
-| `session.started` | `{story_id, character_id, player}` | копирование в `state_*`, сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
+| `session.started` | `{story_id, character_id, player}` | история не копируется; в `dyn_entities` — сущность игрока `player:<character_id>` (тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
 | `character.adapted` | `{original, adapted, choice}`; `choice` — `adapted` или `alternative N` | имя, описание, `props.race` и `props.age` игрока (ADR 37) |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
 | `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `npc.reacted` (ADR 32, 34); `from` — NPC |
@@ -129,11 +147,14 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
 | `player.updated` | `{before, after}` | описание игрока |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
+| `npc.moved` (6.2c) | `{npc, from, to}` | `LOCATED_IN` NPC или существа: отмена связи истории (`CANCEL`) + новая связь; цель — любая `LOCATION` (ADR 42) |
+| `relation.set` (6.2c) | `{src, dst, type, description, before}` | связь в `dyn_relations` (новая или замена связи истории); снимает её `CANCEL` |
+| `relation.cancelled` (6.2c) | `{src, dst, type}` | связь истории → `CANCEL`; динамическая связь удаляется |
 | `npc.reacted` | `{npc, situation, reaction}` (молчание — `[silence]`) | только журнал (ADR 33); реплика — в чате `npc:<id>` и в `transcript` |
 
-Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждое изменённое `state_*` получает `updated_seq` своего события.
+Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждая записанная строка `dyn_*` получает `updated_seq` своего события.
 
-Мастер получает текущее состояние из `state_*` и **последние 5 событий** (улучшение отбора — в backlog).
+Мастер получает текущее состояние из `world_*` и **последние 5 событий** (улучшение отбора — в backlog).
 
 ## `app.db` (приложение)
 
@@ -158,6 +179,7 @@ CREATE TABLE saves (
 - Схема — в коде: [`src/core/library/app-db.ts`](../../apps/mobile/src/core/library/app-db.ts); версии — `PRAGMA user_version`, шаги миграций только дописываются.
 - Файлы лежат в каталоге данных приложения (`Documents` на iOS): `app.db`, `stories/<story_id>.qqstory`, `saves/<save_id>.db`. **Пути в таблицах — относительные**: на iOS путь контейнера приложения меняется между установками и обновлениями.
 - Партия «с начала» (`SaveManager.restart`, 5.3): свежая копия текущей версии истории готовится рядом (`saves/<id>.db.restart`) и заменяет файл партии; id, название и персонаж сохраняются.
+- Сохранение схемы v1 (`state_*`), в котором партия уже началась, не открывается: `SaveOutdatedError` с текстом для игрока «начать заново или удалить» (6.2a). Не начатое — переходит на v2 без потерь.
 - Импорт: проверка `schema_version` и обязательных ключей meta → копия в `stories/` (оригинал не меняется) → `vec_entities` в копии → запись в `stories`. Повторный импорт той же истории заменяет файл; сохранения не страдают — у каждого своя копия.
 
 ## PostgreSQL (cloud)

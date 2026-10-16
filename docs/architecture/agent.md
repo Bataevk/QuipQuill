@@ -14,7 +14,7 @@ graph TD
   CM --> DP[WorldPrompt:<br/>правила + стиль + WORLD_STATE]
   DP --> GM[Мастер, LLM]
   GM --> AM[InvalidToolCalls → ToolLimit]
-  AM -->|tool_calls| TL[Инструменты → события → state_*]
+  AM -->|tool_calls| TL[Инструменты → события → dyn_*]
   TL --> CM
   AM -->|текст| OUT[transcript += ответ]
   RJ --> OUT
@@ -120,7 +120,7 @@ sequenceDiagram
   participant C as Чат адаптации (purpose character)
   participant A as Мастер
   P->>C: beginSession: история + персонаж
-  Note over C: session.started (копия state_*, сущность player)
+  Note over C: session.started (сущность player в dyn_*)
   C-->>P: propose_character → карточки: адаптация / альт. 1 / альт. 2 + объяснение
   P->>C: clarifyCharacter: своё уточнение (всего до 3 предложений)
   C-->>P: новое предложение
@@ -139,5 +139,5 @@ sequenceDiagram
 ## Контекст и стоимость
 
 - `model_messages` (рабочая память, сжимается) ≠ `transcript` (то, что видел игрок, только дописывается).
-- Переживают сжатие: `state_*`, `notes`, последние 5 событий — всё это в `WORLD_STATE`. Поэтому промпт требует **сразу** записывать важное через `note`, `edit_entity` и `update_player`.
+- Переживают сжатие: мир (`world_*`), `notes`, последние 5 событий — всё это в `WORLD_STATE`. Поэтому промпт требует **сразу** записывать важное через `note`, `edit_entity` и `update_player`.
 - Стоимость хода считается по `usage` из `done` и показывается в отладочной панели (этап 6.1).

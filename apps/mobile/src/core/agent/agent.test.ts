@@ -129,7 +129,8 @@ describe('system prompt', () => {
 
   it('lists exits, things here with what is inside them, inventory and notes', async () => {
     await db.run(
-      "UPDATE state_relations SET dst = 'item:crate' WHERE src = 'item:smoke-canister' AND type = 'LOCATED_IN'",
+      // a story where the canister lies in the crate (the story's own graph, before the game reads it)
+      "UPDATE relations SET dst = 'item:crate' WHERE src = 'item:smoke-canister' AND type = 'LOCATED_IN'",
     );
     await world.addNote('Mags wants the Clockheart before dawn.');
     await turn('Hm.', { text: 'Mm.' });

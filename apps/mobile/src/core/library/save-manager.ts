@@ -3,7 +3,7 @@ import { joinPath, type FileStore } from '../storage/files';
 import { migrate } from '../storage/migrate';
 import { newId, nowIso } from '../util/ids';
 import type { AppRepository, SaveRecord } from './app-db';
-import { SAVE_SCHEMA_STEPS } from './save-schema';
+import { OUTDATED_SAVE_VERSION, SAVE_SCHEMA_STEPS } from './save-schema';
 
 export const SAVES_DIR = 'saves';
 
@@ -18,13 +18,29 @@ export class SaveMissingError extends Error {
   }
 }
 
+/**
+ * The save was played on an older world schema (a full copy of the story, ADR 4) and cannot be
+ * carried over to the dynamic graph (ADR 42). It can be started over or deleted.
+ */
+export class SaveOutdatedError extends Error {
+  readonly saveId: string;
+
+  constructor(saveId: string) {
+    super(
+      'This game was saved by an older version of QuipQuill and cannot be continued. Start it over or delete it.',
+    );
+    this.name = 'SaveOutdatedError';
+    this.saveId = saveId;
+  }
+}
+
 export interface NewSave {
   storyId: string;
   characterId: string | null;
   title: string;
 }
 
-/** A save is a copy of the story file plus the game's state tables (ADR 4). */
+/** A save is a copy of the story file plus the playthrough's tables: dynamic graph, journal, chats (ADR 42). */
 export class SaveManager {
   private readonly driver: DbDriver;
   private readonly files: FileStore;
@@ -68,14 +84,15 @@ export class SaveManager {
 
   /**
    * Opens a save with its schema up to date. The caller closes the connection. Fails with
-   * SaveMissingError if the file is gone: SQLite would silently create an empty database.
+   * SaveMissingError if the file is gone: SQLite would silently create an empty database, and
+   * with SaveOutdatedError if it was played on the old world schema.
    */
   async open(saveId: string): Promise<Db> {
     const save = await this.library.getSave(saveId);
     if (!save) throw new SaveMissingError(saveId, 'there is no such save');
     const path = this.absolute(save.path);
     if (!(await this.files.exists(path))) throw new SaveMissingError(saveId, `${save.path} is missing`);
-    return this.openFile(path);
+    return this.openFile(path, saveId);
   }
 
   /**
@@ -111,10 +128,11 @@ export class SaveManager {
     await this.files.remove(this.absolute(save.path));
   }
 
-  private async openFile(path: string): Promise<Db> {
+  private async openFile(path: string, saveId?: string): Promise<Db> {
     const db = await this.driver.open(path);
     try {
       await db.exec('PRAGMA foreign_keys = ON');
+      if (saveId && (await isOutdated(db))) throw new SaveOutdatedError(saveId);
       await migrate(db, SAVE_SCHEMA_STEPS);
       return db;
     } catch (error) {
@@ -126,4 +144,11 @@ export class SaveManager {
   private absolute(relativePath: string): string {
     return joinPath(this.files.dataDir, relativePath);
   }
+}
+
+/** A save on the old schema (state_* copies) that has already started: nothing to migrate it to. */
+async function isOutdated(db: Db): Promise<boolean> {
+  const version = Number((await db.get<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0);
+  if (version !== OUTDATED_SAVE_VERSION) return false;
+  return !!(await db.get('SELECT 1 FROM events LIMIT 1'));
 }

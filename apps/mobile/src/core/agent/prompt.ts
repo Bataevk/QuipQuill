@@ -75,7 +75,7 @@ export function gmSystemMessage(
 
 const BRIEF = 240;
 
-/** {{WORLD_STATE}}: rebuilt before every model call from `state_*`, notes and recent events. */
+/** {{WORLD_STATE}}: rebuilt before every model call from `world_*`, notes and recent events. */
 export async function renderWorldState(world: World): Promise<string> {
   const scene = await world.scene();
   const names = new Map<string, string>();

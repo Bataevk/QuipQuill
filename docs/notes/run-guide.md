@@ -145,7 +145,7 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start --clear
   docker exec quipquill-postgres-1 psql -U quipquill -d quipquill -c "select purpose, count(*), round(sum(cost_usd)::numeric,4) from usage_events where created_at >= date_trunc('day', now() at time zone 'utc') group by purpose;"
   ```
 
-- **Данные приложения** живут в симуляторе: истории, персонажи, партии — в `$(xcrun simctl get_app_container booted app.quipquill.mobile data)/Documents`. Партия — обычный SQLite-файл `saves/<id>.db`, его можно открыть SQLite Viewer'ом (таблицы `transcript`, `events`, `state_*`).
+- **Данные приложения** живут в симуляторе: истории, персонажи, партии — в `$(xcrun simctl get_app_container booted app.quipquill.mobile data)/Documents`. Партия — обычный SQLite-файл `saves/<id>.db`, его можно открыть SQLite Viewer'ом (таблицы `transcript`, `events`, `dyn_*`, представления `world_*`).
 - **Аккаунты** — в Postgres из Docker; `make infra-down` их не стирает (данные в томах).
 
 ## 5. Если что-то не так

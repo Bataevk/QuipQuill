@@ -1,4 +1,4 @@
-/** World model: what the game reads from `state_*` and writes to `events` (data-model.md). */
+/** World model: what the game reads from `world_*` and writes to `dyn_*` and `events` (data-model.md). */
 
 export type EntityType =
   | 'LOCATION'
