@@ -82,18 +82,6 @@ export class EventLog {
     return rows.map(toNote);
   }
 
-  /** The last `limit` reactions of `entity`, oldest first. */
-  async reactionsOf(entity: string, limit: number): Promise<WorldEvent[]> {
-    const rows = await this.db.all<EventRow>(
-      `SELECT * FROM (SELECT * FROM events
-                       WHERE kind = 'entity.reacted' AND json_extract(payload, '$.entity') = ?
-                       ORDER BY seq DESC LIMIT ?)
-        ORDER BY seq`,
-      [entity, limit],
-    );
-    return rows.map(toEvent);
-  }
-
   /** A master's note by id. */
   async note(id: number): Promise<(Note & { closed: boolean }) | undefined> {
     const row = await this.db.get<{ id: number; text: string; created_seq: number; closed_seq: number | null }>(

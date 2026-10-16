@@ -9,6 +9,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { CharacterProposal } from '../agent/character';
 import { lastProposal } from '../agent/character';
 import { ChatStore, GM_CHAT } from '../agent/chat-store';
+import { noteEntities } from '../agent/entity-memory';
 import { generate, type GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
 import { sourceOf } from '../agent/messages';
@@ -55,12 +56,12 @@ export interface GameModels {
   guardModel?: BaseChatModel;
   summaryModel?: BaseChatModel;
   characterModel: BaseChatModel;
-  /** Actors' inner voices (react_entity). */
-  actorModel: BaseChatModel;
-  /** Entities' lines in the actor pack, each on its own channel; default: the master's model. */
-  actorLineModel?: (entity: Entity) => BaseChatModel;
+  /** The actor pack: an entity's line on its own channel (react_entity). */
+  actorModel: (entity: Entity) => BaseChatModel;
   /** The background world generator after each player turn; without it there is none. */
   generatorModel?: BaseChatModel;
+  /** Entities' notes from their overflowing chats, after the generator (ADR 45); none without it. */
+  memoryModel?: BaseChatModel;
 }
 
 /** The generator's call limit: the next action waits for it at most this long (stage 6.2d). */
@@ -107,6 +108,7 @@ export class Game {
   /** What the generator did after the last player turn (dev diagnostics). */
   lastGeneration: GeneratorResult | { error: string } | undefined;
   private readonly generatorModel: BaseChatModel | undefined;
+  private readonly memoryModel: BaseChatModel | undefined;
   private generation: { done: Promise<void>; controller: AbortController } | undefined;
   private readonly generatedListeners = new Set<() => void>();
 
@@ -140,9 +142,10 @@ export class Game {
       world: init.world,
       meta: init.meta,
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
-      actor: { model: () => models.actorModel, lineModel: models.actorLineModel },
+      actor: { model: models.actorModel, chats: this.chats },
     });
     this.generatorModel = models.generatorModel;
+    this.memoryModel = models.memoryModel;
     this.sessionDeps = {
       world: init.world,
       chats: this.chats,
@@ -327,28 +330,42 @@ export class Game {
    */
   private startGenerator(result: TurnResult): void {
     const input = result.messages[0];
-    if (!this.generatorModel || result.rejected || !input || sourceOf(input) !== 'player') return;
+    if (result.rejected || !input || sourceOf(input) !== 'player') return;
+    if (!this.generatorModel && !this.memoryModel) return;
     const controller = new AbortController();
     const meter = new UsageMeter();
     const off = this.onStream((event) => meter.apply(event));
-    const done = generate(
-      {
-        model: this.generatorModel,
-        world: this.world,
-        meta: this.meta,
-        signal: controller.signal,
-        timeoutMs: GENERATOR_TIMEOUT_MS,
-      },
-      { turn: result.turn, input: input.text, reply: result.reply },
-    )
-      .then((generated) => {
-        this.lastGeneration = generated;
-        for (const r of generated.rejected) console.warn(`[generator] turn ${result.turn}: ${r.change}: ${r.error}`);
-      })
+    const generator = this.generatorModel;
+    const memory = this.memoryModel;
+    const generated = generator
+      ? generate(
+          { model: generator, world: this.world, meta: this.meta, signal: controller.signal, timeoutMs: GENERATOR_TIMEOUT_MS },
+          { turn: result.turn, input: input.text, reply: result.reply },
+        )
+          .then((done) => {
+            this.lastGeneration = done;
+            for (const r of done.rejected) console.warn(`[generator] turn ${result.turn}: ${r.change}: ${r.error}`);
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.lastGeneration = { error: message };
+            console.warn(`[generator] turn ${result.turn} failed: ${message}`);
+          })
+      : Promise.resolve();
+    // Entity memory after the generator: both take the turn lock, one at a time.
+    const done = generated
+      .then(() =>
+        memory
+          ? noteEntities(
+              { model: memory, world: this.world, chats: this.chats, signal: controller.signal, timeoutMs: GENERATOR_TIMEOUT_MS },
+              result.turn,
+            ).then((noted) => {
+              for (const r of noted.rejected) console.warn(`[memory] turn ${result.turn}: ${r.entity}: ${r.error}`);
+            })
+          : undefined,
+      )
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        this.lastGeneration = { error: message };
-        console.warn(`[generator] turn ${result.turn} failed: ${message}`);
+        console.warn(`[memory] turn ${result.turn} failed: ${error instanceof Error ? error.message : String(error)}`);
       })
       .finally(() => {
         off();

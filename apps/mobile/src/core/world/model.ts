@@ -55,7 +55,7 @@ export interface EventPayloads {
   'relation.cancelled': { a: string; b: string; removed: Tie[] };
   /**
    * An entity reacted to something (a line, an action, an event) at the master's call (ADR 33,
-   * 43): `reaction` is its inner voice for the master, or "[silence]".
+   * 43, 45): `reaction` is its line (words and/or deeds), or "[silence]".
    */
   'entity.reacted': { entity: string; situation: string; reaction: string };
 }

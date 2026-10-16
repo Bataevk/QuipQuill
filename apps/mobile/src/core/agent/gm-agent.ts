@@ -24,7 +24,7 @@ export interface GmAgentOptions {
   world: World;
   meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary' | 'worldConstraints'>;
   embed?: GmToolDeps['embed'];
-  /** The actor model for react_entity (ADR 43). */
+  /** The actor pack's model and the entities' chats, for react_entity (ADR 43, 45). */
   actor?: ActorDeps;
   /** Cheap model for the Guard (purpose 'guard'); without it player input is not screened. */
   guardModel?: BaseChatModel;
@@ -62,7 +62,7 @@ export function createGmAgent(options: GmAgentOptions) {
       toolLimitMiddleware(options.toolLimit),
       invalidToolCallsMiddleware(),
       worldPromptMiddleware(world, renderStoryStyle(meta)),
-      ...(actor ? [packsMiddleware({ world, lineModel: actor.lineModel })] : []),
+      ...(actor ? [packsMiddleware({ world, ...actor })] : []),
     ],
   });
 }

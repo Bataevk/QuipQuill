@@ -1,7 +1,8 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ChatStore } from '@/core/agent/chat-store';
 import { ScriptedChatModel } from '@/core/agent/testing/scripted-model';
 import type { CloudSocket } from '@/core/net/cloud-socket';
 import type { ServerEvent } from '@/core/protocol/messages';
@@ -20,6 +21,8 @@ let npc: ScriptedChatModel;
 let listeners: Set<(event: ServerEvent) => void>;
 /** The background generator's model for the next `open()`; none by default. */
 let generator: BaseChatModel | undefined;
+/** The entity memory's model for the next `open()`; none by default. */
+let memory: BaseChatModel | undefined;
 
 async function open(): Promise<Game> {
   const socket = {
@@ -34,8 +37,9 @@ async function open(): Promise<Game> {
     models: () => ({
       model: master,
       characterModel: character,
-      actorModel: npc,
+      actorModel: () => npc,
       generatorModel: generator,
+      memoryModel: memory,
     }),
   };
   const saves = await env.library.repository.listSaves();
@@ -52,6 +56,7 @@ beforeEach(async () => {
   npc = new ScriptedChatModel([]);
   listeners = new Set();
   generator = undefined;
+  memory = undefined;
   game = await open();
 });
 
@@ -274,5 +279,38 @@ describe('Game', () => {
       expect(game.lastGeneration).toEqual({ error: 'aborted' });
       game = await open();
     });
+  });
+
+  it('folds an overflowing entity chat into its notes after the turn, in the background (ADR 45)', async () => {
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: '.' }) });
+    await game.start();
+    master.push({ text: 'It begins.' });
+    await game.choose(0);
+    const MAGS = 'npc:mags-holloway';
+    await game.close();
+    // Mags has talked a lot before (her chat is past its window)
+    const db = await env.library.saves.open(game.save.id);
+    const filler = 'w'.repeat(1_000);
+    await new ChatStore(db).append(
+      MAGS,
+      Array.from({ length: 12 }, (_, i) => [new HumanMessage(`Q${i} ${filler}`), new AIMessage(`A${i} ${filler}`)]).flat(),
+    );
+    await db.close();
+    const notes = new ScriptedChatModel([{ text: JSON.stringify({ notes: [{ entity: MAGS, text: 'I sized up the elf.' }] }) }]);
+    memory = notes;
+    game = await open();
+
+    npc.push({ text: '"Hm."' });
+    master.push(
+      { toolCalls: [{ name: 'react_entity', args: { target: MAGS, situation: 'The elf nods.' } }] },
+      { text: 'She nods back.' },
+    );
+    expect((await game.send('I nod to Mags.')).reply).toBe('She nods back.');
+    await game.whenGenerated();
+    expect(notes.calls).toHaveLength(1);
+    expect((await game.world.log.actorNotes(MAGS, 5)).map((n) => n.text)).toEqual(['I sized up the elf.']);
+    const folded = notes.calls[0][1].text;
+    expect(folded).toContain('- Happened: Q0 ');
+    expect(folded).not.toContain('The elf nods.'); // the latest exchange stays in her chat
   });
 });

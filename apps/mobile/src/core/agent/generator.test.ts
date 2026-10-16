@@ -66,7 +66,7 @@ describe('generator', () => {
     expect(context.text).toContain('  - Pip Quillon [npc:pip-quillon]: leader of the crew');
     expect(context.text).toContain(`Player: ${TURN.input}`);
     expect(context.text).toContain(`Game Master: ${TURN.reply}`);
-    expect(context.text).toContain('Inner voices (what they felt and wanted):\n- Mags Holloway: "Suit yourself."');
+    expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Suit yourself."');
     expect(context.text).toContain('Already recorded this turn:\n- nothing');
   });
 
@@ -77,7 +77,7 @@ describe('generator', () => {
         relations: [{ a: MAGS, b: PLAYER, description: 'refused to join the heist; not to be trusted' }],
         moves: [{ who: PIP, to: TAVERN }],
         edits: [{ target: MAGS, description: 'A former airship captain. Her crew is gone; she plans alone.' }],
-        additions: [{ name: 'Overturned Stool', type: 'other', description: 'Kicked over in the argument.' }],
+        additions: [{ name: 'Overturned Stool', type: 'other', description: 'Kicked over in the argument.', where: '' }],
       }),
     );
     const result = await generate({ model, world, meta }, TURN);
@@ -99,6 +99,35 @@ describe('generator', () => {
     // the master's own commands are journaled for the master again
     expectOk(await world.addNote('After the generator.'));
     expect((await world.log.recent(1))[0].actor).toBe('gm');
+  });
+
+  it('"the door in the alley": what an honest NPC said is there appears where she said (ADR 45)', async () => {
+    expectOk(
+      await world.recordReaction({
+        entity: MAGS,
+        situation: 'The stranger asks how to get into the bank unseen.',
+        reaction: '"Lamplight Row. Service door behind the barrels. Knock twice."',
+      }),
+    );
+    const [system, context] = await generatorMessages({ world, meta }, TURN);
+    expect(system.text).toContain('# Look for gaps');
+    expect(system.text).toContain('a legendary golden sword, no');
+    expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Lamplight Row. Service door');
+
+    const model = scripted(
+      changes({
+        additions: [
+          { name: 'service door', type: 'other', description: 'A narrow door behind the barrels; two knocks open it.', where: LAMPLIGHT },
+          { name: 'golden sword', type: 'item', description: 'Legendary.', where: 'loc:nowhere' },
+        ],
+      }),
+    );
+    const result = await generate({ model, world, meta }, TURN);
+    expect(result.applied.map((e) => e.kind)).toEqual(['entity.added', 'item.moved']);
+    expect(result.rejected).toEqual([{ change: 'add golden sword in loc:nowhere', error: 'there is no loc:nowhere' }]);
+    expect((await world.state.locationOf('ent:service-door'))?.id).toBe(LAMPLIGHT);
+    expect(await world.state.entity('item:golden-sword')).toBeUndefined();
+    expect((await world.scene()).here.map((e) => e.id)).not.toContain('ent:service-door');
   });
 
   it('drops the changes the world refuses and keeps the rest', async () => {

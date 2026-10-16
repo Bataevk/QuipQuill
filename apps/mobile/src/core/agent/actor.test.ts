@@ -1,4 +1,4 @@
-import type { AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CloudSocket } from '@/core/net/cloud-socket';
@@ -32,12 +32,9 @@ let meta: StoryMeta;
 let chats: ChatStore;
 let transcript: TranscriptStore;
 let master: ScriptedChatModel;
-/** Actor answers by entity id; every call is recorded with who was asked. */
-let actorScripts: Map<string, ScriptedChatModel>;
-let actorCalls: { entity: Entity; messages: BaseMessage[] }[];
-/** Lines of the actor pack by entity id (default: a nod); every call is recorded. */
-let lineScripts: Map<string, Step[]>;
-let lineCalls: { entity: Entity; messages: BaseMessage[]; tools: string[] }[];
+/** Lines of the actor pack by entity id, in order; every call is recorded with who was asked. */
+let lines: Map<string, Step[]>;
+let actorCalls: { entity: Entity; messages: BaseMessage[]; tools: string[] }[];
 
 beforeEach(async () => {
   env = await makeTestEnv();
@@ -52,10 +49,8 @@ beforeEach(async () => {
   chats = new ChatStore(db);
   transcript = new TranscriptStore(db);
   master = new ScriptedChatModel([]);
-  actorScripts = new Map();
+  lines = new Map();
   actorCalls = [];
-  lineScripts = new Map();
-  lineCalls = [];
 });
 
 afterEach(async () => {
@@ -63,42 +58,25 @@ afterEach(async () => {
   await env?.cleanup();
 });
 
-/** The entity with this id will answer these lines, in order. */
-function feels(id: string, ...lines: string[]) {
-  const model = actorScripts.get(id) ?? new ScriptedChatModel([]);
-  model.push(...lines.map((text) => ({ text })));
-  actorScripts.set(id, model);
+/** The entity with this id will answer with these lines in the actor pack, in order. */
+function says(id: string, ...steps: (Step | string)[]) {
+  lines.set(id, [...(lines.get(id) ?? []), ...steps.map((s) => (typeof s === 'string' ? { text: s } : s))]);
 }
 
 const actorModel = (entity: Entity) => {
-  const scripted = actorScripts.get(entity.id);
-  if (!scripted) throw new Error(`${entity.id} was not expected to react`);
+  const model = new ScriptedChatModel([]);
   return {
     invoke: async (messages: BaseMessage[]) => {
-      actorCalls.push({ entity, messages });
-      return scripted.invoke(messages);
+      const next = lines.get(entity.id)?.shift();
+      if (!next) throw new Error(`${entity.id} was not expected to react`);
+      actorCalls.push({ entity, messages, tools: model.boundTools });
+      model.push(next);
+      return model.invoke(messages);
     },
   } as unknown as ScriptedChatModel;
 };
 
-/** The entity with this id will write these lines in the actor pack, in order. */
-function says(id: string, ...lines: Step[]) {
-  lineScripts.set(id, [...(lineScripts.get(id) ?? []), ...lines]);
-}
-
-const lineModel = (entity: Entity) => {
-  const model = new ScriptedChatModel([]);
-  const next = lineScripts.get(entity.id)?.shift() ?? { text: `*${entity.name} nods.*` };
-  model.push((messages) => {
-    lineCalls.push({ entity, messages, tools: model.boundTools });
-    return typeof next === 'function' ? next(messages) : next;
-  });
-  return model;
-};
-
-function agentFor() {
-  return createGmAgent({ model: master, world, meta, actor: { model: actorModel, lineModel } });
-}
+const agentFor = () => createGmAgent({ model: master, world, meta, actor: { model: actorModel, chats } });
 
 function play(input: string, ...steps: Step[]) {
   master.push(...steps);
@@ -109,75 +87,70 @@ const react = (target: string, situation: string) => ({ toolCalls: [{ name: 'rea
 const call = (name: string, args: Record<string, unknown>) => ({ name, args });
 const promptOf = (i: number) => actorCalls[i].messages[0].content as { text: string; cache_control?: unknown }[];
 
-describe('react_entity', () => {
-  it('full cycle: react → her line in the actor pack → actor_note → the master answers (ADR 43)', async () => {
-    const voice = 'A rookie asking about the vault, out loud? I will tell them it is below the bank, nothing more.';
-    feels(MAGS, voice);
-    says(MAGS, (messages) => {
-      expect(lastToolText(messages)).toMatch(/^Inner voice of Mags Holloway \[npc:mags-holloway\] — for you only/);
-      expect(messages.at(-1)!.text).toMatch(/^\[Actor\] Now speak and act as Mags Holloway \[npc:mags-holloway\]/);
-      expect(messages.at(-1)!.text).toContain('a brass hook');
-      return { text: '*She taps the plan.* "Below the bank, love. That\'s all you get."', toolCalls: [call('note', { text: 'x' })] };
-    });
+describe('react_entity and the actor pack (ADR 45)', () => {
+  it('Mags speaks for herself from her card, the scene and her own chat; the master answers after', async () => {
+    const line = '*She taps the plan.* "Below the bank, love. That\'s all you get."';
+    says(MAGS, line);
     const result = await play(
       'I ask Mags about the vault.',
       react('Mags Holloway', 'The new recruit asks you about the vault.'),
       (messages) => {
-        expect(master.boundTools).toContain('actor_note');
-        expect(messages.at(-2)!.text).toBe('Mags Holloway [npc:mags-holloway]: *She taps the plan.* "Below the bank, love. That\'s all you get."');
+        expect(lastToolText(messages)).toBe('Mags Holloway [npc:mags-holloway] reacts now.');
+        expect(messages.at(-2)!.text).toBe(`Mags Holloway [npc:mags-holloway]: ${line}`);
         expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway had their say; the player saw it\./);
-        return { toolCalls: [call('actor_note', { text: 'I told the rookie only "below the bank"; I do not trust them yet.' })] };
-      },
-      (messages) => {
-        expect(lastToolText(messages)).toBe('Noted for Mags Holloway.');
-        // the instruction stays right after her line: the master still owes the player an answer
-        expect(messages.at(-1)!.getType()).toBe('tool');
-        expect(messages.at(-3)!.text).toMatch(/^\[Game Master\] Mags Holloway had their say/);
-        expect(messages.at(-4)!.text).toMatch(/^Mags Holloway \[npc:mags-holloway\]: \*She taps/);
-        expect(master.boundTools).toContain('actor_note');
         return { text: 'The tavern noise swallows the rest.' };
       },
     );
     expect(result.reply).toBe('The tavern noise swallows the rest.');
     expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
-      ['entity.reacted', { entity: MAGS, situation: 'The new recruit asks you about the vault.', reaction: voice }],
-      ['note.added', { id: 1, text: 'I told the rookie only "below the bank"; I do not trust them yet.', entity: MAGS }],
+      ['entity.reacted', { entity: MAGS, situation: 'The new recruit asks you about the vault.', reaction: line }],
     ]);
-    // the line: its own bubble, from her; a tool call in the actor pack is dropped
-    expect(lineCalls.map((c) => c.entity.id)).toEqual([MAGS]);
     expect((await transcript.lines()).map((l) => [l.speaker, l.text.slice(0, 18), l.extra])).toEqual([
       ['player', 'I ask Mags about t', {}],
       [MAGS, '*She taps the plan', { name: 'Mags Holloway' }],
       ['gm', 'The tavern noise s', {}],
     ]);
-    const line = (await chats.load(GM_CHAT)).find((m) => m.additional_kwargs?.qq_actor);
-    expect(line?.text).toBe('*She taps the plan.* "Below the bank, love. That\'s all you get."');
-    expect((line as AIMessage).tool_calls).toEqual([]);
-    expect((await world.scene()).notes).toEqual([]);
 
-    // the inner voice prompt
-    const [stable, scene] = promptOf(0);
+    // one small call: her card and the scene, the situation; no tools, no master history
+    expect(actorCalls).toHaveLength(1);
+    const [system, ask] = actorCalls[0].messages;
+    expect(actorCalls[0].messages).toHaveLength(2);
+    expect(ask.text).toBe('The new recruit asks you about the vault.');
+    const [stable, scene] = system.content as { text: string; cache_control?: unknown }[];
     expect(stable.cache_control).toEqual({ type: 'ephemeral' });
     expect(stable.text).toMatch(/^You are Mags Holloway, in an interactive story\./);
+    expect(stable.text).toContain('a brass hook where her left hand used to be');
     expect(stable.text).toContain('- Silas Ashcombe: revenge on Silas Ashcombe, who seized her airship');
-    expect(stable.text).toContain('answer them with your inner voice');
-    expect(scene.text).toContain('The player character: Aria (human) — A cartographer.');
+    expect(stable.text).toContain('answer exactly: [silence]');
+    expect(scene.text).toContain('You are in The Rusty Gear Tavern');
+    expect(scene.text).toContain('Facing you: the player character, Aria (human) — A cartographer.');
 
-    // the next turn: the standard pack; her note reaches her next inner voice
-    feels(MAGS, 'Them again.');
-    await play(
-      'Anything else?',
-      () => {
-        expect(master.boundTools).not.toContain('actor_note');
-        return react(MAGS, 'The rookie asks for more.');
-      },
-      { text: 'She shrugs.' },
-    );
-    expect(promptOf(1)[1].text).toContain('# Your notes (what you decided before)\n- I told the rookie only');
+    // her chat keeps the exchange; the master's history keeps the line, marked as hers
+    expect((await chats.load(MAGS)).map((m) => [m.getType(), m.text])).toEqual([
+      ['human', 'The new recruit asks you about the vault.'],
+      ['ai', line],
+    ]);
+    const saved = (await chats.load(GM_CHAT)).find((m) => m.additional_kwargs?.qq_actor);
+    expect(saved?.text).toBe(line);
+    expect(saved?.additional_kwargs?.qq_actor).toEqual({ id: MAGS, name: 'Mags Holloway' });
   });
 
-  it('a magic mirror in the inventory reacts too', async () => {
-    feels('item:magic-mirror', 'At last someone looks at me. I want them to ask about the vault — I saw its keeper.');
+  it('remembers the conversation and her notes in the next actor pack', async () => {
+    says(MAGS, '"Below the bank."', '"I told you: below the bank."');
+    await play('Where is the vault?', react(MAGS, 'The recruit asks where the vault is.'), { text: '.' });
+    expectOk(await world.addActorNote(MAGS, 'I do not trust the recruit yet.'));
+    await play('Where again?', react(MAGS, 'The recruit asks again.'), { text: '.' });
+    expect(actorCalls[1].messages.slice(1).map((m) => m.text)).toEqual([
+      'The recruit asks where the vault is.',
+      '"Below the bank."',
+      'The recruit asks again.',
+    ]);
+    expect(promptOf(1)[1].text).toContain('# What you remember\n- I do not trust the recruit yet.');
+    expect((await world.scene()).notes).toEqual([]); // her notes are not the master's
+  });
+
+  it('a magic mirror in the inventory speaks too', async () => {
+    says('item:magic-mirror', '*The glass ripples.* "Ask me about the keeper of the vault."');
     const result = await play(
       'I pull out the mirror I found and look into it.',
       {
@@ -187,46 +160,29 @@ describe('react_entity', () => {
       },
       { toolCalls: [call('set_relation', { a: 'player', relation: 'has_item', b: 'magic mirror' })] },
       react('magic mirror', 'The stranger who carries you looks into you.'),
-      (messages) => ({ text: lastToolText(messages).startsWith('Inner voice of magic mirror') ? 'The glass ripples.' : '?' }),
+      { text: 'Your reflection blinks late.' },
     );
-    expect(result.reply).toBe('The glass ripples.');
     expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'item.taken', 'entity.reacted']);
-    const [stable, scene] = promptOf(0);
-    expect(stable.text).toContain('remembers every face');
-    expect(scene.text).toContain('The player character carries you.');
-    expect(scene.text).toContain('You are in The Rusty Gear Tavern');
+    expect(promptOf(0)[0].text).toContain('remembers every face');
+    expect(promptOf(0)[1].text).toContain('The player character carries you.');
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'npc:item:magic-mirror', 'gm']);
   });
 
-  it('a stone stays silent: [silence] reaches the master as "does not react"', async () => {
-    feels('item:crate', SILENCE);
+  it('a stone stays silent: no bubble, the master is told it does not react', async () => {
+    says('item:crate', SILENCE);
     const result = await play('I ask the crate where the gold is.', react('crate', 'Someone asks you where the gold is.'), (messages) => {
-      expect(lastToolText(messages)).toBe('crate [item:crate] does not react.');
+      expect(messages.at(-1)!.text).toBe('crate [item:crate] does not react.');
       return { text: 'The crate keeps its counsel.' };
     });
     expect(result.events.map((e) => e.payload)).toEqual([
       { entity: 'item:crate', situation: 'Someone asks you where the gold is.', reaction: SILENCE },
     ]);
-    expect(lineCalls).toEqual([]); // no line for silence
     expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
-  });
-
-  it('remembers through actor notes and its last reactions, not a chat', async () => {
-    feels(MAGS, 'Who is this? I want to know before I say anything.', 'Them again. Still no.');
-    await play('Hello, Mags.', react(MAGS, 'A stranger greets you.'), { text: '.' });
-    expectOk(await world.addActorNote(MAGS, 'I refused to tell the stranger about the vault.'));
-    await play('Tell me about the vault.', react(MAGS, 'The stranger asks about the vault.'), { text: '.' });
-
-    expect(promptOf(0)[1].text).not.toContain('# Your notes');
-    const scene = promptOf(1)[1].text;
-    expect(scene).toContain('# Your notes (what you decided before)\n- I refused to tell the stranger about the vault.');
-    expect(scene).toContain('# Lately\n- A stranger greets you. → you felt: Who is this?');
-    expect(actorCalls[1].messages.map((m) => m.getType())).toEqual(['system', 'human']);
-    // the notes are the actor's, not the master's
-    expect((await world.scene()).notes).toEqual([]);
+    expect((await chats.load('npc:item:crate')).map((m) => m.text)).toEqual(['Someone asks you where the gold is.', SILENCE]);
   });
 
   it('asks an innkeeper the master just added to the scene', async () => {
-    feels('npc:innkeeper', 'Another one who wants talk, not ale. Talk costs extra.');
+    says('npc:innkeeper', '"Ale\'s a penny. Questions cost two."');
     const result = await play(
       'I wave over whoever runs this place.',
       {
@@ -238,16 +194,35 @@ describe('react_entity', () => {
       { text: 'He waits.' },
     );
     expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted']);
-    const [stable, scene] = promptOf(0);
-    expect(stable.text).toContain('A bald man polishing mugs');
-    expect(stable.text).not.toContain('# Your ties');
-    expect(scene.text).toContain('Also here: Mags Holloway.');
-    expect(scene.text).not.toContain('You carry');
+    expect(promptOf(0)[0].text).toContain('A bald man polishing mugs');
+    expect(promptOf(0)[0].text).not.toContain('# Your ties');
+    expect(promptOf(0)[1].text).toContain('Also here: Mags Holloway.');
+  });
+
+  it('two react in one reply: each speaks in turn, the master answers once after both', async () => {
+    says(MAGS, '"No."');
+    says('npc:innkeeper', '*He wipes the table, pointedly.*');
+    await play(
+      'I ask Mags and the innkeeper for a room.',
+      {
+        toolCalls: [
+          call('set_entity', { name: 'innkeeper', type: 'npc', description: 'A bald man polishing mugs.' }),
+          call('react_entity', { target: MAGS, situation: 'The stranger asks you for a room.' }),
+          call('react_entity', { target: 'innkeeper', situation: 'The stranger asks for a room.' }),
+        ],
+      },
+      (messages) => {
+        expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway and innkeeper had their say/);
+        return { text: 'No room tonight.' };
+      },
+    );
+    expect(actorCalls.map((c) => c.entity.id)).toEqual([MAGS, 'npc:innkeeper']);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'npc:innkeeper', 'gm']);
   });
 
   it('snatching an item: the owner reacts first, then take succeeds (ADR 32, 34)', async () => {
     await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
-    feels(PIP, 'Fine, let it go — the card opens no doors without me anyway.');
+    says(PIP, '*Pip lets go with a scowl.* "Keep it. It opens no doors without me."');
     const result = await play(
       "I snatch Pip's calling card.",
       react('Pip Quillon', 'The stranger snatches the calling card from your fingers.'),
@@ -261,9 +236,9 @@ describe('react_entity', () => {
     ]);
   });
 
-  it('snatching an item: take before the reaction is refused; a failed attempt takes nothing', async () => {
+  it('snatching an item: take in the same reply as the reaction is refused', async () => {
     await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
-    feels(PIP, 'Not a chance. I twist away into the crowd.');
+    says(PIP, '*Pip twists away and is gone into the crowd.*');
     const result = await play(
       "I snatch Pip's calling card.",
       {
@@ -280,54 +255,44 @@ describe('react_entity', () => {
     expect((await world.state.inventory(PIP)).map((e) => e.id)).toEqual(['doc:calling-card']);
   });
 
-  it('returns an error when the reaction cannot be journaled', async () => {
-    feels(MAGS, 'Hm.');
-    vi.spyOn(world, 'recordReaction').mockResolvedValue({ ok: false, error: 'disk full' });
-    const result = await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: 'Silence.' });
-    expect(result.messages.find((m) => m.getType() === 'tool')?.text).toMatch(/^Error: Mags Holloway could not react/);
-  });
-
-  it('refuses something that is not here, and survives a failing actor model', async () => {
+  it('refuses something that is not here; a failing actor model becomes an error for the master', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const result = await play(
       'I shout for Silas Ashcombe.',
       react('Silas Ashcombe', 'Someone shouts your name.'),
       react('Mags Holloway', 'The recruit shouts for Silas Ashcombe.'),
-      { text: 'Nobody answers.' },
+      (messages) => {
+        expect(messages.at(-1)!.text).toMatch(/^Error: Mags Holloway \[npc:mags-holloway\] could not react right now \(npc:mags-holloway was not expected/);
+        return { text: 'Nobody answers.' };
+      },
     );
     const results = result.messages.filter((m) => m.getType() === 'tool').map((m) => m.text);
     expect(results[0]).toBe('Error: there is no "Silas Ashcombe" here to react.');
-    expect(results[1]).toMatch(/^Error: Mags Holloway could not react right now \(npc:mags-holloway was not expected/);
     expect(result.events).toEqual([]);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
+    expect(await chats.load(MAGS)).toEqual([]);
+  });
+
+  it('caps a long entity chat in the actor pack (the background notes fold it later)', async () => {
+    const filler = 'w'.repeat(4_000);
+    await chats.append(
+      MAGS,
+      Array.from({ length: 10 }, (_, i) => [new HumanMessage(`Q${i} ${filler}`), new AIMessage(`A${i} ${filler}`)]).flat(),
+    );
+    says(MAGS, '"What were we saying?"');
+    await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: '.' });
+    const sent = actorCalls[0].messages.slice(1);
+    expect(sent.length).toBeLessThan(21);
+    expect(sent.at(-2)!.text).toMatch(/^A9 /);
+    expect(sent.at(-1)!.text).toBe('The recruit says hi.');
   });
 });
 
-describe('packs (ADR 43)', () => {
+describe('a turn cut in the middle (retryTurn)', () => {
   const retry = () => retryTurn({ agent: agentFor(), world, chats, transcript });
 
-  it('a turn cut in the actor pack is retried from the line', async () => {
-    feels(MAGS, 'I want them gone.');
-    says(MAGS, () => {
-      throw new Error('network');
-    });
-    await expect(play('Hi, Mags.', react(MAGS, 'The recruit says hi.'))).rejects.toThrow('network');
-    expect(isUnfinished(await chats.load(GM_CHAT))).toBe(true);
-
-    says(MAGS, { text: '"Shove off."' });
-    master.push((messages) => ({ text: messages.at(-1)!.text.startsWith('[Game Master]') ? 'She turns away.' : '?' }));
-    const result = await retry();
-    expect(result.reply).toBe('She turns away.');
-    expect(actorCalls).toHaveLength(1); // the inner voice is not asked again
-    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted']);
-    expect((await transcript.lines()).map((l) => [l.speaker, l.text])).toEqual([
-      ['player', 'Hi, Mags.'],
-      [MAGS, '"Shove off."'],
-      ['gm', 'She turns away.'],
-    ]);
-  });
-
-  it('a turn cut after the line goes on in the master pack, the line is not repeated', async () => {
-    feels(MAGS, 'I want them gone.');
-    says(MAGS, { text: '"Shove off."' });
+  it('cut after the line: the master goes on, the line is not asked again', async () => {
+    says(MAGS, '"Shove off."');
     await expect(
       play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), () => {
         throw new Error('network');
@@ -337,85 +302,40 @@ describe('packs (ADR 43)', () => {
     expect(saved.at(-1)!.additional_kwargs?.qq_actor).toEqual({ id: MAGS, name: 'Mags Holloway' });
     expect(isUnfinished(saved)).toBe(true);
 
-    master.push(
-      (messages) => {
-        expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway had their say/);
-        return { toolCalls: [call('actor_note', { text: 'I sent the recruit away.' })] };
-      },
-      { text: 'She turns away.' },
-    );
+    master.push((messages) => ({ text: messages.at(-1)!.text.startsWith('[Game Master]') ? 'She turns away.' : '?' }));
     const result = await retry();
-    expect(lineCalls).toHaveLength(1);
-    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted', 'note.added']);
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'gm']);
+    expect(result.reply).toBe('She turns away.');
+    expect(actorCalls).toHaveLength(1);
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted']);
+    expect((await transcript.lines()).map((l) => [l.speaker, l.text])).toEqual([
+      ['player', 'Hi, Mags.'],
+      [MAGS, '"Shove off."'],
+      ['gm', 'She turns away.'],
+    ]);
   });
 
-  it('"the door in the alley": what an honest NPC says exists when the player gets there', async () => {
-    feels(MAGS, 'The recruit needs the way in. I will tell the truth: the service door on Lamplight Row, behind the barrels.');
-    says(MAGS, { text: '"Lamplight Row. Service door behind the barrels. Knock twice."' });
-    await play(
-      'How do I get into the bank unseen?',
-      react(MAGS, 'The recruit asks how to get into the bank unseen.'),
-      (messages) => {
-        expect(lastToolText(messages)).toContain('I will tell the truth');
-        return {
-          toolCalls: [
-            call('set_entity', { name: 'service door', type: 'other', description: 'A narrow door behind the barrels; two knocks open it.' }),
-            call('set_relation', { a: 'service door', relation: 'located_in', b: 'Lamplight Row' }),
-            call('actor_note', { text: 'I showed the recruit the service door.' }),
-          ],
-        };
-      },
-      { text: 'She goes back to her ale.' },
-    );
-    await play(
-      'I go to Lamplight Row and look for the door.',
-      { toolCalls: [call('set_relation', { a: 'player', relation: 'located_in', b: 'Lamplight Row' })] },
-      { toolCalls: [call('inspect', { target: 'service door' })] },
-      (messages) => ({ text: lastToolText(messages).includes('two knocks open it') ? 'There it is.' : 'Nothing.' }),
-    );
-    expect((await world.scene()).here.map((e) => e.id)).toContain('ent:service-door');
-    expect(master.calls.at(-1)!.at(-1)!.text).toContain('two knocks open it');
-  });
+  it('cut after the reaction was journaled but before the line was saved: it is not asked twice', async () => {
+    says(MAGS, '"Shove off."');
+    await expect(
+      play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), () => {
+        throw new Error('network');
+      }),
+    ).rejects.toThrow('network');
+    // simulate the lost line: drop it from the master's saved history
+    const saved = await chats.load(GM_CHAT);
+    await chats.writeFrom(GM_CHAT, 0, []);
+    await chats.append(GM_CHAT, saved.filter((m) => !m.additional_kwargs?.qq_actor));
 
-  it('two react in one reply: each speaks in turn, then notes go to whom they belong', async () => {
-    feels(MAGS, 'Another mouth to feed. No.');
-    feels('npc:innkeeper', 'Trouble at my table. I want them out.');
-    says(MAGS, { text: '"No."' });
-    says('npc:innkeeper', { text: '*He wipes the table, pointedly.*' });
-    const result = await play(
-      'I ask Mags and the innkeeper for a room.',
-      {
-        toolCalls: [
-          call('set_entity', { name: 'innkeeper', type: 'npc', description: 'A bald man polishing mugs.' }),
-          call('react_entity', { target: MAGS, situation: 'The stranger asks you for a room.' }),
-          call('react_entity', { target: 'innkeeper', situation: 'The stranger asks for a room.' }),
-        ],
-      },
-      (messages) => {
-        expect(messages.at(-1)!.text).toMatch(/^\[Game Master\] Mags Holloway and innkeeper had their say/);
-        return {
-          toolCalls: [
-            call('actor_note', { text: 'I refused the stranger.', who: 'Mags' }),
-            call('actor_note', { text: 'I want the stranger out.' }),
-            call('actor_note', { text: 'x', who: 'Silas Ashcombe' }),
-          ],
-        };
-      },
-      { text: 'No room tonight.' },
-    );
-    expect(lineCalls.map((c) => c.entity.id)).toEqual([MAGS, 'npc:innkeeper']);
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'npc:innkeeper', 'gm']);
-    expect(result.messages.filter((m) => m.getType() === 'tool').slice(-1)[0].text).toMatch(
-      /^Error: "Silas Ashcombe" did not react this turn\. Choose one of: Mags Holloway, innkeeper\./,
-    );
-    expect((await world.log.actorNotes(MAGS, 5)).map((n) => n.text)).toEqual(['I refused the stranger.']);
-    expect((await world.log.actorNotes('npc:innkeeper', 5)).map((n) => n.text)).toEqual(['I want the stranger out.']);
+    master.push({ text: 'She turns away.' });
+    const result = await retry();
+    expect(actorCalls).toHaveLength(1); // the line came back from her chat
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted']);
+    expect((await chats.load(MAGS))).toHaveLength(2);
   });
 });
 
-describe('actor streams', () => {
-  it('the inner voice goes on the hidden channel "actor", the line on npc:<id> with her name', async () => {
+describe('actor stream', () => {
+  it('the line streams on npc:<id> with her name, purpose npc, without tools', async () => {
     const requests: LlmRequest[] = [];
     const listeners = new Set<(event: ServerEvent) => void>();
     const emit = (event: ServerEvent) => listeners.forEach((listener) => listener(event));
@@ -427,7 +347,7 @@ describe('actor streams', () => {
       async request(request: LlmRequest): Promise<DoneEvent> {
         requests.push(request);
         const routed = { v: 1 as const, requestId: request.requestId, sessionId: request.sessionId, channel: request.channel };
-        const text = request.purpose === 'npc' ? 'Who is asking? I do not like it.' : 'Mags eyes you.';
+        const text = request.purpose === 'npc' ? '"Who\'s asking?"' : 'Mags eyes you.';
         emit({ ...routed, type: 'delta', seq: 0, text });
         const calls =
           request.purpose === 'gm' && requests.filter((r) => r.purpose === 'gm').length === 1
@@ -452,23 +372,14 @@ describe('actor streams', () => {
     socket.onEvent((event) => seen.push(event));
 
     const models = queueModels(new QueueChatModel({ socket, sessionId: 'save-1', channel: 'gm', purpose: 'gm' }));
-    const agent = createGmAgent({
-      ...models,
-      world,
-      meta,
-      actor: { model: () => models.actorModel, lineModel: models.actorLineModel },
-    });
+    const agent = createGmAgent({ ...models, world, meta, actor: { model: models.actorModel, chats } });
     const result = await runTurn({ agent, world, chats, transcript, input: 'Hello, Mags.' });
 
-    const [voice, line] = requests.filter((r) => r.purpose === 'npc');
-    expect(voice).toMatchObject({ channel: 'actor', purpose: 'npc', sessionId: 'save-1' });
-    expect(voice.meta).toBeUndefined();
-    expect(voice.tools).toBeUndefined();
-    // the line streams in her bubble; the master's tools stay (cache, tool history)
-    expect(line).toMatchObject({ channel: MAGS, purpose: 'npc', meta: { speaker: 'Mags Holloway' } });
-    expect(line.tools?.map((t) => t.function.name)).not.toContain('actor_note');
-    const gm = requests.filter((r) => r.purpose === 'gm');
-    expect(gm[1].tools?.map((t) => t.function.name)).toContain('actor_note');
+    const actor = requests.filter((r) => r.purpose === 'npc');
+    expect(actor).toHaveLength(1);
+    expect(actor[0]).toMatchObject({ channel: MAGS, purpose: 'npc', meta: { speaker: 'Mags Holloway' }, sessionId: 'save-1' });
+    expect(actor[0].tools).toBeUndefined();
+    expect(requests.filter((r) => r.purpose === 'gm')).toHaveLength(2);
     expect(seen.some((e) => e.type === 'delta' && e.channel === MAGS)).toBe(true);
     expect(result.reply).toBe('Mags eyes you.');
     expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'gm']);
@@ -481,8 +392,8 @@ function expectOk<T>(outcome: { ok: true; value: T } | { ok: false; error: strin
 }
 
 describe('a world that follows the player (ADR 42)', () => {
-  it('what an honest NPC tells about becomes real: the master creates the bag, the player takes it (ADR 43)', async () => {
-    feels(MAGS, '"Tools? Under the bench by the stairs. A canvas bag, mind the chisels."');
+  it('what Mags tells about, once made real, can be taken (here the master makes it)', async () => {
+    says(MAGS, '"Tools? Under the bench by the stairs. A canvas bag, mind the chisels."');
     await play(
       'I ask Mags where I can find tools for the lock.',
       react('Mags Holloway', 'The stranger asks where to find tools for the lock.'),
@@ -523,9 +434,9 @@ describe('a world that follows the player (ADR 42)', () => {
 
     await play('I follow her.', { toolCalls: [call('set_relation', { a: 'player', relation: 'located_in', b: 'Lamplight Row' })] }, { text: 'Gas lamps.' });
     expect((await world.scene()).here.map((e) => e.id)).toContain(MAGS);
-    feels(MAGS, '"Took your time."');
+    says(MAGS, '"Took your time."');
     await play('Hello again.', react(MAGS, 'The stranger catches up with you.'), { text: '.' });
-    expect((actorCalls[0].messages[0].content as { text: string }[])[1].text).toContain('You are in Lamplight Row');
+    expect((promptOf(0))[1].text).toContain('You are in Lamplight Row');
   });
 
   it('after the player refuses the heist, Mags acts on the new tie, not on the planned one', async () => {
@@ -553,9 +464,9 @@ describe('a world that follows the player (ADR 42)', () => {
     );
     expect(result.events.map((e) => e.kind)).toEqual(['relation.set', 'relation.cancelled', 'entity.edited']);
 
-    feels(MAGS, '"Walk away, then."');
+    says(MAGS, '"Walk away, then."');
     await play('I nod to Mags.', react(MAGS, 'The stranger who turned you down nods to you.'), { text: '.' });
-    const stable = (actorCalls[0].messages[0].content as { text: string }[])[0].text;
+    const stable = (promptOf(0))[0].text;
     expect(stable).toContain('- Aria: the stranger refused to join the heist and took Pip; she no longer trusts them');
     expect(stable).not.toContain('leader of the crew');
     expect(stable).not.toContain('recruited the player');

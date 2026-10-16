@@ -372,7 +372,7 @@ export class World {
 
   /**
    * `entity.reacted` (ADR 43): the situation is what happened from the entity's side (a line, a
-   * grab, a noise); the reaction is its inner voice for the master, or "[silence]".
+   * grab, a noise); the reaction is its line (words and/or deeds), or "[silence]".
    */
   recordReaction(input: { entity: string; situation: string; reaction: string }): Promise<Outcome> {
     return this.command('gm', async ({ state, log }) => {
@@ -381,14 +381,9 @@ export class World {
     });
   }
 
-  /** Who reacted with more than silence this turn, in order (for actor_note). */
-  async reactedThisTurn(): Promise<Entity[]> {
-    const ids = new Set<string>();
-    for (const e of await this.log.ofTurn(this.turn)) {
-      if (e.kind === 'entity.reacted' && e.payload.reaction !== '[silence]') ids.add(e.payload.entity);
-    }
-    const found = await Promise.all([...ids].map((id) => this.state.entity(id)));
-    return found.filter((e): e is Entity => !!e);
+  /** Whether `entity` already reacted this turn (`entity.reacted`). */
+  hasReacted(entity: string): Promise<boolean> {
+    return this.log.reacted(this.turn, entity);
   }
 
   /** `note.added` with `entity`: an actor note — what the entity decided, for its next reaction. */

@@ -2,6 +2,7 @@ import type { QueueChatModel } from '../net/queue-chat-model';
 import type { Entity } from '../world/model';
 import { actorChannel } from './actor';
 import { CHARACTER_RESPONSE_FORMAT } from './character';
+import { NOTE_ENTITY_RESPONSE_FORMAT } from './entity-memory';
 import { GENERATOR_RESPONSE_FORMAT } from './generator';
 import { GUARD_RESPONSE_FORMAT } from './middleware/guard';
 
@@ -29,10 +30,15 @@ export function queueModels(base: QueueChatModel) {
       purpose: 'generator',
       responseFormat: GENERATOR_RESPONSE_FORMAT,
     }),
-    /** Actors (react_entity): the inner voice is for the master, so not a story channel. */
-    actorModel: base.with({ ...plain, channel: 'actor', purpose: 'npc' }),
-    /** The actor pack: the entity's line on its own channel, with its name for the bubble. */
-    actorLineModel: (entity: Entity) =>
+    /** Entities' notes from their overflowing chats (ADR 45): background, not a story channel. */
+    memoryModel: base.with({
+      ...plain,
+      channel: 'system',
+      purpose: 'summary',
+      responseFormat: NOTE_ENTITY_RESPONSE_FORMAT,
+    }),
+    /** The actor pack: each entity streams on its own channel, with its name for the bubble. */
+    actorModel: (entity: Entity) =>
       base.with({ ...plain, channel: actorChannel(entity), purpose: 'npc', meta: { speaker: entity.name } }),
   };
 }

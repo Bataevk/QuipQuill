@@ -10,14 +10,14 @@ import { z } from 'zod';
 
 import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
-import { type ActorDeps, reactEntity, voiceResult } from './actor';
+import { type ActorDeps, reactionAsked } from './actor';
 import { brief } from './prompt';
 
 export interface GmToolDeps {
   world: World;
   /** Query vector for search_lore, with the story's `meta.embed_model` (CloudEmbeddings). */
   embed?: (text: string) => Promise<Float32Array>;
-  /** The actor model for react_entity; without it nothing can react. */
+  /** The actor pack's model; without it nothing can react. */
   actor?: ActorDeps;
 }
 
@@ -188,7 +188,7 @@ export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredTo
   );
 
   const reactEntityTool = tool(
-    guarded('react_entity', async ({ target, situation }: { target: string; situation: string }, signal) => {
+    guarded('react_entity', async ({ target }: { target: string; situation: string }) => {
       if (!actor) return 'Error: nothing can react right now. Narrate around it.';
       const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
       const found = world.state.resolve(target, nearby);
@@ -197,23 +197,16 @@ export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredTo
         return `Error: "${target}" is ambiguous: ${candidates}.`;
       }
       if (found.kind === 'none') return `Error: there is no "${target}" here to react.`;
-      try {
-        const reaction = await reactEntity(world, actor, found.entity, situation, signal);
-        const who = `${found.entity.name} [${found.entity.id}]`;
-        return reaction.silent ? `${who} does not react.` : voiceResult(found.entity, reaction.voice);
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return `Error: ${found.entity.name} could not react right now (${(error as Error).message}). Narrate around it.`;
-      }
+      return reactionAsked(found.entity);
     }),
     {
       name: 'react_entity',
       description:
-        'Ask something here how it takes what just happened: a person, a creature, anything that might perceive ' +
-        '(a magic mirror, a watchful statue) — here or in the inventory. Use it whenever someone or something ' +
-        'present would respond to the player or the scene: a question, a shove, a bribe, a grab at their purse. ' +
-        'It answers you, not the player: its feelings, intent and the truth behind any lie; a plain object stays ' +
-        'silent. Several calls run one after another.',
+        'Let something here react, in its own words and/or deeds, to what just happened: a person, a creature, ' +
+        'anything that might perceive (a magic mirror, a watchful statue) — here or in the inventory. Use it ' +
+        'whenever someone or something present would respond to the player or the scene: a question, a shove, a ' +
+        'bribe, a grab at their purse — instead of writing their lines yourself. It speaks to the player in its ' +
+        'own voice right after this; a plain object stays silent. Several calls react one after another.',
       schema: z.object({
         target: z.string().describe('Id or name of who or what reacts (here or in the inventory)'),
         situation: z

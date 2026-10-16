@@ -2,7 +2,7 @@
  * The background world generator (stage 6.2d, ADR 42): after the master's turn, one call with a
  * structured answer reads what happened and brings the world in line with it — how people now
  * stand with the player and each other, where they went, what they became, small things the
- * narration made real. Changes go through the same world commands as the master's tools, with
+ * narration made real or someone truthfully spoke of (gaps, ADR 45). Changes go through the same world commands as the master's tools, with
  * `actor = 'generator'`; a change the world refuses is dropped, never shown to the player.
  * Successor of the legacy prototype's `updator` (docs/notes/legacy-prototype.md).
  */
@@ -22,7 +22,10 @@ export const GENERATOR_PROMPT = `You keep the world of an interactive story true
 - relations: how a person now stands with the player or with someone else, from the person's side — joined or refused a plan, betrayed, rescued, owes, fears, distrusts. If a tie the story planned is no longer true, rewrite it; if a tie has ended (someone left a crew, an alliance broke), put it in cancelled instead.
 - edits: a lasting change to a person or thing — attitude, plans, what they now know, their state. Give the whole new description: keep everything that is still true and rewrite only what changed. A person whose description still says they recruited, trust or wait for the player when the turn made that untrue must be edited.
 - moves: a person or creature the narration sent elsewhere (left, followed, fled, was taken away) who is not there yet in the world state. Destination: any location by id.
-- additions: something the narration made real in the current location that the world does not have yet — a small thing, a passer-by. Never places, never anything powerful.
+- additions: something the turn made real or implied that the world does not have yet — a small thing, a passer-by, what someone truthfully said is there. where: the id of the location or container it is in; empty — the current location. Never places, never anything powerful.
+
+# Look for gaps
+Compare what people said and what the narration showed with the world state. When someone speaks truthfully of a thing in this world that does not exist yet (the bag of tools under the bench, the service door in the alley), add it where they said, so the player finds it. When they lie, boast or only guess (their description, ties and manner tell), add nothing. Add only what is plausible for that place and moment: a few coins in a drunk's pocket, yes; a legendary golden sword, no.
 
 # Rules
 - Record only what this turn established. Never invent new plot, never contradict the narration, never undo what is already recorded.
@@ -57,6 +60,7 @@ export const GENERATOR_RESPONSE_FORMAT = {
             name: { type: 'string' },
             type: { type: 'string', enum: ['item', 'document', 'npc', 'creature', 'other'] }, // ADDABLE
             description: { type: 'string' },
+            where: { type: 'string' },
           }),
         },
       },
@@ -78,7 +82,7 @@ const Changes = z.object({
   moves: z.array(z.object({ who: text, to: text })).default([]),
   edits: z.array(z.object({ target: text, description: text })).default([]),
   additions: z
-    .array(z.object({ name: text, type: z.enum(ADDABLE), description: z.string() }))
+    .array(z.object({ name: text, type: z.enum(ADDABLE), description: z.string(), where: z.string().trim().default('') }))
     .default([]),
 });
 export type WorldChanges = z.infer<typeof Changes>;
@@ -164,7 +168,7 @@ export async function generatorMessages(
       `# This turn (${turn.turn})`,
       `Player: ${turn.input.trim()}`,
       `Game Master: ${turn.reply.trim() || '(no text)'}`,
-      reactions.length ? `Inner voices (what they felt and wanted):\n${reactions.join('\n')}` : '',
+      reactions.length ? `What people said and did:\n${reactions.join('\n')}` : '',
       `Already recorded this turn:\n${recorded.join('\n') || '- nothing'}`,
     ]
       .filter(Boolean)
@@ -216,7 +220,18 @@ export async function applyChanges(world: World, changes: WorldChanges): Promise
       );
     }
     for (const a of changes.additions) {
+      const where = a.where ? await world.state.entity(a.where) : undefined;
+      if (a.where && !where) {
+        await apply(`add ${a.name} in ${a.where}`, refuse(`there is no ${a.where}`));
+        continue;
+      }
+      const before = result.applied.length;
       await apply(`add ${a.name}`, world.setEntity({ name: a.name, type: a.type, description: a.description }));
+      const added = result.applied.length > before ? result.applied.at(-1) : undefined;
+      // Created here, then put where it was said to be (if that fails, it stays here).
+      if (where && added?.kind === 'entity.added') {
+        await apply(`put ${a.name} in ${where.id}`, world.setRelation(added.payload.entity, 'LOCATED_IN', where.id));
+      }
     }
   });
   return result;
