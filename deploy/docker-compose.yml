@@ -1,0 +1,91 @@
+# Production stack on the VPS (/opt/quipquill). Local development uses the root docker-compose.yml.
+# Values come from /opt/quipquill/.env (DOMAIN, POSTGRES_PASSWORD, RABBITMQ_PASSWORD, CLOUD_IMAGE)
+# and app secrets from /opt/quipquill/cloud.env (JWT_SECRET, OPENROUTER_API_KEY, INVITE_CODES).
+# Deploy and rollback: ./deploy.sh <image>. See docs/notes/deploy.md.
+name: quipquill
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: quipquill
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: quipquill
+    # Sized for a 1 GB VPS.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quipquill -d quipquill"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    # The node name (and its data directory) follows the hostname; keep it fixed across recreates.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: quipquill
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  migrate:
+    image: ${CLOUD_IMAGE:?}
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quipquill:${POSTGRES_PASSWORD}@postgres:5432/quipquill
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  cloud:
+    image: ${CLOUD_IMAGE:?}
+    env_file: cloud.env
+    environment:
+      ENV: prod
+      LOG_FORMAT: json
+      DATABASE_URL: postgresql+asyncpg://quipquill:${POSTGRES_PASSWORD}@postgres:5432/quipquill
+      RABBITMQ_URL: amqp://quipquill:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      QUEUE_PREFIX: qq.prod
+      # Only Caddy reaches this port, so its X-Forwarded-For can be trusted.
+      FORWARDED_ALLOW_IPS: "*"
+    expose:
+      - "8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # TLS certificates; losing it means re-issuing (rate-limited)
+      - caddy-config:/config
+    depends_on:
+      - cloud
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  caddy-data:
+  caddy-config:

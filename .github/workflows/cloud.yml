@@ -1,0 +1,117 @@
+# Cloud: tests and lint on every push and PR; on project-131027 (or by hand) also build the image,
+# push it to GHCR and roll it out to the VPS. Server layout and secrets: docs/notes/deploy.md.
+name: cloud
+
+on:
+  push:
+    paths: ["cloud/**", "deploy/**", ".github/workflows/cloud.yml"]
+  pull_request:
+    paths: ["cloud/**", "deploy/**", ".github/workflows/cloud.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: cloud-${{ github.ref }}
+  cancel-in-progress: false # never interrupt a half-done deploy
+
+env:
+  IMAGE: ghcr.io/bataevk/quipquill-cloud
+  DEPLOY_BRANCH: refs/heads/project-131027
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: quipquill
+          POSTGRES_PASSWORD: quipquill
+          POSTGRES_DB: quipquill
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U quipquill" --health-interval 5s --health-timeout 3s --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: quipquill
+          RABBITMQ_DEFAULT_PASS: quipquill
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 10s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: cloud
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pytest
+
+  image:
+    needs: test
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/project-131027' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: cloud
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://${{ vars.DEPLOY_DOMAIN }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Copy stack files
+        run: scp deploy/docker-compose.yml deploy/Caddyfile deploy/deploy.sh "deploy@${{ vars.DEPLOY_HOST }}:/opt/quipquill/"
+      - name: Roll out
+        # The job token pulls the image (the GHCR package may be private); logout right after.
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # shellcheck disable=SC2029 # the image tag is meant to expand here, on the runner
+          printf '%s\n' "$TOKEN" | ssh "deploy@${{ vars.DEPLOY_HOST }}" \
+            "docker login ghcr.io -u ${{ github.actor }} --password-stdin >/dev/null \
+             && /opt/quipquill/deploy.sh $IMAGE:${{ github.sha }}; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"
+      - name: Smoke test
+        run: |
+          for path in health health/db health/mq; do
+            curl -fsS --retry 10 --retry-delay 3 --retry-all-errors "https://${{ vars.DEPLOY_DOMAIN }}/$path"; echo
+          done

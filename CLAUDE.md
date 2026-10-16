@@ -6,7 +6,7 @@
 
 - План и статусы этапов: [docs/plan/roadmap.md](docs/plan/roadmap.md) — **начинать отсюда**. Отложенное: [docs/plan/backlog.md](docs/plan/backlog.md).
 - Архитектура: [overview](docs/architecture/overview.md) · [decisions (ADR)](docs/architecture/decisions.md) · [data-model](docs/architecture/data-model.md) · [protocol](docs/architecture/protocol.md) · [agent](docs/architecture/agent.md).
-- Заметки: [legacy-prototype](docs/notes/legacy-prototype.md) (старый Python-код в `main`, `5a25926`) · [ai-samba-ideas](docs/notes/ai-samba-ideas.md) · [research](docs/notes/research.md) · [spikes](docs/notes/spikes.md) · [dev-setup](docs/notes/dev-setup.md) · [run-guide](docs/notes/run-guide.md) (запуск и ручная проверка).
+- Заметки: [legacy-prototype](docs/notes/legacy-prototype.md) (старый Python-код в `main`, `5a25926`) · [ai-samba-ideas](docs/notes/ai-samba-ideas.md) · [research](docs/notes/research.md) · [spikes](docs/notes/spikes.md) · [dev-setup](docs/notes/dev-setup.md) · [run-guide](docs/notes/run-guide.md) (запуск и ручная проверка) · [deploy](docs/notes/deploy.md) (тестовый сервер, CI/CD).
 
 | Папка | Стек |
 |---|---|

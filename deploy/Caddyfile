@@ -1,0 +1,4 @@
+# TLS from Let's Encrypt for $DOMAIN; HTTP is redirected to HTTPS. WebSocket (/ws) passes through.
+{$DOMAIN} {
+	reverse_proxy cloud:8000
+}

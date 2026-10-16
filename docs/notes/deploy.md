@@ -1,0 +1,67 @@
+# Деплой облака: VPS, CI/CD
+
+Облако работает на тестовом VPS и выкатывается из GitHub Actions. Решение — [ADR 40](../architecture/decisions.md#40-тестовый-сервер-vps--ghcr--github-actions).
+
+| | |
+|---|---|
+| Адрес | `https://146-103-120-112.sslip.io` (WebSocket — `wss://…/ws`) |
+| Сервер | Ubuntu 26.04, 1 vCPU, 1 GB RAM (+2 GB swap), 10 GB, IP `146.103.120.112` |
+| Образ | `ghcr.io/bataevk/quipquill-cloud:<sha>` (и `:latest`) |
+| Стек | [deploy/docker-compose.yml](../../deploy/docker-compose.yml): Postgres 17, RabbitMQ 4, migrate, cloud, Caddy (TLS от Let's Encrypt) |
+
+`sslip.io` — бесплатный DNS: имя `146-103-120-112.sslip.io` указывает на этот IP, поэтому TLS работает без покупки домена. Свой домен: A-запись на IP, затем `DOMAIN` в `/opt/quipquill/.env` и переменная `DEPLOY_DOMAIN` окружения `production` в GitHub.
+
+## Как работает CI/CD
+
+- [`.github/workflows/cloud.yml`](../../.github/workflows/cloud.yml) — на каждый push и PR, затрагивающий `cloud/` или `deploy/`: ruff, pytest (Postgres и RabbitMQ — сервисы job'а). На `project-131027` (или кнопкой **Run workflow**) дальше: сборка образа → GHCR → окружение `production` → копирование `deploy/*` на сервер → `deploy.sh <образ>` → проверка `/health`, `/health/db`, `/health/mq` по HTTPS.
+- [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — builder (ruff, pytest) и мобильное ядро (`tsc`, `expo lint`, vitest).
+- Окружение `production` разрешает деплой только из ветки `project-131027`. В нём секреты `DEPLOY_SSH_KEY` (ключ пользователя `deploy`), `DEPLOY_KNOWN_HOSTS` и переменные `DEPLOY_HOST`, `DEPLOY_DOMAIN`.
+- Образ тянется токеном самого job'а (`docker login` на время деплоя, затем `logout`), поэтому пакет в GHCR может оставаться приватным.
+
+## Сервер
+
+`/opt/quipquill` (владелец `deploy`):
+
+| Файл | Что | Откуда |
+|---|---|---|
+| `docker-compose.yml`, `Caddyfile`, `deploy.sh` | стек | копирует CI из `deploy/` |
+| `.env` | `DOMAIN`, `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `CLOUD_IMAGE` (тег пишет `deploy.sh`) | создан вручную, не в git |
+| `cloud.env` | `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES`, `DAILY_COST_LIMIT_USD=1` | создан вручную, не в git |
+
+Доступ: `ssh -i ~/.ssh/quipquill_vps root@146.103.120.112` (ключ администратора на Mac владельца). Вход по паролю отключён (`/etc/ssh/sshd_config.d/01-quipquill.conf`), открыты только 22, 80, 443 (ufw). Первичная настройка — [deploy/bootstrap.sh](../../deploy/bootstrap.sh) (повторный запуск безопасен).
+
+Инвайт-код для регистрации — в `cloud.env`:
+
+```bash
+ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 grep INVITE /opt/quipquill/cloud.env
+```
+
+## Частые действия
+
+Статус и логи:
+
+```bash
+ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'cd /opt/quipquill && docker compose ps && docker compose logs --tail 50 cloud'
+```
+
+Откат на прошлый образ (теги — в GHCR или в истории запусков `cloud`):
+
+```bash
+ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/deploy.sh ghcr.io/bataevk/quipquill-cloud:<sha>'
+```
+
+Если пакет приватный, перед ручным откатом нужен `docker login ghcr.io` с личным токеном (`read:packages`); проще перезапустить нужный старый запуск workflow (**Re-run jobs**).
+
+Сменить секрет: отредактировать `cloud.env`, затем `docker compose up -d cloud` в `/opt/quipquill`.
+
+## Приложение против сервера
+
+```bash
+EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start
+```
+
+## Ограничения
+
+- 1 GB RAM — впритык (Postgres, RabbitMQ и API вместе ~600–700 MB). При OOM — тариф 2 GB.
+- Бэкапов Postgres нет: тестовый сервер. Перед реальными пользователями — `pg_dump` по расписанию ([backlog](../plan/backlog.md)).
+- Деплой с коротким простоем: контейнер `cloud` пересоздаётся; клиент переподключается и делает `resume`, но генерации в памяти старого процесса теряются (ADR 18).
