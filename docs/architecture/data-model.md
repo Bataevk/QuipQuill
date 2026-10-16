@@ -150,9 +150,9 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `entity.edited` | `{id, before, after}` | описание и/или props (слияние) |
 | `player.updated` | `{before, after}` | описание игрока |
 | `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
-| `npc.moved` (6.2c) | `{npc, from, to}` | `LOCATED_IN` NPC или существа: отмена связи истории (`CANCEL`) + новая связь; цель — любая `LOCATION` (ADR 42) |
-| `relation.set` (6.2c) | `{src, dst, type, description, before}` | связь в `dyn_relations` (новая или замена связи истории); снимает её `CANCEL` |
-| `relation.cancelled` (6.2c) | `{src, dst, type}` | связь истории → `CANCEL`; динамическая связь удаляется |
+| `npc.moved` | `{npc, from, to}`; `from` пуст, если NPC нигде не был | `LOCATED_IN` NPC или существа: прежнее место снимается (связь истории — `CANCEL`) + новое; цель — любая `LOCATION` (ADR 42) |
+| `relation.set` | `{src, dst, type, description, before}`; `before` — `null` для новой | связь-отношение (`INTERACTS_WITH` / `HAS_ATTRIBUTE`); уже существующая между теми же сторонами (в любую сторону) получает новое описание, её `src`/`dst` сохраняются; иначе новая в `dyn_relations` |
+| `relation.cancelled` | `{a, b, removed: [{src, dst, type, description}]}` | все связи-отношения между `a` и `b`, в обе стороны: связь истории → `CANCEL`, динамическая удаляется |
 | `npc.reacted` | `{npc, situation, reaction}` (молчание — `[silence]`) | только журнал (ADR 33); реплика — в чате `npc:<id>` и в `transcript` |
 
 Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждая записанная строка `dyn_*` получает `updated_seq` своего события.

@@ -283,6 +283,71 @@ describe('player.updated and character.adapted', () => {
   });
 });
 
+describe('npc.moved', () => {
+  it('sends a person to any location, out of sight too; the story keeps its own placement', async () => {
+    const event = expectOk(await world.moveNpc('Mags Holloway', 'Orrery Vault'));
+    expect(event).toMatchObject({
+      kind: 'npc.moved',
+      payload: { npc: 'npc:mags-holloway', from: TAVERN, to: 'loc:orrery-vault' },
+    });
+    expect(ids((await world.scene()).here)).not.toContain('npc:mags-holloway');
+    expect((await world.state.locationOf('npc:mags-holloway'))?.id).toBe('loc:orrery-vault');
+    const storyPlacement = "SELECT count(*) AS n FROM relations WHERE src = ? AND dst = ? AND type = 'LOCATED_IN'";
+    expect(await count(storyPlacement, ['npc:mags-holloway', TAVERN])).toBe(1);
+  });
+
+  it('refuses the player, places that are not locations, and staying put', async () => {
+    expectError(await world.moveNpc(PLAYER, LAMPLIGHT), /no person or creature/);
+    expectError(await world.moveNpc('npc:mags-holloway', 'brass lantern'), /no location "brass lantern"/);
+    expectError(await world.moveNpc('npc:mags-holloway', TAVERN), /already in The Rusty Gear Tavern/);
+    expect(await world.log.count('npc.moved')).toBe(0);
+  });
+});
+
+describe('relation.set and relation.cancelled', () => {
+  const MAGS = 'npc:mags-holloway';
+  const PIP = 'npc:pip-quillon';
+  const tieOf = async (id: string, other: string) =>
+    (await world.state.ties(id)).find((t) => t.other.id === other)?.description;
+
+  it('records a new tie, with the player too', async () => {
+    const event = expectOk(await world.setRelation(MAGS, 'Aria', 'refused to join the heist; not to be trusted'));
+    expect(event.payload).toEqual({
+      src: MAGS,
+      dst: PLAYER,
+      type: 'INTERACTS_WITH',
+      description: 'refused to join the heist; not to be trusted',
+      before: null,
+    });
+    expect(await tieOf(MAGS, PLAYER)).toBe('refused to join the heist; not to be trusted');
+  });
+
+  it("rewrites the story's tie between the two, whichever way it was written", async () => {
+    const event = expectOk(await world.setRelation(PIP, MAGS, 'quit her crew after the stranger walked away'));
+    expect(event.payload).toMatchObject({ src: MAGS, dst: PIP, before: 'leader of the crew' });
+    expect(await tieOf(PIP, MAGS)).toBe('quit her crew after the stranger walked away');
+    expect((await world.state.ties(MAGS)).filter((t) => t.other.id === PIP)).toHaveLength(1);
+  });
+
+  it('cancels the ties between two, and refuses when there are none', async () => {
+    const event = expectOk(await world.cancelRelation('Pip Quillon', 'Mags Holloway'));
+    expect(event.payload).toEqual({
+      a: PIP,
+      b: MAGS,
+      removed: [{ src: MAGS, dst: PIP, type: 'INTERACTS_WITH', description: 'leader of the crew' }],
+    });
+    expect(await tieOf(MAGS, PIP)).toBeUndefined();
+    expectError(await world.cancelRelation(PIP, MAGS), /have no tie/);
+  });
+
+  it('refuses placement, an empty tie and a tie with oneself', async () => {
+    expectError(await world.setRelation(MAGS, TAVERN, 'there', 'LOCATED_IN'), /LOCATED_IN is not a tie/);
+    expectError(await world.setRelation(MAGS, PIP, '  '), /Describe the tie/);
+    expectError(await world.setRelation(MAGS, 'Mags Holloway', 'self-respect'), /two different parties/);
+    expectError(await world.setRelation(MAGS, 'nobody at all', 'x'), /no "nobody at all"/);
+  });
+});
+
 describe('notes and npc.reacted', () => {
   it('adds and closes notes', async () => {
     const added = expectOk(await world.addNote('Meet Mags at midnight.'));

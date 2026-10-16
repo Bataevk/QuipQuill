@@ -1,6 +1,6 @@
 import type { Db } from '../storage/db';
 import type { VectorIndex } from '../vector/vector-index';
-import { putEntity, relate, unlocate, unplace } from './dynamic-graph';
+import { putEntity, relate, unlocate, unplace, unrelate } from './dynamic-graph';
 import { EventLog } from './event-log';
 import { LoreVectors, type Embed } from './lore-vectors';
 import {
@@ -14,6 +14,8 @@ import {
   type Note,
   type Outcome,
   type Props,
+  type Tie,
+  TIE_TYPES,
   type WorldEvent,
 } from './model';
 import { normalizeName, slugify } from './names';
@@ -54,6 +56,7 @@ const ID_PREFIX: Record<string, string> = {
   OTHER: 'ent',
 };
 const PORTABLE: readonly EntityType[] = ['ITEM', 'DOCUMENT'];
+const BEINGS: readonly EntityType[] = ['NPC', 'CREATURE'];
 export const RECENT_EVENTS = 5;
 
 /** A broken rule inside a transaction: rolls it back and becomes a failed Outcome. */
@@ -355,6 +358,82 @@ export class World {
     });
   }
 
+  /**
+   * `npc.moved`: a person or creature goes to any location — walking off, fleeing, taken away,
+   * or about their own business out of sight (ADR 42). Found by id or name anywhere.
+   */
+  moveNpc(target: string, destination: string): Promise<Outcome> {
+    return this.command('gm', async ({ state, log, db }) => {
+      const all = await state.allEntities();
+      const npc = pick(
+        state.resolve(target, all.filter((e) => BEINGS.includes(e.type))),
+        target,
+        () => `There is no person or creature "${target}".`,
+      );
+      const to = pick(
+        state.resolve(destination, all.filter((e) => e.type === 'LOCATION')),
+        destination,
+        () => `There is no location "${destination}".`,
+      );
+      const from = await state.locationOf(npc.id);
+      if (from?.id === to.id) reject(`${npc.name} is already in ${to.name}.`);
+      const event = await log.append(this.turn, 'gm', 'npc.moved', {
+        npc: npc.id,
+        from: from?.id ?? '',
+        to: to.id,
+      });
+      await unlocate(db, event.seq, npc.id);
+      await relate(db, event.seq, npc.id, to.id, 'LOCATED_IN');
+      return event;
+    });
+  }
+
+  /**
+   * `relation.set`: writes or rewrites a tie between two entities (anywhere, the player too):
+   * allegiance, grudge, debt, trust. An existing tie between them, in either direction, gets
+   * the new description; otherwise a new one goes from `a` to `b`.
+   */
+  setRelation(a: string, b: string, description: string, type: string = 'INTERACTS_WITH'): Promise<Outcome> {
+    return this.command('gm', async ({ state, log, db }) => {
+      if (!(TIE_TYPES as readonly string[]).includes(type)) {
+        reject(`${type} is not a tie; allowed: ${TIE_TYPES.join(', ')}. Places and possessions change by moving.`);
+      }
+      if (!description.trim()) reject('Describe the tie: how one stands with the other now.');
+      const [one, other] = await this.pair(state, a, b);
+      const existing = (await this.tiesBetween(db, one.id, other.id)).find((t) => t.type === type);
+      const [src, dst] = existing ? [existing.src, existing.dst] : [one.id, other.id];
+      const event = await log.append(this.turn, 'gm', 'relation.set', {
+        src,
+        dst,
+        type,
+        description: description.trim(),
+        before: existing?.description ?? null,
+      });
+      await relate(db, event.seq, src, dst, type, description.trim());
+      return event;
+    });
+  }
+
+  /**
+   * `relation.cancelled`: the ties between two entities (both directions; of one type if given)
+   * are no longer true — someone left a crew, broke an alliance. A story tie is cancelled, not
+   * deleted (ADR 42).
+   */
+  cancelRelation(a: string, b: string, type?: string): Promise<Outcome> {
+    return this.command('gm', async ({ state, log, db }) => {
+      const [one, other] = await this.pair(state, a, b);
+      const ties = (await this.tiesBetween(db, one.id, other.id)).filter((t) => !type || t.type === type);
+      if (ties.length === 0) reject(`${one.name} and ${other.name} have no tie${type ? ` of type ${type}` : ''}.`);
+      const event = await log.append(this.turn, 'gm', 'relation.cancelled', {
+        a: one.id,
+        b: other.id,
+        removed: ties,
+      });
+      for (const t of ties) await unrelate(db, event.seq, t.src, t.dst, t.type);
+      return event;
+    });
+  }
+
   /** `player.updated`: the player's description (wounds, clothes, reputation…). */
   updatePlayer(description: string): Promise<Outcome> {
     return this.command('gm', async ({ db, log }, player) => {
@@ -404,6 +483,28 @@ export class World {
   }
 
   // --- internals -----------------------------------------------------------------------------
+
+  /** Two different entities, each by id or name anywhere in the world. */
+  private async pair(state: WorldState, a: string, b: string): Promise<[Entity, Entity]> {
+    const all = await state.allEntities();
+    const find = async (target: string) =>
+      (await state.entity(target)) ?? pick(state.resolve(target, all), target, () => `There is no "${target}".`);
+    const one = await find(a);
+    const other = await find(b);
+    if (one.id === other.id) reject(`A tie needs two different parties; both are ${one.name}.`);
+    return [one, other];
+  }
+
+  /** The ties between two entities, in both directions, as the world has them now. */
+  private tiesBetween(db: Db, a: string, b: string): Promise<Tie[]> {
+    return db.all<Tie & Record<string, string>>(
+      `SELECT src, dst, type, description FROM world_relations
+        WHERE ((src = ? AND dst = ?) OR (src = ? AND dst = ?))
+          AND type IN (${TIE_TYPES.map(() => '?').join(', ')})
+        ORDER BY id`,
+      [a, b, b, a, ...TIE_TYPES],
+    );
+  }
 
   /** Items the player can reach: here, and one level inside containers that are here. */
   private async reachable(state: WorldState, player: Entity): Promise<Entity[]> {

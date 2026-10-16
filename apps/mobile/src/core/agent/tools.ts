@@ -32,6 +32,9 @@ export const GM_TOOL_NAMES = [
   'update_player',
   'note',
   'npc_react',
+  'move_npc',
+  'set_relation',
+  'cancel_relation',
 ] as const;
 
 const LORE_HITS = 5;
@@ -277,7 +280,93 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     },
   );
 
-  return [move, inspect, take, drop, searchLore, addEntity, editEntity, updatePlayer, note, npcReact];
+  const moveNpc = tool(
+    guarded('move_npc', async ({ who, to }: { who: string; to: string }) =>
+      result(await world.moveNpc(who, to), async (e) =>
+        e.kind === 'npc.moved'
+          ? `${await name(e.payload.npc)} [${e.payload.npc}] is now in ` +
+            `${await name(e.payload.to)} [${e.payload.to}].`
+          : 'Done.',
+      ),
+    ),
+    {
+      name: 'move_npc',
+      description:
+        'Send a person or creature to another location — any place in the world, in sight or not: ' +
+        'they walk off, flee, are taken away, or go about their own business. Call it when they leave ' +
+        '(or arrive); afterwards they are found there. Not for the player: use move.',
+      schema: z.object({
+        who: z.string().describe('Id or name of the person or creature'),
+        to: z.string().describe('Id or name of the destination location'),
+      }),
+    },
+  );
+
+  const setRelation = tool(
+    guarded('set_relation', async ({ a, b, description }: { a: string; b: string; description: string }) =>
+      result(await world.setRelation(a, b, description), async (e) =>
+        e.kind === 'relation.set'
+          ? `${await name(e.payload.src)} — ${await name(e.payload.dst)}: ${
+              e.payload.before === null ? 'tie recorded' : 'tie rewritten'
+            }. They will act on it.`
+          : 'Done.',
+      ),
+    ),
+    {
+      name: 'set_relation',
+      description:
+        'Record or rewrite how someone stands with another person, a group, a thing or the player: ' +
+        'allegiance, grudge, debt, trust, a deal. Use it as soon as a choice changes a relationship ' +
+        '(the player joins or refuses a plot, betrays, rescues, threatens). The description replaces ' +
+        'the old one and is what that person knows about the tie from now on.',
+      schema: z.object({
+        a: z.string().describe('Id or name of the one who holds the tie (usually the person)'),
+        b: z.string().describe('Id or name of the other side (a person, group, thing, or the player)'),
+        description: z
+          .string()
+          .describe(
+            'The tie as it is now, from a\'s side, e.g. ' +
+              '"the stranger refused to join the heist; she no longer trusts them"',
+          ),
+      }),
+    },
+  );
+
+  const cancelRelation = tool(
+    guarded('cancel_relation', async ({ a, b }: { a: string; b: string }) =>
+      result(await world.cancelRelation(a, b), async (e) =>
+        e.kind === 'relation.cancelled'
+          ? `${await name(e.payload.a)} and ${await name(e.payload.b)} are no longer tied.`
+          : 'Done.',
+      ),
+    ),
+    {
+      name: 'cancel_relation',
+      description:
+        'Remove a tie that is no longer true: someone left a crew, broke an alliance, no longer serves ' +
+        'or is owed. People stop acting on it. To change a tie rather than end it, use set_relation.',
+      schema: z.object({
+        a: z.string().describe('Id or name of one side'),
+        b: z.string().describe('Id or name of the other side'),
+      }),
+    },
+  );
+
+  return [
+    move,
+    inspect,
+    take,
+    drop,
+    searchLore,
+    addEntity,
+    editEntity,
+    updatePlayer,
+    note,
+    npcReact,
+    moveNpc,
+    setRelation,
+    cancelRelation,
+  ];
 }
 
 const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;

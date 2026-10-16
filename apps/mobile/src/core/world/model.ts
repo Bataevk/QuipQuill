@@ -42,6 +42,12 @@ export interface EventPayloads {
   'player.updated': { before: string; after: string };
   'note.added': { id: number; text: string };
   'note.closed': { id: number; text: string };
+  /** A person or creature went to another location, in sight or not (ADR 42). */
+  'npc.moved': { npc: string; from: string; to: string };
+  /** A tie was written or rewritten; `before` is its old description, null if it is new. */
+  'relation.set': { src: string; dst: string; type: string; description: string; before: string | null };
+  /** The ties between two entities that are no longer true (story ones get CANCEL, ADR 42). */
+  'relation.cancelled': { a: string; b: string; removed: Tie[] };
   /** An NPC reacted to something (a line, an action, an event) at the master's call (ADR 33). */
   'npc.reacted': { npc: string; situation: string; reaction: string };
 }
@@ -58,6 +64,17 @@ export type WorldEvent = {
     ts: string;
   };
 }[EventKind];
+
+/** A relation that is not about place or possessions: who knows, serves, owes, hates whom. */
+export interface Tie {
+  src: string;
+  dst: string;
+  type: string;
+  description: string;
+}
+
+/** Relation types that are ties (state.ties); placement goes through move, take, drop, move_npc. */
+export const TIE_TYPES = ['INTERACTS_WITH', 'HAS_ATTRIBUTE'] as const;
 
 export interface EntityPatch {
   description?: string;

@@ -13,7 +13,7 @@ import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
-import { NPC_TRIMMED_NOTE, npcChatId, SILENCE } from './npc';
+import { NPC_TRIMMED_NOTE, npcChatId, npcSystemMessage, SILENCE } from './npc';
 import { runTurn } from './run-turn';
 import { lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
@@ -315,5 +315,63 @@ describe('NPC stream on its own channel', () => {
     expect(npcDeltas.map((e) => (e as { text: string }).text).join('')).toBe('"Who\'s asking?"');
     expect(result.reply).toBe('Mags eyes you.');
     expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'gm']);
+  });
+});
+
+describe('a world that follows the player (ADR 42)', () => {
+  const call = (name: string, args: Record<string, unknown>) => ({ name, args });
+
+  it('lets an NPC leave for another location, where she is found later', async () => {
+    const result = await play(
+      'I tell Mags to wait for me on Lamplight Row.',
+      { toolCalls: [call('move_npc', { who: 'Mags Holloway', to: 'Lamplight Row' })] },
+      (messages) => {
+        expect(lastToolText(messages)).toBe(
+          'Mags Holloway [npc:mags-holloway] is now in Lamplight Row [loc:lamplight-row].',
+        );
+        return { text: 'She shoulders her coat and goes up the stairs.' };
+      },
+    );
+    expect(result.events.map((e) => e.kind)).toEqual(['npc.moved']);
+    expect((await world.scene()).here.map((e) => e.id)).not.toContain(MAGS);
+
+    await play('I follow her.', { toolCalls: [call('move', { to: 'Lamplight Row' })] }, { text: 'Gas lamps.' });
+    expect((await world.scene()).here.map((e) => e.id)).toContain(MAGS);
+    npcSays(MAGS, '"Took your time."');
+    await play('Hello again.', react(MAGS, 'The stranger catches up with you.'), { text: '.' });
+    expect((npcCalls[0].messages[0].content as { text: string }[])[1].text).toContain('You are in Lamplight Row');
+  });
+
+  it('after the player refuses the heist, Mags acts on the new tie, not on the planned one', async () => {
+    const before = await npcSystemMessage(world, (await world.state.entity(MAGS))!);
+    expect((before.content as { text: string }[])[0].text).toContain('- Pip Quillon: leader of the crew');
+
+    const result = await play(
+      "I won't join your heist, and Pip is coming with me.",
+      {
+        toolCalls: [
+          call('set_relation', {
+            a: 'Mags Holloway',
+            b: 'Aria',
+            description: 'the stranger refused to join the heist and took Pip; she no longer trusts them',
+          }),
+          call('cancel_relation', { a: 'Mags Holloway', b: 'Pip Quillon' }),
+          call('edit_entity', {
+            target: 'Mags Holloway',
+            description: 'A former airship captain with a brass hook. Her crew fell apart; she plans alone now.',
+          }),
+        ],
+      },
+      { text: 'Mags says nothing. Her hook taps the table.' },
+    );
+    expect(result.events.map((e) => e.kind)).toEqual(['relation.set', 'relation.cancelled', 'entity.edited']);
+
+    npcSays(MAGS, '"Walk away, then."');
+    await play('I nod to Mags.', react(MAGS, 'The stranger who turned you down nods to you.'), { text: '.' });
+    const stable = (npcCalls[0].messages[0].content as { text: string }[])[0].text;
+    expect(stable).toContain('- Aria: the stranger refused to join the heist and took Pip; she no longer trusts them');
+    expect(stable).not.toContain('leader of the crew');
+    expect(stable).not.toContain('recruited the player');
+    expect(stable).toContain('Her crew fell apart; she plans alone now.');
   });
 });
