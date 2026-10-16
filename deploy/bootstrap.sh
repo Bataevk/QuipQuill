@@ -15,6 +15,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get upgrade -yq
 apt-get install -yq docker.io docker-compose-v2 docker-buildx ufw unattended-upgrades
+apt-get clean # ~1 GB of .deb files on a 10 GB disk
 
 # Swap: Postgres + RabbitMQ + API + Caddy fit in 1 GB only with headroom on disk.
 if ! swapon --show | grep -q /swapfile; then
