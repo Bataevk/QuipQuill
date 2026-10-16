@@ -105,6 +105,17 @@ export const SAVE_SCHEMA_STEPS = [
      vector    BLOB NOT NULL,
      PRIMARY KEY (entity_id, kind)
    ) STRICT;`,
+  // v4 (stage 6.2g, ADR 43): actors instead of NPC chats. A note with `entity_id` is that
+  // entity's actor note; reactions become `entity.reacted`; the NPC chats are no longer read.
+  `ALTER TABLE notes ADD COLUMN entity_id TEXT;
+   CREATE INDEX notes_entity ON notes (entity_id);
+   UPDATE events
+      SET kind = 'entity.reacted',
+          payload = json_object('entity', json_extract(payload, '$.npc'),
+                                'situation', json_extract(payload, '$.situation'),
+                                'reaction', json_extract(payload, '$.reaction'))
+    WHERE kind = 'npc.reacted';
+   DELETE FROM model_messages WHERE chat_id LIKE 'npc:%';`,
 ] as const;
 
 /** The schema version whose saves can no longer be played once started (state_* copies). */

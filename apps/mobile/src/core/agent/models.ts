@@ -1,9 +1,7 @@
 import type { QueueChatModel } from '../net/queue-chat-model';
-import type { Entity } from '../world/model';
 import { CHARACTER_RESPONSE_FORMAT } from './character';
 import { GENERATOR_RESPONSE_FORMAT } from './generator';
 import { GUARD_RESPONSE_FORMAT } from './middleware/guard';
-import { npcChatId } from './npc';
 
 /**
  * The models of one playthrough over the cloud queue: one `QueueChatModel` per purpose and UI
@@ -29,8 +27,7 @@ export function queueModels(base: QueueChatModel) {
       purpose: 'generator',
       responseFormat: GENERATOR_RESPONSE_FORMAT,
     }),
-    /** Each NPC streams on its own channel, with its name for the speech bubble. */
-    npcModel: (npc: Entity) =>
-      base.with({ ...plain, channel: npcChatId(npc), purpose: 'npc', meta: { speaker: npc.name } }),
+    /** Actors (react_entity): the inner voice is for the master, so not a story channel. */
+    actorModel: base.with({ ...plain, channel: 'actor', purpose: 'npc' }),
   };
 }

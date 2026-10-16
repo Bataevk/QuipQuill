@@ -371,14 +371,31 @@ export class World {
   }
 
   /**
-   * `npc.reacted`: journal only — the NPC's own chat keeps the conversation (stage 4.3). The
-   * situation is what happened from the NPC's side (a line, a grab, a noise); the reaction is
-   * its words and/or deeds, or "[silence]".
+   * `entity.reacted` (ADR 43): the situation is what happened from the entity's side (a line, a
+   * grab, a noise); the reaction is its inner voice for the master, or "[silence]".
    */
-  recordNpcReaction(input: { npc: string; situation: string; reaction: string }): Promise<Outcome> {
+  recordReaction(input: { entity: string; situation: string; reaction: string }): Promise<Outcome> {
     return this.command('gm', async ({ state, log }) => {
-      if (!(await state.entity(input.npc))) reject(`There is no ${input.npc}.`);
-      return log.append(this.turn, this.actor, 'npc.reacted', input);
+      if (!(await state.entity(input.entity))) reject(`There is no ${input.entity}.`);
+      return log.append(this.turn, this.actor, 'entity.reacted', input);
+    });
+  }
+
+  /** `note.added` with `entity`: an actor note — what the entity decided, for its next reaction. */
+  addActorNote(entity: string, text: string): Promise<Outcome> {
+    return this.command('gm', async ({ db, state, log }) => {
+      if (!(await state.entity(entity))) reject(`There is no ${entity}.`);
+      if (!text.trim()) reject('The note is empty.');
+      const row = await db.get<{ id: number }>('SELECT coalesce(max(id), 0) + 1 AS id FROM notes');
+      const id = Number(row?.id ?? 1);
+      const event = await log.append(this.turn, this.actor, 'note.added', { id, text: text.trim(), entity });
+      await db.run('INSERT INTO notes (id, text, created_seq, entity_id) VALUES (?, ?, ?, ?)', [
+        id,
+        text.trim(),
+        event.seq,
+        entity,
+      ]);
+      return event;
     });
   }
 
@@ -477,7 +494,7 @@ export class World {
   /**
    * `item.taken`: a portable item that lies here, or inside something that lies here. An item
    * an NPC here holds only after a played-out attempt (ADR 32, 34): this turn already has that
-   * NPC's `npc.reacted`, and the master decided the attempt worked.
+   * NPC's `entity.reacted`, and the master decided the attempt worked.
    */
   private async take({ db, state, log }: Tx, player: Entity, target: string): Promise<WorldEvent> {
     const owned = state.resolve(target, await state.inventory(player.id));
@@ -494,7 +511,7 @@ export class World {
     const holder = held.find((h) => h.item.id === item.id)?.npc;
     if (holder && !(await log.reacted(this.turn, holder.id))) {
       reject(
-        `${holder.name} has ${item.name}. Play out the attempt first: call npc_react for ` +
+        `${holder.name} has ${item.name}. Play out the attempt first: call react_entity for ` +
           `${holder.name}, then take it only if the attempt succeeds.`,
       );
     }

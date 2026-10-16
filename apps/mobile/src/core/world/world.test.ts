@@ -159,11 +159,11 @@ describe('item.taken', () => {
 
   it("takes an NPC's item only after that NPC reacted this turn (ADR 32, 34)", async () => {
     expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
-    expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Pip Quillon has calling card.*npc_react/);
+    expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Pip Quillon has calling card.*react_entity/);
     world.beginTurn();
     expectOk(
-      await world.recordNpcReaction({
-        npc: 'npc:pip-quillon',
+      await world.recordReaction({
+        entity: 'npc:pip-quillon',
         situation: 'The stranger snatches the calling card from your fingers.',
         reaction: '"Oi! Fine, keep it — it opens no doors without me."',
       }),
@@ -176,10 +176,10 @@ describe('item.taken', () => {
 
   it("does not count another NPC's or an earlier turn's reaction", async () => {
     expectOk(await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT));
-    expectOk(await world.recordNpcReaction({ npc: 'npc:pip-quillon', situation: 's', reaction: 'r' }));
+    expectOk(await world.recordReaction({ entity: 'npc:pip-quillon', situation: 's', reaction: 'r' }));
     world.beginTurn();
     expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Play out the attempt first/);
-    expectOk(await world.recordNpcReaction({ npc: 'npc:mags-holloway', situation: 's', reaction: 'r' }));
+    expectOk(await world.recordReaction({ entity: 'npc:mags-holloway', situation: 's', reaction: 'r' }));
     expectError(await world.setRelation('player', 'HAS_ITEM', 'calling card'), /Play out the attempt first/);
     expect(await world.log.count('item.taken')).toBe(0);
   });
@@ -374,7 +374,7 @@ describe('relation.set and relation.cancelled', () => {
   });
 });
 
-describe('notes and npc.reacted', () => {
+describe('notes and entity.reacted', () => {
   it('adds and closes notes', async () => {
     const added = expectOk(await world.addNote('Meet Mags at midnight.'));
     expect(added.payload).toEqual({ id: 1, text: 'Meet Mags at midnight.' });
@@ -387,19 +387,32 @@ describe('notes and npc.reacted', () => {
     expectError(await world.closeNote(9), /no note #9/);
   });
 
+  it('keeps actor notes apart from the master\'s: not in his notebook, not closable by him', async () => {
+    expectOk(await world.addNote('Meet Mags at midnight.'));
+    const noted = expectOk(await world.addActorNote('npc:mags-holloway', 'I will not trust the stranger again.'));
+    expect(noted.payload).toEqual({ id: 2, text: 'I will not trust the stranger again.', entity: 'npc:mags-holloway' });
+    expectOk(await world.addActorNote('npc:pip-quillon', 'Owes me a drink.'));
+    expect((await world.log.openNotes()).map((n) => n.id)).toEqual([1]);
+    expect((await world.log.actorNotes('npc:mags-holloway', 10)).map((n) => n.text)).toEqual([
+      'I will not trust the stranger again.',
+    ]);
+    expectError(await world.closeNote(2), /no note #2/);
+    expectError(await world.addActorNote('npc:nobody', 'x'), /no npc:nobody/);
+  });
+
   it('journals an NPC reaction without touching the state', async () => {
     const before = await count('SELECT sum(updated_seq) AS n FROM dyn_entities');
     const event = expectOk(
-      await world.recordNpcReaction({
-        npc: 'npc:mags-holloway',
+      await world.recordReaction({
+        entity: 'npc:mags-holloway',
         situation: 'The player snatches the plan off her table.',
         reaction: '"Hands off, rookie." She pins your wrist to the table.',
       }),
     );
-    expect(event.kind).toBe('npc.reacted');
+    expect(event.kind).toBe('entity.reacted');
     expect(await count('SELECT sum(updated_seq) AS n FROM dyn_entities')).toBe(before);
     expectError(
-      await world.recordNpcReaction({ npc: 'npc:nobody', situation: '?', reaction: '' }),
+      await world.recordReaction({ entity: 'npc:nobody', situation: '?', reaction: '' }),
       /no npc:nobody/,
     );
   });

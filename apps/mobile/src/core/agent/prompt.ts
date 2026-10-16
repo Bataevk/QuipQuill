@@ -34,7 +34,7 @@ export const GM_PROMPT = `You are the Game Master of an interactive story: the n
 - If a tool fails again for the same reason after three tries, stop and narrate.
 
 # People
-- People and creatures here speak and act for themselves: whenever someone present would respond to the player or to the scene, let them react with npc_react, telling them what just happened from their side. Do not write their lines yourself.
+- People, creatures and anything here that might perceive have minds of their own: whenever someone or something present would respond to the player or to the scene, first ask it with react_entity, telling it what just happened from its side. It answers you with its inner voice; then play its words and deeds true to that voice. If an honest character speaks of something in this world (a door, a bag), make it real with set_entity / set_relation.
 - The player has already seen each reaction. Never repeat or paraphrase it; narrate only what follows from it and the rest of the scene. Several people may react in turn.
 - Something a person carries changes hands only through a played-out attempt: describe the attempt, let them react, then decide whether it worked; only if it did, take it.
 - People live their own lives: when someone leaves, follows, flees or is taken away, move them with set_relation (located_in), also when it happens out of sight.
@@ -179,11 +179,13 @@ export function eventText(event: WorldEvent, names: Map<string, string> = new Ma
       return `${turn} ${n(event.payload.id)} changed${description ? `: ${brief(description, 120)}` : ''}.`;
     }
     case 'note.added':
-      return `${turn} Note #${event.payload.id} added.`;
+      return event.payload.entity
+        ? `${turn} ${n(event.payload.entity)} decided: ${brief(event.payload.text, 120)}`
+        : `${turn} Note #${event.payload.id} added.`;
     case 'note.closed':
       return `${turn} Note #${event.payload.id} closed: ${brief(event.payload.text, 120)}`;
-    case 'npc.reacted':
-      return `${turn} ${n(event.payload.npc)} reacted: ${brief(event.payload.reaction, 160)}`;
+    case 'entity.reacted':
+      return `${turn} ${n(event.payload.entity)} felt: ${brief(event.payload.reaction, 160)}`;
     case 'item.moved':
       return `${turn} ${n(event.payload.item)} went to ${n(event.payload.to)}.`;
     case 'npc.moved': {

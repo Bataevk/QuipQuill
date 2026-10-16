@@ -32,7 +32,6 @@ import type { Db } from '../storage/db';
 import { readStoryMeta, type StoryMeta } from '../story/story-meta';
 import { nowIso } from '../util/ids';
 import { openVectorIndex } from '../vector/open-index';
-import type { Entity } from '../world/model';
 import type { CharacterSheet } from '../world/world';
 import { World } from '../world/world';
 
@@ -55,7 +54,8 @@ export interface GameModels {
   guardModel?: BaseChatModel;
   summaryModel?: BaseChatModel;
   characterModel: BaseChatModel;
-  npcModel: (npc: Entity) => BaseChatModel;
+  /** Actors' inner voices (react_entity). */
+  actorModel: BaseChatModel;
   /** The background world generator after each player turn; without it there is none. */
   generatorModel?: BaseChatModel;
 }
@@ -137,7 +137,7 @@ export class Game {
       world: init.world,
       meta: init.meta,
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
-      npc: { model: models.npcModel, chats: this.chats, transcript: this.transcript },
+      actor: { model: () => models.actorModel },
     });
     this.generatorModel = models.generatorModel;
     this.sessionDeps = {

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScriptedChatModel } from '@/core/agent/testing/scripted-model';
 import type { CloudSocket } from '@/core/net/cloud-socket';
 import type { ServerEvent } from '@/core/protocol/messages';
-import type { Entity } from '@/core/world/model';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
 import { Game, type GameServices, isStoryChannel } from './game';
@@ -35,7 +34,7 @@ async function open(): Promise<Game> {
     models: () => ({
       model: master,
       characterModel: character,
-      npcModel: (_npc: Entity) => npc,
+      actorModel: npc,
       generatorModel: generator,
     }),
   };

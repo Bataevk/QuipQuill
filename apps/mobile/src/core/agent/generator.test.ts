@@ -53,7 +53,7 @@ const scripted = (answer: string) => new ScriptedChatModel([{ text: answer }]);
 describe('generator', () => {
   it('reads the turn and the people in it, with the story first for the cache', async () => {
     expectOk(
-      await world.recordNpcReaction({ npc: MAGS, situation: 'The stranger refuses.', reaction: '"Suit yourself."' }),
+      await world.recordReaction({ entity: MAGS, situation: 'The stranger refuses.', reaction: '"Suit yourself."' }),
     );
     const [system, context] = await generatorMessages({ world, meta }, TURN);
 
@@ -66,7 +66,7 @@ describe('generator', () => {
     expect(context.text).toContain('  - Pip Quillon [npc:pip-quillon]: leader of the crew');
     expect(context.text).toContain(`Player: ${TURN.input}`);
     expect(context.text).toContain(`Game Master: ${TURN.reply}`);
-    expect(context.text).toContain('Reactions:\n- Mags Holloway: "Suit yourself."');
+    expect(context.text).toContain('Inner voices (what they felt and wanted):\n- Mags Holloway: "Suit yourself."');
     expect(context.text).toContain('Already recorded this turn:\n- nothing');
   });
 

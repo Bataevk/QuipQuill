@@ -10,15 +10,15 @@ import { z } from 'zod';
 
 import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
-import { type NpcDeps, reactNpc } from './npc';
+import { type ActorDeps, reactEntity } from './actor';
 import { brief } from './prompt';
 
 export interface GmToolDeps {
   world: World;
   /** Query vector for search_lore, with the story's `meta.embed_model` (CloudEmbeddings). */
   embed?: (text: string) => Promise<Float32Array>;
-  /** NPC models and stores for npc_react; without them NPCs cannot react. */
-  npc?: NpcDeps;
+  /** The actor model for react_entity; without it nothing can react. */
+  actor?: ActorDeps;
 }
 
 export const GM_TOOL_NAMES = [
@@ -28,12 +28,12 @@ export const GM_TOOL_NAMES = [
   'set_relation',
   'cancel_relation',
   'note',
-  'npc_react',
+  'react_entity',
 ] as const;
 
 const LORE_HITS = 5;
 
-export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredToolInterface[] {
+export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredToolInterface[] {
   // The agent may run several tool calls of one model reply concurrently; world commands must
   // apply in the order the model wrote them (move, then take).
   const run = serial();
@@ -127,7 +127,7 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
         'Make a relation true; the world checks its rules and refuses what cannot happen. ' +
         'located_in — a is in b: the player goes to b (only along a listed exit); a person or creature goes to ' +
         'any location, in sight or not; something is put down here or into a container. ' +
-        'has_item — a carries b: the player takes something here (from a person here only after npc_react and ' +
+        'has_item — a carries b: the player takes something here (from a person here only after react_entity and ' +
         'a played-out attempt); someone gets or is given a thing. ' +
         "interacts_with — how a stands with b now (allegiance, grudge, debt, trust), told from a's side; it " +
         'replaces the old tie between them. has_attribute — a lasting quality b of a. ' +
@@ -187,9 +187,9 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     },
   );
 
-  const npcReact = tool(
-    guarded('npc_react', async ({ target, situation }: { target: string; situation: string }, signal) => {
-      if (!npc) return 'Error: people cannot react right now. Narrate around it.';
+  const reactEntityTool = tool(
+    guarded('react_entity', async ({ target, situation }: { target: string; situation: string }, signal) => {
+      if (!actor) return 'Error: nothing can react right now. Narrate around it.';
       const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
       const found = world.state.resolve(target, nearby);
       if (found.kind === 'ambiguous') {
@@ -198,26 +198,27 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
       }
       if (found.kind === 'none') return `Error: there is no "${target}" here to react.`;
       try {
-        const reaction = await reactNpc(world, npc, found.entity, situation, signal);
+        const reaction = await reactEntity(world, actor, found.entity, situation, signal);
         const who = `${found.entity.name} [${found.entity.id}]`;
         return reaction.silent
           ? `${who} does not react.`
-          : `${who} reacted; the player already saw it, so do not repeat or paraphrase it — ` +
-              `narrate only its consequences and the rest of the scene:\n${reaction.text}`;
+          : `Inner voice of ${who} — for you only, the player has not heard it:\n${reaction.voice}\n` +
+              'Play their outward reaction (words, deeds) true to this voice; if they lie, the truth is above.';
       } catch (error) {
         if (signal?.aborted) throw error;
         return `Error: ${found.entity.name} could not react right now (${(error as Error).message}). Narrate around it.`;
       }
     }),
     {
-      name: 'npc_react',
+      name: 'react_entity',
       description:
-        'Let a person or creature here react — in their own words and/or deeds — to what just happened: ' +
-        'something the player said or asked them, did to them (a shove, a bribe, a grab at their purse), ' +
-        'or an event in the scene. Use it whenever someone present would respond, instead of writing ' +
-        'their lines yourself. The player sees the reaction at once. Several calls run one after another.',
+        'Ask something here how it takes what just happened: a person, a creature, anything that might perceive ' +
+        '(a magic mirror, a watchful statue) — here or in the inventory. Use it whenever someone or something ' +
+        'present would respond to the player or the scene: a question, a shove, a bribe, a grab at their purse. ' +
+        'It answers you, not the player: its feelings, intent and the truth behind any lie; a plain object stays ' +
+        'silent. Several calls run one after another.',
       schema: z.object({
-        target: z.string().describe('Id or name of who reacts (someone here)'),
+        target: z.string().describe('Id or name of who or what reacts (here or in the inventory)'),
         situation: z
           .string()
           .describe(
@@ -259,7 +260,7 @@ export function createGmTools({ world, embed, npc }: GmToolDeps): StructuredTool
     }
   }
 
-  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, npcReact];
+  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool];
 }
 
 const CREATABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;

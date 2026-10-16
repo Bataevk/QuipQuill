@@ -42,7 +42,8 @@ export interface EventPayloads {
   'item.dropped': { item: string; to: string };
   'entity.added': { entity: string; relation: { type: string; target: string } };
   'entity.edited': { id: string; before: EntityPatch; after: EntityPatch };
-  'note.added': { id: number; text: string };
+  /** A master's note, or with `entity` an actor's note: what that entity decided (ADR 43). */
+  'note.added': { id: number; text: string; entity?: string };
   'note.closed': { id: number; text: string };
   /** A thing the master moved or handed over, not by the player's own hand (ADR 43). */
   'item.moved': { item: string; from: string; to: string };
@@ -52,8 +53,11 @@ export interface EventPayloads {
   'relation.set': { src: string; dst: string; type: string; description: string; before: string | null };
   /** The ties between two entities that are no longer true (story ones get CANCEL, ADR 42). */
   'relation.cancelled': { a: string; b: string; removed: Tie[] };
-  /** An NPC reacted to something (a line, an action, an event) at the master's call (ADR 33). */
-  'npc.reacted': { npc: string; situation: string; reaction: string };
+  /**
+   * An entity reacted to something (a line, an action, an event) at the master's call (ADR 33,
+   * 43): `reaction` is its inner voice for the master, or "[silence]".
+   */
+  'entity.reacted': { entity: string; situation: string; reaction: string };
 }
 
 export type EventKind = keyof EventPayloads;

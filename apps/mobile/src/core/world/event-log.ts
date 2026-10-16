@@ -4,7 +4,7 @@ import type { Actor, EventKind, EventPayloads, Note, WorldEvent } from './model'
 
 type EventRow = { seq: number; turn: number; actor: string; kind: string; payload: string; ts: string };
 
-/** The append-only journal (`events`) and the master's notes (`notes`). */
+/** The append-only journal (`events`) and the notes (`notes`): the master's and actors'. */
 export class EventLog {
   private readonly db: Db;
 
@@ -49,12 +49,12 @@ export class EventLog {
     return Number(row?.n ?? 0);
   }
 
-  /** Whether `npc` already reacted (`npc.reacted`) during `turn`. */
-  async reacted(turn: number, npc: string): Promise<boolean> {
+  /** Whether `entity` already reacted (`entity.reacted`) during `turn`. */
+  async reacted(turn: number, entity: string): Promise<boolean> {
     const row = await this.db.get<{ n: number }>(
       `SELECT count(*) AS n FROM events
-        WHERE turn = ? AND kind = 'npc.reacted' AND json_extract(payload, '$.npc') = ?`,
-      [turn, npc],
+        WHERE turn = ? AND kind = 'entity.reacted' AND json_extract(payload, '$.entity') = ?`,
+      [turn, entity],
     );
     return Number(row?.n ?? 0) > 0;
   }
@@ -64,16 +64,40 @@ export class EventLog {
     return Number(row?.turn ?? 0);
   }
 
+  /** The master's open notes (actor notes are not his). */
   async openNotes(): Promise<Note[]> {
     const rows = await this.db.all<{ id: number; text: string; created_seq: number }>(
-      'SELECT id, text, created_seq FROM notes WHERE closed_seq IS NULL ORDER BY id',
+      'SELECT id, text, created_seq FROM notes WHERE closed_seq IS NULL AND entity_id IS NULL ORDER BY id',
     );
-    return rows.map((row) => ({ id: Number(row.id), text: row.text, createdSeq: Number(row.created_seq) }));
+    return rows.map(toNote);
   }
 
+  /** The last `limit` actor notes of `entity`, oldest first. */
+  async actorNotes(entity: string, limit: number): Promise<Note[]> {
+    const rows = await this.db.all<{ id: number; text: string; created_seq: number }>(
+      `SELECT * FROM (SELECT id, text, created_seq FROM notes WHERE entity_id = ? ORDER BY id DESC LIMIT ?)
+        ORDER BY id`,
+      [entity, limit],
+    );
+    return rows.map(toNote);
+  }
+
+  /** The last `limit` reactions of `entity`, oldest first. */
+  async reactionsOf(entity: string, limit: number): Promise<WorldEvent[]> {
+    const rows = await this.db.all<EventRow>(
+      `SELECT * FROM (SELECT * FROM events
+                       WHERE kind = 'entity.reacted' AND json_extract(payload, '$.entity') = ?
+                       ORDER BY seq DESC LIMIT ?)
+        ORDER BY seq`,
+      [entity, limit],
+    );
+    return rows.map(toEvent);
+  }
+
+  /** A master's note by id. */
   async note(id: number): Promise<(Note & { closed: boolean }) | undefined> {
     const row = await this.db.get<{ id: number; text: string; created_seq: number; closed_seq: number | null }>(
-      'SELECT * FROM notes WHERE id = ?',
+      'SELECT * FROM notes WHERE id = ? AND entity_id IS NULL',
       [id],
     );
     return (
@@ -85,6 +109,10 @@ export class EventLog {
       }
     );
   }
+}
+
+function toNote(row: { id: number; text: string; created_seq: number }): Note {
+  return { id: Number(row.id), text: row.text, createdSeq: Number(row.created_seq) };
 }
 
 function toEvent(row: EventRow): WorldEvent {

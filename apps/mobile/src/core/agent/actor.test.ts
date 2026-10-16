@@ -1,4 +1,4 @@
-import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
+import type { BaseMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CloudSocket } from '@/core/net/cloud-socket';
@@ -10,10 +10,10 @@ import type { Entity } from '@/core/world/model';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
+import { actorSystemMessage, SILENCE } from './actor';
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
-import { NPC_TRIMMED_NOTE, npcChatId, npcSystemMessage, SILENCE } from './npc';
 import { runTurn } from './run-turn';
 import { lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
@@ -32,9 +32,9 @@ let meta: StoryMeta;
 let chats: ChatStore;
 let transcript: TranscriptStore;
 let master: ScriptedChatModel;
-/** NPC answers by NPC id; every call is recorded with who was asked. */
-let npcScripts: Map<string, ScriptedChatModel>;
-let npcCalls: { npc: Entity; messages: BaseMessage[] }[];
+/** Actor answers by entity id; every call is recorded with who was asked. */
+let actorScripts: Map<string, ScriptedChatModel>;
+let actorCalls: { entity: Entity; messages: BaseMessage[] }[];
 
 beforeEach(async () => {
   env = await makeTestEnv();
@@ -49,8 +49,8 @@ beforeEach(async () => {
   chats = new ChatStore(db);
   transcript = new TranscriptStore(db);
   master = new ScriptedChatModel([]);
-  npcScripts = new Map();
-  npcCalls = [];
+  actorScripts = new Map();
+  actorCalls = [];
 });
 
 afterEach(async () => {
@@ -58,19 +58,19 @@ afterEach(async () => {
   await env?.cleanup();
 });
 
-/** The NPC with this id will answer these lines, in order. */
-function npcSays(id: string, ...lines: string[]) {
-  const model = npcScripts.get(id) ?? new ScriptedChatModel([]);
+/** The entity with this id will answer these lines, in order. */
+function feels(id: string, ...lines: string[]) {
+  const model = actorScripts.get(id) ?? new ScriptedChatModel([]);
   model.push(...lines.map((text) => ({ text })));
-  npcScripts.set(id, model);
+  actorScripts.set(id, model);
 }
 
-const npcModel = (npc: Entity) => {
-  const scripted = npcScripts.get(npc.id);
-  if (!scripted) throw new Error(`${npc.id} was not expected to react`);
+const actorModel = (entity: Entity) => {
+  const scripted = actorScripts.get(entity.id);
+  if (!scripted) throw new Error(`${entity.id} was not expected to react`);
   return {
     invoke: async (messages: BaseMessage[]) => {
-      npcCalls.push({ npc, messages });
+      actorCalls.push({ entity, messages });
       return scripted.invoke(messages);
     },
   } as unknown as ScriptedChatModel;
@@ -78,174 +78,160 @@ const npcModel = (npc: Entity) => {
 
 function play(input: string, ...steps: Step[]) {
   master.push(...steps);
-  const agent = createGmAgent({ model: master, world, meta, npc: { model: npcModel, chats, transcript } });
+  const agent = createGmAgent({ model: master, world, meta, actor: { model: actorModel } });
   return runTurn({ agent, world, chats, transcript, input });
 }
 
-const react = (target: string, situation: string) => ({ toolCalls: [{ name: 'npc_react', args: { target, situation } }] });
+const react = (target: string, situation: string) => ({ toolCalls: [{ name: 'react_entity', args: { target, situation } }] });
+const call = (name: string, args: Record<string, unknown>) => ({ name, args });
+const promptOf = (i: number) => actorCalls[i].messages[0].content as { text: string; cache_control?: unknown }[];
 
-describe('npc_react', () => {
-  it('asks a story NPC: persona and ties in her prompt, her own chat, the transcript, the journal', async () => {
-    npcSays(MAGS, '*She taps the plan.* "Below the bank, love. Behind a lock that thinks."');
+describe('react_entity', () => {
+  it('asks Mags: her inner voice goes to the master only, the journal gets entity.reacted', async () => {
+    const voice = 'A rookie asking about the vault, out loud? I will tell them it is below the bank, nothing more.';
+    feels(MAGS, voice);
     const result = await play(
       'I ask Mags about the vault.',
       react('Mags Holloway', 'The new recruit asks you about the vault.'),
       (messages) => {
         const told = lastToolText(messages);
-        expect(told).toMatch(/^Mags Holloway \[npc:mags-holloway\] reacted; the player already saw it, so do not repeat/);
-        expect(told).toContain('Behind a lock that thinks.');
-        return { text: 'The tavern noise swallows the rest.' };
+        expect(told).toMatch(/^Inner voice of Mags Holloway \[npc:mags-holloway\] — for you only, the player has not heard it:/);
+        expect(told).toContain(voice);
+        expect(told).toMatch(/Play their outward reaction/);
+        return { text: '"Below the bank, love," Mags mutters, and says no more.' };
       },
     );
-    expect(result.reply).toBe('The tavern noise swallows the rest.');
     expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
-      [
-        'npc.reacted',
-        {
-          npc: MAGS,
-          situation: 'The new recruit asks you about the vault.',
-          reaction: '*She taps the plan.* "Below the bank, love. Behind a lock that thinks."',
-        },
-      ],
+      ['entity.reacted', { entity: MAGS, situation: 'The new recruit asks you about the vault.', reaction: voice }],
     ]);
 
-    const [system, situation] = npcCalls[0].messages;
-    const [stable, scene] = system.content as { text: string; cache_control?: unknown }[];
+    const [stable, scene] = promptOf(0);
     expect(stable.cache_control).toEqual({ type: 'ephemeral' });
-    expect(stable.text).toMatch(/^You are Mags Holloway, a character in an interactive story\./);
+    expect(stable.text).toMatch(/^You are Mags Holloway, in an interactive story\./);
     expect(stable.text).toContain('a brass hook where her left hand used to be');
     expect(stable.text).toContain('- Silas Ashcombe: revenge on Silas Ashcombe, who seized her airship');
+    expect(stable.text).toContain('answer them with your inner voice');
     expect(stable.text).toContain('answer exactly: [silence]');
     expect(scene.text).toContain('You are in The Rusty Gear Tavern');
-    expect(scene.text).toContain('Facing you: the player character, Aria (human) — A cartographer.');
-    expect(situation.text).toBe('The new recruit asks you about the vault.');
+    expect(scene.text).toContain('The player character: Aria (human) — A cartographer.');
+    expect(actorCalls[0].messages[1].text).toBe('The new recruit asks you about the vault.');
 
-    expect((await chats.load(npcChatId(npcCalls[0].npc))).map((m) => m.getType())).toEqual(['human', 'ai']);
-    expect((await transcript.lines()).map((l) => [l.speaker, l.text.slice(0, 18), l.extra])).toEqual([
-      ['player', 'I ask Mags about t', {}],
-      [MAGS, '*She taps the plan', { name: 'Mags Holloway' }],
-      ['gm', 'The tavern noise s', {}],
-    ]);
+    // no NPC chat, no NPC line in the transcript: the master tells the player what she does
+    expect(await db.all("SELECT * FROM model_messages WHERE chat_id LIKE 'npc:%'")).toEqual([]);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
+    expect((await chats.load(GM_CHAT)).some((m) => m.text.includes(voice))).toBe(true);
   });
 
-  it('remembers the conversation: the next question comes with the earlier exchange', async () => {
-    npcSays(MAGS, '"Below the bank."', '"I told you: below the bank."');
-    await play('Where is the vault?', react(MAGS, 'The recruit asks where the vault is.'), { text: '.' });
-    await play('Where again?', react(MAGS, 'The recruit asks again.'), { text: '.' });
-    expect(npcCalls[1].messages.slice(1).map((m) => m.text)).toEqual([
-      'The recruit asks where the vault is.',
-      '"Below the bank."',
-      'The recruit asks again.',
-    ]);
-    // the master's chat does not get the NPC's chat, only its tool result
-    expect((await chats.load(GM_CHAT)).some((m) => m.text === '"Below the bank."')).toBe(false);
-  });
-
-  it('asks an innkeeper the master just added to the scene', async () => {
-    npcSays('npc:innkeeper', '"Ale\'s a penny. Questions cost two."');
+  it('a magic mirror in the inventory reacts too', async () => {
+    feels('item:magic-mirror', 'At last someone looks at me. I want them to ask about the vault — I saw its keeper.');
     const result = await play(
-      'I wave over whoever runs this place.',
+      'I pull out the mirror I found and look into it.',
       {
         toolCalls: [
-          {
-            name: 'set_entity',
-            args: { name: 'innkeeper', type: 'npc', description: 'A bald man polishing mugs that never get clean.' },
-          },
-          { name: 'npc_react', args: { target: 'innkeeper', situation: 'A stranger waves you over.' } },
+          call('set_entity', { name: 'magic mirror', type: 'item', description: 'A hand mirror that remembers every face it has shown.' }),
         ],
       },
-      { text: 'He waits.' },
+      { toolCalls: [call('set_relation', { a: 'player', relation: 'has_item', b: 'magic mirror' })] },
+      react('magic mirror', 'The stranger who carries you looks into you.'),
+      (messages) => ({ text: lastToolText(messages).startsWith('Inner voice of magic mirror') ? 'The glass ripples.' : '?' }),
     );
-    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'npc.reacted']);
-    const [stable, scene] = npcCalls[0].messages[0].content as { text: string }[];
-    expect(stable.text).toContain('A bald man polishing mugs');
-    expect(stable.text).not.toContain('# Your ties');
-    expect(scene.text).toContain('Also here: Mags Holloway.');
-    expect(scene.text).toContain('You carry: nothing of note.');
+    expect(result.reply).toBe('The glass ripples.');
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'item.taken', 'entity.reacted']);
+    const [stable, scene] = promptOf(0);
+    expect(stable.text).toContain('remembers every face');
+    expect(scene.text).toContain('The player character carries you.');
+    expect(scene.text).toContain('You are in The Rusty Gear Tavern');
   });
 
-  it('asks a stone: [silence] reaches neither the player nor the master as words', async () => {
-    npcSays('item:crate', SILENCE);
+  it('a stone stays silent: [silence] reaches the master as "does not react"', async () => {
+    feels('item:crate', SILENCE);
     const result = await play('I ask the crate where the gold is.', react('crate', 'Someone asks you where the gold is.'), (messages) => {
       expect(lastToolText(messages)).toBe('crate [item:crate] does not react.');
       return { text: 'The crate keeps its counsel.' };
     });
     expect(result.events.map((e) => e.payload)).toEqual([
-      { npc: 'item:crate', situation: 'Someone asks you where the gold is.', reaction: SILENCE },
+      { entity: 'item:crate', situation: 'Someone asks you where the gold is.', reaction: SILENCE },
     ]);
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
-    expect((await chats.load('npc:item:crate')).map((m) => m.text)).toEqual(['Someone asks you where the gold is.', SILENCE]);
+  });
+
+  it('remembers through actor notes and its last reactions, not a chat', async () => {
+    feels(MAGS, 'Who is this? I want to know before I say anything.', 'Them again. Still no.');
+    await play('Hello, Mags.', react(MAGS, 'A stranger greets you.'), { text: '.' });
+    expectOk(await world.addActorNote(MAGS, 'I refused to tell the stranger about the vault.'));
+    await play('Tell me about the vault.', react(MAGS, 'The stranger asks about the vault.'), { text: '.' });
+
+    expect(promptOf(0)[1].text).not.toContain('# Your notes');
+    const scene = promptOf(1)[1].text;
+    expect(scene).toContain('# Your notes (what you decided before)\n- I refused to tell the stranger about the vault.');
+    expect(scene).toContain('# Lately\n- A stranger greets you. → you felt: Who is this?');
+    expect(actorCalls[1].messages.map((m) => m.getType())).toEqual(['system', 'human']);
+    // the notes are the actor's, not the master's
+    expect((await world.scene()).notes).toEqual([]);
+  });
+
+  it('asks an innkeeper the master just added to the scene', async () => {
+    feels('npc:innkeeper', 'Another one who wants talk, not ale. Talk costs extra.');
+    const result = await play(
+      'I wave over whoever runs this place.',
+      {
+        toolCalls: [
+          call('set_entity', { name: 'innkeeper', type: 'npc', description: 'A bald man polishing mugs that never get clean.' }),
+          call('react_entity', { target: 'innkeeper', situation: 'A stranger waves you over.' }),
+        ],
+      },
+      { text: 'He waits.' },
+    );
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted']);
+    const [stable, scene] = promptOf(0);
+    expect(stable.text).toContain('A bald man polishing mugs');
+    expect(stable.text).not.toContain('# Your ties');
+    expect(scene.text).toContain('Also here: Mags Holloway.');
+    expect(scene.text).not.toContain('You carry');
   });
 
   it('snatching an item: the owner reacts first, then take succeeds (ADR 32, 34)', async () => {
     await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
-    npcSays(PIP, '*Pip lets go with a scowl.* "Keep it. It opens no doors without me."');
+    feels(PIP, 'Fine, let it go — the card opens no doors without me anyway.');
     const result = await play(
       "I snatch Pip's calling card.",
       react('Pip Quillon', 'The stranger snatches the calling card from your fingers.'),
-      { toolCalls: [{ name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'calling card' } }] },
+      { toolCalls: [call('set_relation', { a: 'player', relation: 'has_item', b: 'calling card' })] },
       (messages) => ({ text: lastToolText(messages).startsWith('The player now has calling card') ? 'Yours now.' : '?' }),
     );
     expect(result.reply).toBe('Yours now.');
     expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
-      ['npc.reacted', expect.objectContaining({ npc: PIP })],
+      ['entity.reacted', expect.objectContaining({ entity: PIP })],
       ['item.taken', { item: 'doc:calling-card', from: PIP }],
     ]);
   });
 
   it('snatching an item: take before the reaction is refused; a failed attempt takes nothing', async () => {
     await world.setRelation('player', 'LOCATED_IN', LAMPLIGHT);
-    npcSays(PIP, '*Pip twists away and is gone into the crowd.*');
+    feels(PIP, 'Not a chance. I twist away into the crowd.');
     const result = await play(
       "I snatch Pip's calling card.",
       {
         toolCalls: [
-          { name: 'set_relation', args: { a: 'player', relation: 'has_item', b: 'calling card' } },
-          { name: 'npc_react', args: { target: PIP, situation: 'The stranger grabs at your calling card.' } },
+          call('set_relation', { a: 'player', relation: 'has_item', b: 'calling card' }),
+          call('react_entity', { target: PIP, situation: 'The stranger grabs at your calling card.' }),
         ],
       },
       { text: 'Your fingers close on air.' },
     );
     const results = result.messages.filter((m) => m.getType() === 'tool').map((m) => m.text);
-    expect(results[0]).toMatch(/^Error: Pip Quillon has calling card\. Play out the attempt first/);
-    expect(result.events.map((e) => e.kind)).toEqual(['npc.reacted']);
+    expect(results[0]).toMatch(/^Error: Pip Quillon has calling card\. Play out the attempt first: call react_entity/);
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted']);
     expect((await world.state.inventory(PIP)).map((e) => e.id)).toEqual(['doc:calling-card']);
   });
 
-  it('keeps the transcript in the order the player saw it: master, NPC, master', async () => {
-    npcSays(MAGS, '"Took you long enough."');
-    await play(
-      'I sit down with Mags.',
-      { text: 'You slide onto the bench.', toolCalls: [{ name: 'npc_react', args: { target: MAGS, situation: 'The recruit sits down.' } }] },
-      { text: 'The ale arrives.' },
-    );
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm', MAGS, 'gm']);
-  });
-
-  it('writes nothing visible when the reaction cannot be journaled', async () => {
-    npcSays(MAGS, '"Hm."');
-    vi.spyOn(world, 'recordNpcReaction').mockResolvedValue({ ok: false, error: 'disk full' });
+  it('returns an error when the reaction cannot be journaled', async () => {
+    feels(MAGS, 'Hm.');
+    vi.spyOn(world, 'recordReaction').mockResolvedValue({ ok: false, error: 'disk full' });
     const result = await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: 'Silence.' });
     expect(result.messages.find((m) => m.getType() === 'tool')?.text).toMatch(/^Error: Mags Holloway could not react/);
-    expect(await chats.load(MAGS)).toEqual([]);
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
   });
 
-  it('trims a long NPC chat with a note written for the NPC', async () => {
-    const filler = 'w'.repeat(4_000);
-    await chats.append(
-      MAGS,
-      Array.from({ length: 10 }, (_, i) => [new HumanMessage(`Q${i} ${filler}`), new AIMessage(`A${i} ${filler}`)]).flat(),
-    );
-    npcSays(MAGS, '"What were we saying?"');
-    await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: '.' });
-    const seen = npcCalls[0].messages.slice(1);
-    expect(seen[0].text).toBe(NPC_TRIMMED_NOTE);
-    expect(seen.at(-1)!.text).toBe('The recruit says hi.');
-    expect((await chats.load(MAGS))[0].text).toBe(NPC_TRIMMED_NOTE);
-  });
-
-  it('refuses someone who is not here, and survives a failing NPC model', async () => {
+  it('refuses something that is not here, and survives a failing actor model', async () => {
     const result = await play(
       'I shout for Silas Ashcombe.',
       react('Silas Ashcombe', 'Someone shouts your name.'),
@@ -256,12 +242,11 @@ describe('npc_react', () => {
     expect(results[0]).toBe('Error: there is no "Silas Ashcombe" here to react.');
     expect(results[1]).toMatch(/^Error: Mags Holloway could not react right now \(npc:mags-holloway was not expected/);
     expect(result.events).toEqual([]);
-    expect(await chats.load('npc:mags-holloway')).toEqual([]);
   });
 });
 
-describe('NPC stream on its own channel', () => {
-  it('sends the NPC request on channel npc:<id> with its name; the UI sees its deltas there', async () => {
+describe('actor stream', () => {
+  it('sends the actor request with purpose npc on the hidden channel "actor"', async () => {
     const requests: LlmRequest[] = [];
     const listeners = new Set<(event: ServerEvent) => void>();
     const emit = (event: ServerEvent) => listeners.forEach((listener) => listener(event));
@@ -273,16 +258,15 @@ describe('NPC stream on its own channel', () => {
       async request(request: LlmRequest): Promise<DoneEvent> {
         requests.push(request);
         const routed = { v: 1 as const, requestId: request.requestId, sessionId: request.sessionId, channel: request.channel };
-        const text = request.purpose === 'npc' ? '"Who\'s asking?"' : 'Mags eyes you.';
-        emit({ ...routed, type: 'delta', seq: 0, text: text.slice(0, 5) });
-        emit({ ...routed, type: 'delta', seq: 1, text: text.slice(5) });
+        const text = request.purpose === 'npc' ? 'Who is asking? I do not like it.' : 'Mags eyes you.';
+        emit({ ...routed, type: 'delta', seq: 0, text });
         const calls =
           request.purpose === 'gm' && requests.filter((r) => r.purpose === 'gm').length === 1
             ? [
                 {
                   id: 'call_1',
                   type: 'function' as const,
-                  function: { name: 'npc_react', arguments: JSON.stringify({ target: MAGS, situation: 'The recruit greets you.' }) },
+                  function: { name: 'react_entity', arguments: JSON.stringify({ target: MAGS, situation: 'The recruit greets you.' }) },
                 },
               ]
             : undefined;
@@ -295,34 +279,28 @@ describe('NPC stream on its own channel', () => {
         };
       },
     } as unknown as CloudSocket;
-    const seen: ServerEvent[] = [];
-    socket.onEvent((event) => seen.push(event));
 
     const models = queueModels(new QueueChatModel({ socket, sessionId: 'save-1', channel: 'gm', purpose: 'gm' }));
-    const agent = createGmAgent({
-      ...models,
-      world,
-      meta,
-      npc: { model: models.npcModel, chats, transcript },
-    });
+    const agent = createGmAgent({ ...models, world, meta, actor: { model: () => models.actorModel } });
     const result = await runTurn({ agent, world, chats, transcript, input: 'Hello, Mags.' });
 
-    const npcRequest = requests.find((r) => r.purpose === 'npc')!;
-    expect(npcRequest).toMatchObject({ channel: MAGS, purpose: 'npc', meta: { speaker: 'Mags Holloway' }, sessionId: 'save-1' });
-    expect(npcRequest.tools).toBeUndefined();
-    expect(requests.filter((r) => r.purpose === 'gm').every((r) => r.channel === 'gm' && r.tools?.length)).toBe(true);
-    const npcDeltas = seen.filter((e) => e.type === 'delta' && e.channel === MAGS);
-    expect(npcDeltas.map((e) => (e as { text: string }).text).join('')).toBe('"Who\'s asking?"');
+    const actorRequest = requests.find((r) => r.purpose === 'npc')!;
+    expect(actorRequest).toMatchObject({ channel: 'actor', purpose: 'npc', sessionId: 'save-1' });
+    expect(actorRequest.meta).toBeUndefined();
+    expect(actorRequest.tools).toBeUndefined();
     expect(result.reply).toBe('Mags eyes you.');
-    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', MAGS, 'gm']);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
   });
 });
 
-describe('a world that follows the player (ADR 42)', () => {
-  const call = (name: string, args: Record<string, unknown>) => ({ name, args });
+function expectOk<T>(outcome: { ok: true; value: T } | { ok: false; error: string }): T {
+  if (!outcome.ok) throw new Error(outcome.error);
+  return outcome.value;
+}
 
+describe('a world that follows the player (ADR 42)', () => {
   it('what an honest NPC tells about becomes real: the master creates the bag, the player takes it (ADR 43)', async () => {
-    npcSays(MAGS, '"Tools? Under the bench by the stairs. A canvas bag, mind the chisels."');
+    feels(MAGS, '"Tools? Under the bench by the stairs. A canvas bag, mind the chisels."');
     await play(
       'I ask Mags where I can find tools for the lock.',
       react('Mags Holloway', 'The stranger asks where to find tools for the lock.'),
@@ -363,13 +341,13 @@ describe('a world that follows the player (ADR 42)', () => {
 
     await play('I follow her.', { toolCalls: [call('set_relation', { a: 'player', relation: 'located_in', b: 'Lamplight Row' })] }, { text: 'Gas lamps.' });
     expect((await world.scene()).here.map((e) => e.id)).toContain(MAGS);
-    npcSays(MAGS, '"Took your time."');
+    feels(MAGS, '"Took your time."');
     await play('Hello again.', react(MAGS, 'The stranger catches up with you.'), { text: '.' });
-    expect((npcCalls[0].messages[0].content as { text: string }[])[1].text).toContain('You are in Lamplight Row');
+    expect((actorCalls[0].messages[0].content as { text: string }[])[1].text).toContain('You are in Lamplight Row');
   });
 
   it('after the player refuses the heist, Mags acts on the new tie, not on the planned one', async () => {
-    const before = await npcSystemMessage(world, (await world.state.entity(MAGS))!);
+    const before = await actorSystemMessage(world, (await world.state.entity(MAGS))!);
     expect((before.content as { text: string }[])[0].text).toContain('- Pip Quillon: leader of the crew');
 
     const result = await play(
@@ -393,9 +371,9 @@ describe('a world that follows the player (ADR 42)', () => {
     );
     expect(result.events.map((e) => e.kind)).toEqual(['relation.set', 'relation.cancelled', 'entity.edited']);
 
-    npcSays(MAGS, '"Walk away, then."');
+    feels(MAGS, '"Walk away, then."');
     await play('I nod to Mags.', react(MAGS, 'The stranger who turned you down nods to you.'), { text: '.' });
-    const stable = (npcCalls[0].messages[0].content as { text: string }[])[0].text;
+    const stable = (actorCalls[0].messages[0].content as { text: string }[])[0].text;
     expect(stable).toContain('- Aria: the stranger refused to join the heist and took Pip; she no longer trusts them');
     expect(stable).not.toContain('leader of the crew');
     expect(stable).not.toContain('recruited the player');

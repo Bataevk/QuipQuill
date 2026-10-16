@@ -152,6 +152,39 @@ describe('SaveManager', () => {
     }
   });
 
+  it('carries a v3 game over to actors: npc.reacted becomes entity.reacted, NPC chats go (ADR 43)', async () => {
+    env = await makeTestEnv();
+    await env.library.importer.import(DEMO_STORY);
+    const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: null, title: 'v3' });
+    const path = join(env.files.dataDir, save.path);
+    await env.files.copy(DEMO_STORY, path);
+    const old = await env.driver.open(path);
+    try {
+      await migrate(old, SAVE_SCHEMA_STEPS.slice(0, 3));
+      await old.run(
+        `INSERT INTO events (turn, actor, kind, payload, ts) VALUES (1, 'gm', 'npc.reacted', ?, 'now')`,
+        [JSON.stringify({ npc: 'npc:mags-holloway', situation: 'Hi.', reaction: '"Hm."' })],
+      );
+      await old.run("INSERT INTO notes (id, text, created_seq) VALUES (1, 'Meet Mags.', 1)");
+      await old.run(
+        `INSERT INTO model_messages (chat_id, seq, role, content) VALUES ('npc:mags-holloway', 0, 'user', '"Hi."')`,
+      );
+    } finally {
+      await old.close();
+    }
+
+    const db = await env.library.saves.open(save.id);
+    try {
+      const event = await db.get<{ kind: string; payload: string }>('SELECT kind, payload FROM events');
+      expect(event?.kind).toBe('entity.reacted');
+      expect(JSON.parse(event!.payload)).toEqual({ entity: 'npc:mags-holloway', situation: 'Hi.', reaction: '"Hm."' });
+      expect(await db.get('SELECT entity_id FROM notes WHERE id = 1')).toEqual({ entity_id: null });
+      expect(await db.all("SELECT * FROM model_messages WHERE chat_id LIKE 'npc:%'")).toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('deletes the file and the record', async () => {
     env = await makeTestEnv();
     await env.library.importer.import(DEMO_STORY);

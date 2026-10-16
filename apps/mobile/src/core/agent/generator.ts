@@ -150,11 +150,11 @@ export async function generatorMessages(
   for (const event of events) for (const id of idsOf(event)) await name(id);
 
   const reactions = events.flatMap((e) =>
-    e.kind === 'npc.reacted' && !e.payload.reaction.startsWith('[silence]')
-      ? [`- ${names.get(e.payload.npc) ?? e.payload.npc}: ${brief(e.payload.reaction, 400)}`]
+    e.kind === 'entity.reacted' && !e.payload.reaction.startsWith('[silence]')
+      ? [`- ${names.get(e.payload.entity) ?? e.payload.entity}: ${brief(e.payload.reaction, 400)}`]
       : [],
   );
-  const recorded = events.filter((e) => e.kind !== 'npc.reacted').map((e) => `- ${eventText(e, names)}`);
+  const recorded = events.filter((e) => e.kind !== 'entity.reacted').map((e) => `- ${eventText(e, names)}`);
   const people = await Promise.all((await involved(world, events)).map((npc) => personText(world, npc)));
 
   const context = [
@@ -164,7 +164,7 @@ export async function generatorMessages(
       `# This turn (${turn.turn})`,
       `Player: ${turn.input.trim()}`,
       `Game Master: ${turn.reply.trim() || '(no text)'}`,
-      reactions.length ? `Reactions:\n${reactions.join('\n')}` : '',
+      reactions.length ? `Inner voices (what they felt and wanted):\n${reactions.join('\n')}` : '',
       `Already recorded this turn:\n${recorded.join('\n') || '- nothing'}`,
     ]
       .filter(Boolean)

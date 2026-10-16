@@ -109,12 +109,13 @@ CREATE TABLE events (
   ts      TEXT NOT NULL              -- ISO-8601
 );
 
-CREATE TABLE notes (                 -- заметки мастера: квесты, обещания, сюжетные нити
-  id INTEGER PRIMARY KEY, text TEXT NOT NULL, created_seq INTEGER NOT NULL, closed_seq INTEGER
+CREATE TABLE notes (                 -- заметки мастера (квесты, обещания, нити) и записки актёров
+  id INTEGER PRIMARY KEY, text TEXT NOT NULL, created_seq INTEGER NOT NULL, closed_seq INTEGER,
+  entity_id TEXT                     -- NULL — заметка мастера; иначе записка актёра этой сущности (6.2g)
 );
 
 CREATE TABLE model_messages (        -- рабочая память моделей; сжимается
-  chat_id TEXT NOT NULL,             -- 'gm' | 'npc:<id>' | 'character' (только до выбора персонажа)
+  chat_id TEXT NOT NULL,             -- 'gm' | 'character' (только до выбора персонажа); 'npc:<id>' — до 6.2g
   seq     INTEGER NOT NULL,
   role    TEXT NOT NULL,             -- system | user | assistant | tool
   content TEXT NOT NULL,             -- JSON сообщения (LangChain-совместимый)
@@ -144,16 +145,16 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `session.started` | `{story_id, character_id, player}` | история не копируется; в `dyn_entities` — сущность игрока `player` (ровно этот id, ADR 43; тип `PLAYER`, анкета — в `props.original`) `LOCATED_IN` стартовой локации |
 | `character.adapted` | `{original, adapted, choice}`; `choice` — `adapted` или `alternative N` | имя, описание, `props.race` и `props.age` игрока (ADR 37) |
 | `player.moved` | `{from, to}` | `LOCATED_IN` игрока; только по `LEADS_TO` из текущей локации |
-| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `npc.reacted` (ADR 32, 34); `from` — NPC |
+| `item.taken` | `{item, from}` | все размещения предмета (`item LOCATED_IN x`, `x HAS_ITEM item`) → `player HAS_ITEM item`; предмет `ITEM`/`DOCUMENT`, не `fixed`, лежит здесь или внутри того, что лежит здесь; с этапа 4.1 — и у NPC или существа рядом, если в этом ходу уже есть его `entity.reacted` (ADR 32, 34); `from` — NPC |
 | `item.dropped` | `{item, to}` | из рук игрока → `LOCATED_IN` текущей локации или контейнера здесь |
 | `item.moved` | `{item, from, to}` | вещь, которую переносит или передаёт мастер (не рука игрока): все прежние размещения → `item LOCATED_IN to` или `to HAS_ITEM item`; из рук игрока — только тому, кто рядом (ADR 43) |
 | `entity.added` | `{entity, relation: {type, target}}` | новая сущность (`ITEM`/`DOCUMENT`/`NPC`/`CREATURE`/`OTHER`, имя уникально, `props.added`) + `LOCATED_IN` текущей локации; в руки — следующим `set_relation` (`item.taken`) |
 | `entity.edited` | `{id, before, after}` | имя и/или описание; игрок — тоже (`id = player`, ADR 43) |
-| `note.added` / `note.closed` | `{id, text}` | таблица `notes` |
+| `note.added` / `note.closed` | `{id, text, entity?}` (`entity` — записка актёра, только `note.added`) | таблица `notes` |
 | `npc.moved` | `{npc, from, to}`; `from` пуст, если NPC нигде не был | `LOCATED_IN` NPC или существа: прежнее место снимается (связь истории — `CANCEL`) + новое; цель — любая `LOCATION` (ADR 42) |
 | `relation.set` | `{src, dst, type, description, before}`; `before` — `null` для новой | связь-отношение (`INTERACTS_WITH` / `HAS_ATTRIBUTE`); уже существующая между теми же сторонами (в любую сторону) получает новое описание, её `src`/`dst` сохраняются; иначе новая в `dyn_relations` |
 | `relation.cancelled` | `{a, b, removed: [{src, dst, type, description}]}` | все связи-отношения между `a` и `b`, в обе стороны: связь истории → `CANCEL`, динамическая удаляется |
-| `npc.reacted` | `{npc, situation, reaction}` (молчание — `[silence]`) | только журнал (ADR 33); реплика — в чате `npc:<id>` и в `transcript` |
+| `entity.reacted` | `{entity, situation, reaction}` — внутренний голос для мастера (молчание — `[silence]`) | только журнал (ADR 33, 43); до 6.2g — `npc.reacted {npc, …}`, переносится миграцией v4 |
 
 Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждая записанная строка `dyn_*` получает `updated_seq` своего события.
 
