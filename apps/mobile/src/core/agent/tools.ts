@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
-import { type ActorDeps, reactEntity } from './actor';
+import { type ActorDeps, reactEntity, voiceResult } from './actor';
 import { brief } from './prompt';
 
 export interface GmToolDeps {
@@ -200,10 +200,7 @@ export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredTo
       try {
         const reaction = await reactEntity(world, actor, found.entity, situation, signal);
         const who = `${found.entity.name} [${found.entity.id}]`;
-        return reaction.silent
-          ? `${who} does not react.`
-          : `Inner voice of ${who} — for you only, the player has not heard it:\n${reaction.voice}\n` +
-              'Play their outward reaction (words, deeds) true to this voice; if they lie, the truth is above.';
+        return reaction.silent ? `${who} does not react.` : voiceResult(found.entity, reaction.voice);
       } catch (error) {
         if (signal?.aborted) throw error;
         return `Error: ${found.entity.name} could not react right now (${(error as Error).message}). Narrate around it.`;

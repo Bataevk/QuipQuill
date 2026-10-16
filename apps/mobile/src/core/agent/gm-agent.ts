@@ -12,6 +12,7 @@ import { bugGuardMiddleware } from './middleware/bug-guard';
 import { contextMiddleware, type ContextOptions } from './middleware/context';
 import { guardMiddleware, type GuardOptions } from './middleware/guard';
 import { invalidToolCallsMiddleware } from './middleware/invalid-tool-calls';
+import { packsMiddleware } from './middleware/packs';
 import { toolLimitMiddleware } from './middleware/tool-limit';
 import { worldPromptMiddleware } from './middleware/world-prompt';
 import type { ActorDeps } from './actor';
@@ -36,8 +37,8 @@ export interface GmAgentOptions {
 
 /**
  * Middleware order (agent.md): `before*` hooks run in this order, `after*` in reverse.
- * BugGuard → Guard (beforeAgent); Context (beforeModel); WorldPrompt (wrapModelCall);
- * InvalidToolCalls → ToolLimit (afterModel).
+ * BugGuard → Guard (beforeAgent); Context (beforeModel); WorldPrompt, Packs (wrapModelCall);
+ * InvalidToolCalls → ToolLimit, Packs (afterModel). Packs only with an actor (react_entity).
  */
 export function createGmAgent(options: GmAgentOptions) {
   const { model, world, meta, embed, actor } = options;
@@ -61,6 +62,7 @@ export function createGmAgent(options: GmAgentOptions) {
       toolLimitMiddleware(options.toolLimit),
       invalidToolCallsMiddleware(),
       worldPromptMiddleware(world, renderStoryStyle(meta)),
+      ...(actor ? [packsMiddleware({ world, lineModel: actor.lineModel })] : []),
     ],
   });
 }

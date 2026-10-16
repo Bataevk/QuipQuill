@@ -13,6 +13,7 @@ import { generate, type GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
 import { sourceOf } from '../agent/messages';
 import { queueModels } from '../agent/models';
+import type { Entity } from '../world/model';
 import { isUnfinished, retryTurn, runTurn, type TurnResult } from '../agent/run-turn';
 import {
   beginSession,
@@ -56,6 +57,8 @@ export interface GameModels {
   characterModel: BaseChatModel;
   /** Actors' inner voices (react_entity). */
   actorModel: BaseChatModel;
+  /** Entities' lines in the actor pack, each on its own channel; default: the master's model. */
+  actorLineModel?: (entity: Entity) => BaseChatModel;
   /** The background world generator after each player turn; without it there is none. */
   generatorModel?: BaseChatModel;
 }
@@ -137,7 +140,7 @@ export class Game {
       world: init.world,
       meta: init.meta,
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
-      actor: { model: () => models.actorModel },
+      actor: { model: () => models.actorModel, lineModel: models.actorLineModel },
     });
     this.generatorModel = models.generatorModel;
     this.sessionDeps = {

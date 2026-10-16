@@ -19,9 +19,28 @@ const ACTOR_NOTES = 12;
 const PAST_REACTIONS = 4;
 
 export interface ActorDeps {
-  /** The model for one actor: in the app the queue model with purpose 'npc' on a hidden channel. */
+  /** The inner voice: in the app the queue model with purpose 'npc' on the hidden channel 'actor'. */
   model: (entity: Entity) => BaseChatModel;
+  /**
+   * The actor pack (stage 6.2h): the entity's line on its own channel `npc:<id>`, with its name
+   * for the bubble (`queueModels().actorLineModel`). Without it the master's model writes it.
+   */
+  lineModel?: (entity: Entity) => BaseChatModel;
   timeoutMs?: number;
+}
+
+/** Where the entity's own line streams and who it is in `transcript`: 'npc:<id>' (ADR 43). */
+export const actorChannel = (entity: { id: string }) => `npc:${entity.id.replace(/^npc:/, '')}`;
+
+/** What react_entity returns to the master for a reaction with words. */
+export function voiceResult(entity: Entity, voice: string): string {
+  return `Inner voice of ${entity.name} [${entity.id}] — for you only, the player has not heard it:\n${voice}`;
+}
+
+/** The entity a react_entity result gave an inner voice to; none for silence or an error. */
+export function voiceOf(result: string): { id: string; name: string } | undefined {
+  const match = /^Inner voice of (.+) \[([^\]]+)\] — for you only/.exec(result);
+  return match ? { name: match[1], id: match[2] } : undefined;
 }
 
 export interface Reaction {
@@ -32,7 +51,7 @@ export interface Reaction {
 }
 
 export const ACTOR_RULES = `# How to answer
-- You are not speaking to anyone. The Game Master asks how you take what just happened; answer them with your inner voice, in the first person: what you feel, what you think of it, and what you want to do or say now. One to three short sentences.
+- You are not speaking to anyone. The Game Master asks how you take what just happened; answer them with your inner voice, in the first person: what you feel, what you think of it, and what you want to do or say now. One to three short sentences, like notes to yourself ("Wary. I want to know who sent them before I tell them anything.") — not your lines or gestures: the Game Master will play those.
 - Be honest with the Game Master even when you would lie to others: if you mean to deceive, say so and say what the truth is.
 - Know only what you would know: who you are, your ties, your notes, what you see here. Keep your secrets from strangers unless they give you a reason.
 - You may want to agree, refuse, bargain, lie, threaten, call for help or walk away, but you cannot change the world. The Game Master decides what really happens.

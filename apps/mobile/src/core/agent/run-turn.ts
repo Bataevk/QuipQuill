@@ -3,7 +3,9 @@ import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messag
 import type { WorldEvent } from '../world/model';
 import type { World } from '../world/world';
 import { ChatSync, GM_CHAT, type ChatStore } from './chat-store';
+import { actorChannel } from './actor';
 import type { GmAgent } from './gm-agent';
+import { actorOf } from './middleware/packs';
 import { inputMessage, type InputSource, turnOf, turnStart } from './messages';
 import type { TranscriptStore } from './transcript';
 import { exclusive } from './turn-lock';
@@ -27,7 +29,7 @@ export interface TurnInput extends TurnDeps {
 
 export interface TurnResult {
   turn: number;
-  /** All the master's text of the turn, in order (the Guard's reply on reject). */
+  /** All the master's text of the turn, in order (the Guard's reply on reject); not entities' lines. */
   reply: string;
   /** This turn's messages in the master's chat, its input first. */
   messages: BaseMessage[];
@@ -51,8 +53,9 @@ export class NothingToRetryError extends Error {
  * One turn: the master's history from `model_messages`, the input, the agent loop
  * (model ⇄ tools, with the middleware), and the history saved after every step, so a turn cut
  * short (network, app killed) keeps what already happened; BugGuard repairs its loose end.
- * The player's input goes to `transcript` at once, each piece of the master's text as soon as
- * the model writes it (so it lands between NPC lines in the order the player saw them).
+ * The player's input goes to `transcript` at once, each piece of the master's text and each
+ * entity's line (actor pack, under its own name) as soon as the model writes it, in the order
+ * the player saw them.
  * One turn at a time per playthrough (TurnInProgressError).
  */
 export function runTurn({ input, source = 'player', ...deps }: TurnInput): Promise<TurnResult> {
@@ -83,7 +86,8 @@ export function retryTurn(deps: TurnDeps): Promise<TurnResult> {
 export function isUnfinished(history: BaseMessage[]): boolean {
   const last = history.at(-1);
   if (turnStart(history) < 0 || !last) return false;
-  return !(AIMessage.isInstance(last) && !last.tool_calls?.length);
+  // An entity's line is not the end: the master answers after it (packs, ADR 43).
+  return !(AIMessage.isInstance(last) && !last.tool_calls?.length && !actorOf(last));
 }
 
 async function play(
@@ -106,13 +110,18 @@ async function play(
     for (const message of messages.slice(Math.max(turnStart(messages), 0))) {
       if (!AIMessage.isInstance(message) || shown.has(message.id) || !message.text.trim()) continue;
       shown.add(message.id);
+      const actor = actorOf(message);
+      if (actor) {
+        await transcript.append(actorChannel(actor), message.text.trim(), { name: actor.name });
+        continue;
+      }
       const rejected = message.response_metadata?.guard === 'reject';
       await transcript.append('gm', message.text.trim(), rejected ? { guard: 'reject' } : {});
     }
   }
 
   const own = messages.slice(Math.max(turnStart(messages), 0));
-  const texts = own.filter((m) => AIMessage.isInstance(m) && m.text.trim()) as AIMessage[];
+  const texts = own.filter((m) => AIMessage.isInstance(m) && m.text.trim() && !actorOf(m)) as AIMessage[];
   const lastMessage = own.at(-1);
   return {
     turn,

@@ -381,6 +381,16 @@ export class World {
     });
   }
 
+  /** Who reacted with more than silence this turn, in order (for actor_note). */
+  async reactedThisTurn(): Promise<Entity[]> {
+    const ids = new Set<string>();
+    for (const e of await this.log.ofTurn(this.turn)) {
+      if (e.kind === 'entity.reacted' && e.payload.reaction !== '[silence]') ids.add(e.payload.entity);
+    }
+    const found = await Promise.all([...ids].map((id) => this.state.entity(id)));
+    return found.filter((e): e is Entity => !!e);
+  }
+
   /** `note.added` with `entity`: an actor note — what the entity decided, for its next reaction. */
   addActorNote(entity: string, text: string): Promise<Outcome> {
     return this.command('gm', async ({ db, state, log }) => {

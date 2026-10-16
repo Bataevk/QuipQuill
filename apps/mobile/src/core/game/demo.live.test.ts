@@ -5,6 +5,7 @@
  * Costs real money (about $0.04 per run): `npm run test:live` after `make infra-up`
  * (`QQ_RUNS=0` skips the demo runs). One file, so the scenarios share the cloud one at a time.
  */
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { AuthSession, MemoryTokenStore } from '@/core/net/auth';
@@ -87,6 +88,13 @@ function recorder(game: Game, steps: Step[]) {
   };
 }
 
+/** One message of a turn for diagnostics: type, tool calls, text. */
+function describeMessage(m: BaseMessage): string {
+  const calls = AIMessage.isInstance(m) ? (m.tool_calls ?? []).map((c) => `${c.name}(${JSON.stringify(c.args)})`) : [];
+  const actor = m.additional_kwargs?.qq_actor ? ' [line]' : '';
+  return `${m.getType()}${actor}: ${m.text.slice(0, 300)} ${calls.join(' ')}`.trim();
+}
+
 function table(title: string, steps: Step[]): string {
   return [`\n### ${title}`, '| Step | s | $ | Usage | Events | Reply |', '|---|---|---|---|---|---|']
     .concat(
@@ -108,7 +116,8 @@ async function playOnce(run: number): Promise<Step[]> {
     const opening = await timed('choice + opening scene', () => game.choose(0));
     expect(opening.reply).toBeTruthy();
     for (const move of DEMO_MOVES) {
-      const turn = (await timed(move, () => game.send(move))) as { reply: string; cutShort: boolean };
+      const turn = (await timed(move, () => game.send(move))) as TurnResult;
+      if (!turn.reply) console.log(`Empty reply to "${move}":`, turn.messages.map(describeMessage));
       expect(turn.reply, move).toBeTruthy();
       expect(turn.cutShort, move).toBe(false);
     }
@@ -133,7 +142,7 @@ const REFUSAL = [
   'I ask Pip whether Mags has told him about me.',
 ] as const;
 
-it('stage 6.2d: after the player refuses the heist, the world and the people follow', async () => {
+it('stages 6.2d, 6.2h: after the player refuses the heist, the world and the people follow', async () => {
   const game = await openNewGame('Refusal');
   const steps: Step[] = [];
   const timed = recorder(game, steps);
@@ -157,7 +166,16 @@ it('stage 6.2d: after the player refuses the heist, the world and the people fol
     const lines = await game.lines();
     console.log('\nTranscript after the refusal:');
     for (const line of lines.slice(-10)) console.log(`[${line.speaker}] ${line.text.slice(0, 400)}`);
-    expect(touchesMags.length).toBeGreaterThan(0);
+    for (const who of [mags, 'npc:pip-quillon']) {
+      console.log(`Actor notes of ${who}:`, (await game.world.log.actorNotes(who, 20)).map((n) => n.text));
+    }
+    // ...or in Mags's own memory: an actor note written on the refusal turn or later (6.2h)
+    const magsNotes = (await game.world.log.recent(200)).filter(
+      (e) => e.turn >= 3 && e.kind === 'note.added' && e.payload.entity === mags,
+    );
+    expect(touchesMags.length + magsNotes.length).toBeGreaterThan(0);
+    // stage 6.2h: people speak in their own bubbles (the actor pack)
+    expect(lines.some((l) => l.speaker.startsWith('npc:'))).toBe(true);
     const turns = steps.filter((s) => !s.step.startsWith('adaptation') && !s.step.startsWith('choice'));
     const average = turns.reduce((sum, s) => sum + s.cost, 0) / turns.length;
     console.log(`\nAverage cost of a player turn with the generator: $${average.toFixed(4)}; total ${formatUsage(game.sessionUsage)}`);
