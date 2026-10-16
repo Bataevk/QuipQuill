@@ -16,6 +16,11 @@ class FakeSocket {
   onerror: (() => void) | null = null;
   /** Answer `ping` with `heartbeat`, like the server does. */
   answerPings = true;
+  /**
+   * The link died while the app was suspended (iOS): the socket still looks open, what is
+   * sent goes nowhere, and closing it never fires `onclose`.
+   */
+  zombie = false;
 
   open(): void {
     this.readyState = 1;
@@ -33,13 +38,14 @@ class FakeSocket {
   }
 
   send(data: string): void {
+    if (this.zombie) return;
     const message = JSON.parse(data) as ClientMessage;
     this.sent.push(message);
     if (message.type === 'ping' && this.answerPings) this.push({ v: 1, type: 'heartbeat' });
   }
 
   close(code = 1006): void {
-    if (this.readyState === 3) return;
+    if (this.zombie || this.readyState === 3) return;
     this.readyState = 3;
     this.onclose?.({ code });
   }
@@ -156,6 +162,73 @@ describe('CloudSocket liveness', () => {
     last().openAndReady();
     await expect(s.request(llm('r1'))).rejects.toMatchObject({ code: 'timeout', retryable: true });
     await expect(s.request(llm('r2'))).rejects.toBeInstanceOf(LlmError);
+  });
+
+  it('back from the background, reconnects and resumes even when the dead socket never reports close', async () => {
+    const { socket: s, sockets, last } = await setup();
+    last().openAndReady();
+    const answer = s.request(llm('r1'));
+    const first = last();
+    first.zombie = true; // the app was suspended for minutes; the link is gone
+
+    s.reconnectNow(); // AppState → active
+    await until(() => sockets.length === 2);
+    last().openAndReady();
+    expect(last().types()).toEqual(['auth', 'resume']);
+    last().push({
+      v: 1,
+      type: 'done',
+      requestId: 'r1',
+      sessionId: 'save-1',
+      channel: 'gm',
+      message: { role: 'assistant', content: 'Hi' },
+      finishReason: 'stop',
+      usage: { input: 1, output: 1, cacheRead: 0, costUsd: 0 },
+    }); // the server kept the answer and repeats its done after resume
+    await expect(answer).resolves.toMatchObject({ requestId: 'r1' });
+    expect(s.status).toBe('ready');
+  });
+
+  it('fails a resumed request the server no longer knows, without waiting for the idle timeout', async () => {
+    const { socket: s, sockets, last } = await setup({ resumeGraceMs: 60, requestIdleTimeoutMs: 60_000 });
+    last().openAndReady();
+    const answer = s.request(llm('r1'));
+    last().zombie = true;
+    s.reconnectNow();
+    await until(() => sockets.length === 2);
+    last().openAndReady(); // the server says nothing about r1: its result is gone
+    await expect(answer).rejects.toMatchObject({ code: 'timeout', retryable: true });
+  });
+
+  it('keeps waiting for a resumed request the server reports as still thinking', async () => {
+    const { socket: s, sockets, last } = await setup({ resumeGraceMs: 60 });
+    last().openAndReady();
+    let settled = false;
+    const answer = s.request(llm('r1')).finally(() => (settled = true));
+    last().zombie = true;
+    s.reconnectNow();
+    await until(() => sockets.length === 2);
+    last().openAndReady();
+    last().push({ v: 1, type: 'status', requestId: 'r1', sessionId: 'save-1', channel: 'gm', status: 'thinking' });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(settled).toBe(false);
+    s.stop();
+    await expect(answer).rejects.toThrow('Connection stopped');
+  });
+
+  it('replaces a silent connection that never reports close', async () => {
+    const { socket: s, sockets, last } = await setup({ deadAfterMs: 60 });
+    last().openAndReady();
+    last().zombie = true;
+    await until(() => sockets.length === 2);
+    last().openAndReady();
+    expect(s.status).toBe('ready');
+  });
+
+  it('gives up on a connection attempt that hangs without a close event', async () => {
+    const { sockets, last } = await setup({ connectTimeoutMs: 50 });
+    last().zombie = true; // never opens, and closing it says nothing
+    await until(() => sockets.length === 2);
   });
 
   it('goes signed-out without tokens and fails requests', async () => {

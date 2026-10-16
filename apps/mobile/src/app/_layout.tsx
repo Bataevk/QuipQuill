@@ -29,17 +29,20 @@ function useAuthGate() {
     };
   }, [onLogin]);
 
-  // Back from the background: the OS may have dropped the socket; reconnect at once and
-  // resume (the server replays the text of a generation in flight).
-  // Only after real backgrounding: `inactive` (control centre, app switcher, system prompts)
-  // keeps the socket alive, and a needless reconnect would replay the stream for nothing.
+  // Back from the background: the OS may have killed the socket while the app was suspended,
+  // often without a close event (stage 6.2e); reconnect at once and resume (the server replays
+  // a generation in flight or repeats its `done`).
+  // Only after real backgrounding: `inactive` alone (control centre, app switcher, system
+  // prompts) keeps the socket alive, and a needless reconnect would replay the stream for
+  // nothing. "Was in the background" survives an `inactive` on the way back.
   useEffect(() => {
-    let previous = AppState.currentState;
+    let away = AppState.currentState === 'background';
     const sub = AppState.addEventListener('change', (state) => {
-      const wasAway = previous === 'background';
-      previous = state;
+      if (state === 'background') away = true;
+      if (state !== 'active' || !away) return;
+      away = false;
       const { socket } = getCloud();
-      if (state === 'active' && wasAway && (socket.status === 'ready' || socket.status === 'reconnecting')) {
+      if (socket.status === 'ready' || socket.status === 'reconnecting' || socket.status === 'connecting') {
         socket.reconnectNow();
       }
     });

@@ -46,6 +46,12 @@ export interface CloudSocketOptions {
   deadAfterMs?: number;
   /** A request that got no event for this long is failed with `timeout` (it may be lost). */
   requestIdleTimeoutMs?: number;
+  /**
+   * After `resume` the server answers at once for every request it knows (replay, thinking or
+   * its `done`); one that gets nothing within this time is lost (its result outlived the
+   * server's 15-minute buffer, or the server restarted) and fails with `timeout` at once.
+   */
+  resumeGraceMs?: number;
 }
 
 interface Pending {
@@ -55,6 +61,8 @@ interface Pending {
   resolve: (done: DoneEvent) => void;
   reject: (error: Error) => void;
   lastEventAt: number;
+  /** When it was resumed after a reconnect and has not heard from the server since. */
+  resumedAt?: number;
 }
 
 type Listener<T> = (value: T) => void;
@@ -96,6 +104,7 @@ export class CloudSocket {
       pingIntervalMs: options.pingIntervalMs ?? 10_000,
       deadAfterMs: options.deadAfterMs ?? 25_000,
       requestIdleTimeoutMs: options.requestIdleTimeoutMs ?? 90_000,
+      resumeGraceMs: options.resumeGraceMs ?? 15_000,
     };
   }
 
@@ -118,9 +127,12 @@ export class CloudSocket {
     this.failAll(new Error('Connection stopped'));
   }
 
-  /** Drops the current connection and reconnects (e.g. the app came back to the foreground). */
+  /**
+   * Drops the current connection and reconnects at once (the app came back to the foreground:
+   * the OS may have killed the link while the app was suspended). Requests in flight resume.
+   */
   reconnectNow(): void {
-    if (this.ws) this.ws.close(4000, 'client reconnect');
+    if (this.ws) this.drop(this.ws, 'client reconnect', { immediately: true });
     else if (this.state === 'reconnecting') {
       clearTimeout(this.retryTimer);
       void this.connect();
@@ -195,7 +207,8 @@ export class CloudSocket {
   }
 
   private async connect(): Promise<void> {
-    this.setStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
+    // A first connection is "connecting"; restoring a lost one stays "reconnecting".
+    this.setStatus(this.attempt === 0 && this.state !== 'reconnecting' ? 'connecting' : 'reconnecting');
     let token: string;
     try {
       token = await this.auth.accessToken({ force: this.forceRefresh });
@@ -212,7 +225,7 @@ export class CloudSocket {
 
     const ws = this.createSocket(this.url);
     this.ws = ws;
-    this.connectTimer = setTimeout(() => ws.close(4000, 'connect timeout'), this.options.connectTimeoutMs);
+    this.connectTimer = setTimeout(() => this.drop(ws, 'connect timeout'), this.options.connectTimeoutMs);
     ws.onopen = () => ws.send(JSON.stringify({ v: 1, type: 'auth', token }));
     ws.onmessage = (message) => this.onFrame(ws, String(message.data));
     ws.onerror = () => undefined; // a close event always follows
@@ -238,6 +251,7 @@ export class CloudSocket {
       const pending = this.pending.get(event.requestId);
       if (pending) {
         pending.lastEventAt = Date.now();
+        pending.resumedAt = undefined;
         if (event.type === 'done') {
           this.pending.delete(event.requestId);
           pending.resolve(event);
@@ -264,6 +278,7 @@ export class CloudSocket {
     for (const sessionId of new Set(inFlight.map((p) => p.sessionId))) {
       this.transmit(ws, { v: 1, type: 'resume', sessionId });
     }
+    for (const pending of inFlight) pending.resumedAt = now;
     for (const pending of this.pending.values()) pending.lastEventAt = Math.max(pending.lastEventAt, now);
     for (const message of this.outbox.splice(0)) this.transmit(ws, message);
     this.pingTimer = setInterval(() => this.tick(ws), this.options.pingIntervalMs);
@@ -272,16 +287,43 @@ export class CloudSocket {
   private tick(ws: WebSocket): void {
     const now = Date.now();
     if (now - this.lastFrameAt > this.options.deadAfterMs) {
-      ws.close(4000, 'no frames'); // reconnect via onclose
+      this.drop(ws, 'no frames');
       return;
     }
     this.transmit(ws, { v: 1, type: 'ping' });
     for (const [requestId, pending] of this.pending) {
-      if (now - pending.lastEventAt > this.options.requestIdleTimeoutMs) {
+      const lost = pending.resumedAt !== undefined && now - pending.resumedAt > this.options.resumeGraceMs;
+      if (lost || now - pending.lastEventAt > this.options.requestIdleTimeoutMs) {
         this.pending.delete(requestId);
         pending.reject(new LlmError('timeout', true));
       }
     }
+  }
+
+  /**
+   * Gives up on a connection the client found dead and reconnects, without waiting for its
+   * close event: a socket that died while the app was suspended may never send one (iOS), and
+   * waiting for it would leave every request hanging. Its late events are ignored.
+   */
+  private drop(ws: WebSocket, reason: string, { immediately = false } = {}): void {
+    if (this.ws !== ws) return;
+    this.ws = undefined;
+    this.clearTimers();
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    try {
+      ws.close(4000, reason);
+    } catch {
+      // already broken: nothing to close
+    }
+    if (this.state === 'stopped') return;
+    if (immediately) {
+      this.attempt = 0;
+      this.setStatus('reconnecting');
+      void this.connect();
+    } else this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
