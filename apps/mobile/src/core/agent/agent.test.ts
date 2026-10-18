@@ -364,3 +364,43 @@ describe('invalid tool call arguments', () => {
     expect(calls.every((call) => answered.has(call.id!))).toBe(true);
   });
 });
+
+describe('roll_luck (ADR 47)', () => {
+  const roll = (likelihood: string, stakes: string) => ({
+    toolCalls: [{ name: 'roll_luck', args: { attempt: 'search under the tables', likelihood, stakes } }],
+  });
+  const play = async (luck: number, draws: number[], ...steps: Step[]) => {
+    model.push(...steps);
+    const meta = await readStoryMeta(db);
+    expect(meta.luck).toBe(0.5); // the demo story does not say: a fair world
+    const lucky = createGmAgent({ model, world, meta: { ...meta, luck }, random: () => draws.shift() ?? 0.5 });
+    return runTurn({ agent: lucky, world, chats, transcript, input: 'I search under the tables.' });
+  };
+
+  it('rolls in code with the story luck; the master hears the outcome and decides what it is', async () => {
+    const result = await play(0.5, [0.2], roll('possible', 'trivial'), (messages) => {
+      expect(lastToolText(messages)).toMatch(/^Luck: it works out\. Narrate what the player finds or gains: .*trivial at most/);
+      return { text: 'A tarnished penny, stuck to the floor.' };
+    });
+    expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
+      [
+        'luck.rolled',
+        { attempt: 'search under the tables', likelihood: 'possible', stakes: 'trivial', luck: 0.5, chance: 0.45, roll: 0.2, outcome: 'success' },
+      ],
+    ]);
+    // the master does not create it: the generator records what he narrated, after the reply
+    expect((await world.scene()).inventory).toEqual([]);
+  });
+
+  it('fails plainly in a fair world, and turns into a mishap in a very unlucky one', async () => {
+    await play(0.5, [0.99, 0], roll('possible', 'useful'), (messages) => {
+      expect(lastToolText(messages)).toBe('Luck: it does not work out. Nothing is found or gained; narrate that plainly.');
+      return { text: 'Only dust.' };
+    });
+    await play(0.05, [0.99, 0.1], roll('possible', 'useful'), (messages) => {
+      expect(lastToolText(messages)).toMatch(/^Luck: bad luck\. It fails, and something small goes wrong/);
+      return { text: 'You knock over a mug; heads turn.' };
+    });
+    expect((await world.log.recent(2)).map((e) => e.kind === 'luck.rolled' && e.payload.outcome)).toEqual(['failure', 'mishap']);
+  });
+});

@@ -30,6 +30,7 @@ CREATE TABLE meta (
 --   embed_model      'openai/text-embedding-3-small' (запросы при игре — той же моделью!)
 --   embed_dim        '1536'
 --   built_at, builder_version
+--   luck             необязательно: 0…1, удача мира для игрока (ADR 47); нет — 0.5
 
 CREATE TABLE entities (
   id          TEXT PRIMARY KEY,      -- 'loc:tavern', 'item:rusty-key', 'npc:innkeeper'
@@ -122,6 +123,10 @@ CREATE TABLE model_messages (        -- рабочая память моделе
   PRIMARY KEY (chat_id, seq)
 );
 
+CREATE TABLE after_turns (           -- ходы игрока, чей фон (генератор, note_entity) отработал (v5, ADR 48)
+  turn INTEGER PRIMARY KEY, finished_at TEXT NOT NULL
+);
+
 CREATE TABLE transcript (            -- то, что видел игрок; только дописывается
   seq     INTEGER PRIMARY KEY AUTOINCREMENT,
   speaker TEXT NOT NULL,             -- 'player' | 'gm' | 'npc:<id>' | 'system'
@@ -155,6 +160,9 @@ CREATE VIRTUAL TABLE vec_entities USING vec0(embedding float[<embed_dim>]);
 | `relation.set` | `{src, dst, type, description, before}`; `before` — `null` для новой | связь-отношение (`INTERACTS_WITH` / `HAS_ATTRIBUTE`); уже существующая между теми же сторонами (в любую сторону) получает новое описание, её `src`/`dst` сохраняются; иначе новая в `dyn_relations` |
 | `relation.cancelled` | `{a, b, removed: [{src, dst, type, description}]}` | все связи-отношения между `a` и `b`, в обе стороны: связь истории → `CANCEL`, динамическая удаляется |
 | `entity.reacted` | `{entity, situation, reaction}` — реплика сущности (молчание — `[silence]`) | только журнал (ADR 33, 43); до 6.2g — `npc.reacted {npc, …}`, переносится миграцией v4 |
+| `luck.rolled` | `{attempt, likelihood, stakes, luck, chance, roll, outcome}` | только журнал (ADR 47); что выпало, вносит генератор |
+| `draft.confirmed` | `{entity, name}` | черновик Guard задействован в ходе: у сущности снимается `props.draft` (ADR 48) |
+| `draft.withdrawn` | `{entity, name}` | черновик не понадобился: строки сущности, её связи и векторы удаляются из `dyn_*` |
 
 Код: [`src/core/world/`](../../apps/mobile/src/core/world/) — `WorldState` (запросы), `EventLog` (журнал, заметки), `World` (команды). Нарушенное правило — не исключение, а результат `{ok: false, error}` с текстом для модели (ADR 29); транзакция при этом откатывается. Каждая записанная строка `dyn_*` получает `updated_seq` своего события.
 

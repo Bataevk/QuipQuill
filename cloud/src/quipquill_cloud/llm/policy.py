@@ -16,7 +16,8 @@ class CallParams:
 PURPOSES: dict[str, CallParams] = {
     "gm": CallParams(effort="medium", max_tokens=2000),
     "npc": CallParams(effort="low", max_tokens=800),
-    "guard": CallParams(effort="low", max_tokens=200),
+    # Stage 6.2k (ADR 48): the verdict also lists the place's expected gaps (drafts).
+    "guard": CallParams(effort="low", max_tokens=400),
     "summary": CallParams(effort="low", max_tokens=1500),
     "character": CallParams(effort="low", max_tokens=1500),
     # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.

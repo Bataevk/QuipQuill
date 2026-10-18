@@ -9,6 +9,7 @@ PRAGMA foreign_keys = ON;
 --   schema_version, story_id, title, language, start_location,
 --   world_summary, world_constraints, style, embed_model, embed_dim,
 --   built_at, builder_version
+-- Optional: luck — 0..1, how lucky the world is for the player (ADR 47); missing means 0.5.
 CREATE TABLE meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

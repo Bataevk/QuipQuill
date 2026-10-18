@@ -114,3 +114,13 @@ async function nextRelationId(db: Db): Promise<number> {
   );
   return Number(row?.id ?? 1);
 }
+
+/**
+ * Removes an entity that exists only in the dynamic graph (a draft nobody used, ADR 48): its row,
+ * its relations either way and its vectors. A story entity is never removed.
+ */
+export async function forget(db: Db, id: string): Promise<void> {
+  await db.run('DELETE FROM dyn_relations WHERE src = ? OR dst = ?', [id, id]);
+  await db.run('DELETE FROM dyn_embeddings WHERE entity_id = ?', [id]);
+  await db.run('DELETE FROM dyn_entities WHERE id = ? AND id NOT IN (SELECT id FROM entities)', [id]);
+}

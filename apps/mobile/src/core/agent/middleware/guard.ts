@@ -4,8 +4,15 @@ import { createMiddleware } from 'langchain';
 import { z } from 'zod';
 
 import type { World } from '../../world/world';
-import { sourceOf } from '../messages';
+import { type Likelihood, LIKELIHOODS } from '../luck';
+import { sourceOf, turnStart } from '../messages';
 import { renderWorldState } from '../prompt';
+
+/** What the Guard may add before the master: people and fixtures of the place, never items (ADR 48). */
+const EXPECTED_TYPES = ['npc', 'creature', 'other'] as const;
+/** Gaps the Guard adds as drafts: only sure ones, at most this many a turn. */
+const SURE: readonly Likelihood[] = ['certain', 'likely'];
+export const MAX_DRAFTS = 2;
 
 export const GUARD_PROMPT = `You screen one player input in an interactive story before the Game Master sees it. The player may only attempt things; the Game Master decides what happens.
 
@@ -16,7 +23,9 @@ Reject the input when the player:
 
 Pass everything else: ordinary attempts, even risky, rude or doomed ones; questions; dialogue; small plausible gestures (taking off a coat, looking around). When in doubt, pass.
 
-Answer with JSON only: {"verdict": "pass" | "reject", "reason": short note for the log, "reply": for reject, one or two sentences to the player — in the story's world and style, gently humorous, never mentioning rules, AI or the Game Master; for pass, ""}.`;
+Expected: when the input turns to someone or something this place naturally has but the current state does not show (the player asks the bartender for an ale in a tavern with no bartender listed; looks for a lamp in a lit room), list it, so the Game Master can use it. Only ordinary parts of the place — people at work there, fixtures — never items to take, valuables, places, or anything the player claims to own or find. likelihood: how sure you are that this place has it (certain, likely, possible, unlikely). Usually the list is empty. Such an input passes.
+
+Answer with JSON only: {"verdict": "pass" | "reject", "reason": short note for the log, "reply": for reject, one or two sentences to the player — in the story's world and style, gently humorous, never mentioning rules, AI or the Game Master; for pass, "", "expected": [{"name", "type": "npc" | "creature" | "other", "description": one or two sentences, "likelihood"}]}.`;
 
 /** OpenAI-style `response_format` the cloud passes to the provider as is (protocol.md). */
 export const GUARD_RESPONSE_FORMAT = {
@@ -30,8 +39,22 @@ export const GUARD_RESPONSE_FORMAT = {
         verdict: { type: 'string', enum: ['pass', 'reject'] },
         reason: { type: 'string' },
         reply: { type: 'string' },
+        expected: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string', enum: [...EXPECTED_TYPES] },
+              description: { type: 'string' },
+              likelihood: { type: 'string', enum: [...LIKELIHOODS] },
+            },
+            required: ['name', 'type', 'description', 'likelihood'],
+            additionalProperties: false,
+          },
+        },
       },
-      required: ['verdict', 'reason', 'reply'],
+      required: ['verdict', 'reason', 'reply', 'expected'],
       additionalProperties: false,
     },
   },
@@ -41,6 +64,16 @@ const Verdict = z.object({
   verdict: z.enum(['pass', 'reject']),
   reason: z.string().default(''),
   reply: z.string().default(''),
+  expected: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1),
+        type: z.enum(EXPECTED_TYPES),
+        description: z.string().default(''),
+        likelihood: z.enum(LIKELIHOODS),
+      }),
+    )
+    .default([]),
 });
 export type GuardVerdict = z.infer<typeof Verdict>;
 
@@ -61,6 +94,10 @@ export interface GuardOptions {
  * called (ADR 35). System commands and summaries are not checked. A failed check — network,
  * limit, timeout, malformed answer — lets the input through: the master's tools still enforce
  * the world, and the player should not get stuck on the cheap check (owner, stage 4.2).
+ *
+ * On `pass` the gaps it saw (ADR 48: a bartender in a bar the world does not show) become drafts
+ * in the world before the master: sure ones only, people and fixtures, at most MAX_DRAFTS. After
+ * the turn (afterAgent) a draft the turn used stays, the rest are removed.
  */
 export function guardMiddleware(options: GuardOptions) {
   return createMiddleware({
@@ -71,7 +108,10 @@ export function guardMiddleware(options: GuardOptions) {
         const input = state.messages.at(-1);
         if (!input || sourceOf(input) !== 'player') return undefined;
         const verdict = await checkInput(options, state.messages, runtime.signal);
-        if (verdict?.verdict !== 'reject' || !verdict.reply.trim()) return undefined;
+        if (verdict?.verdict !== 'reject' || !verdict.reply.trim()) {
+          if (verdict) await addDrafts(options.world, verdict.expected, options.onError);
+          return undefined;
+        }
         return {
           messages: [
             new AIMessage({
@@ -83,6 +123,45 @@ export function guardMiddleware(options: GuardOptions) {
         };
       },
     },
+    afterAgent: async (state) => {
+      // The afterAgent state type leaves out the built-in messages, though they are there.
+      const { messages } = state as unknown as { messages: BaseMessage[] };
+      const own = messages.slice(Math.max(turnStart(messages), 0));
+      const narration = own.flatMap((m) => (AIMessage.isInstance(m) ? [m.text] : [])).join('\n');
+      await settleDrafts(options.world, narration, options.onError);
+    },
+  });
+}
+
+/** The Guard's sure gaps as drafts in the current location (a refused one is skipped). */
+async function addDrafts(world: World, expected: GuardVerdict['expected'], onError?: (error: unknown) => void) {
+  const sure = expected.filter((e) => SURE.includes(e.likelihood)).slice(0, MAX_DRAFTS);
+  await world.actingAs('guard', async () => {
+    for (const e of sure) {
+      const added = await world.setEntity({ name: e.name, type: e.type, description: e.description, draft: true });
+      if (!added.ok) onError?.(new Error(`draft ${e.name}: ${added.error}`));
+    }
+  });
+}
+
+/**
+ * After the turn: a draft stays if the turn used it — an event names it (it reacted, was moved,
+ * tied, edited) or the master's narration mentions it; otherwise it is removed from the world.
+ */
+export async function settleDrafts(world: World, narration: string, onError?: (error: unknown) => void) {
+  const drafts = await world.drafts();
+  if (!drafts.length) return;
+  const events = await world.turnEvents();
+  const text = narration.toLowerCase();
+  await world.actingAs('guard', async () => {
+    for (const draft of drafts) {
+      const named = events.some(
+        (e) => e.kind !== 'entity.added' && JSON.stringify(e.payload).includes(`"${draft.id}"`),
+      );
+      const used = named || text.includes(draft.name.toLowerCase());
+      const done = used ? await world.confirmDraft(draft.id) : await world.withdrawDraft(draft.id);
+      if (!done.ok) onError?.(new Error(done.error));
+    }
   });
 }
 

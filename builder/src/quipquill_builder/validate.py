@@ -53,6 +53,9 @@ def validate(
             warning("meta_missing", f"'{key}' is empty — fill it with `builder meta`")
         else:
             error("meta_missing", f"required meta key '{key}' is empty")
+    luck = meta.get("luck", "").strip()
+    if luck and not _is_luck(luck):
+        error("meta_luck", f"luck must be a number from 0 to 1, got {luck!r}")
 
     # --- entities
     locations = {eid for eid, (etype, _, _) in entities.items() if etype == "LOCATION"}
@@ -156,3 +159,10 @@ def _check_embeddings(conn: sqlite3.Connection, meta: dict[str, str], ids) -> li
 
 def has_errors(issues: list[Issue]) -> bool:
     return any(issue.level == "error" for issue in issues)
+
+
+def _is_luck(value: str) -> bool:
+    try:
+        return 0.0 <= float(value) <= 1.0
+    except ValueError:
+        return False

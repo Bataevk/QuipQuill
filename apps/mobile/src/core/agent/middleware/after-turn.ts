@@ -36,48 +36,67 @@ export interface AfterTurnOptions {
  * system turns (the opening) have nothing to read.
  */
 export function afterTurnMiddleware(options: AfterTurnOptions) {
-  const { world, meta, chats, work, generatorModel, memoryModel, onGenerated } = options;
-  const timeoutMs = options.timeoutMs ?? AFTER_TURN_TIMEOUT_MS;
   return createMiddleware({
     name: 'AfterTurn',
     afterAgent: (state) => {
-      if (!generatorModel && !memoryModel) return;
       // The afterAgent state type leaves out the built-in messages, though they are there.
       const { messages } = state as unknown as { messages: BaseMessage[] };
-      const start = turnStart(messages);
-      const input = messages[start];
-      const turn = input ? turnOf(input) : undefined;
-      if (!input || turn === undefined || sourceOf(input) !== 'player') return;
-      const own = messages.slice(start);
-      const said = own.filter((m) => AIMessage.isInstance(m) && !actorOf(m)) as AIMessage[];
-      if (said.some((m) => m.response_metadata?.guard === 'reject')) return;
-      const reply = said.flatMap((m) => (m.text.trim() ? [m.text.trim()] : [])).join('\n\n');
-
-      work.start(world, async (signal) => {
-        if (generatorModel) {
-          try {
-            const result = await generate(
-              { model: generatorModel, world, meta, signal, timeoutMs },
-              { turn, input: input.text, reply },
-            );
-            for (const r of result.rejected) console.warn(`[generator] turn ${turn}: ${r.change}: ${r.error}`);
-            onGenerated?.(result);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.warn(`[generator] turn ${turn} failed: ${message}`);
-            onGenerated?.({ error: message });
-          }
-        }
-        if (memoryModel && !signal.aborted) {
-          try {
-            const noted = await noteEntities({ model: memoryModel, world, chats, signal, timeoutMs }, turn);
-            for (const r of noted.rejected) console.warn(`[memory] turn ${turn}: ${r.entity}: ${r.error}`);
-          } catch (error) {
-            console.warn(`[memory] turn ${turn} failed: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        }
-      });
+      const turn = turnToSettle(messages);
+      if (turn) startAfterTurn(options, turn);
       return;
     },
+  });
+}
+
+/** A player's turn as the background work reads it. */
+export interface SettledTurn {
+  turn: number;
+  input: string;
+  /** All the master's text of the turn (entities' lines left out). */
+  reply: string;
+}
+
+/** The last turn of the history if it needs background work: a player's, not rejected by the Guard. */
+export function turnToSettle(messages: BaseMessage[]): SettledTurn | undefined {
+  const start = turnStart(messages);
+  const input = messages[start];
+  const turn = input ? turnOf(input) : undefined;
+  if (!input || turn === undefined || sourceOf(input) !== 'player') return undefined;
+  const said = messages.slice(start).filter((m) => AIMessage.isInstance(m) && !actorOf(m)) as AIMessage[];
+  if (said.some((m) => m.response_metadata?.guard === 'reject')) return undefined;
+  const reply = said.flatMap((m) => (m.text.trim() ? [m.text.trim()] : [])).join('\n\n');
+  return { turn, input: input.text, reply };
+}
+
+/**
+ * Queues the background work of one turn: the generator, then entity memory; when both are
+ * through (not aborted), the turn is marked done, so a game reopened after the app was killed
+ * runs only what it missed (ADR 48).
+ */
+export function startAfterTurn(options: AfterTurnOptions, { turn, input, reply }: SettledTurn): void {
+  const { world, meta, chats, work, generatorModel, memoryModel, onGenerated } = options;
+  const timeoutMs = options.timeoutMs ?? AFTER_TURN_TIMEOUT_MS;
+  if (!generatorModel && !memoryModel) return;
+  work.start(world, async (signal) => {
+    if (generatorModel) {
+      try {
+        const result = await generate({ model: generatorModel, world, meta, signal, timeoutMs }, { turn, input, reply });
+        for (const r of result.rejected) console.warn(`[generator] turn ${turn}: ${r.change}: ${r.error}`);
+        onGenerated?.(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[generator] turn ${turn} failed: ${message}`);
+        onGenerated?.({ error: message });
+      }
+    }
+    if (memoryModel && !signal.aborted) {
+      try {
+        const noted = await noteEntities({ model: memoryModel, world, chats, signal, timeoutMs }, turn);
+        for (const r of noted.rejected) console.warn(`[memory] turn ${turn}: ${r.entity}: ${r.error}`);
+      } catch (error) {
+        console.warn(`[memory] turn ${turn} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!signal.aborted) await world.markAfterTurnDone(turn);
   });
 }

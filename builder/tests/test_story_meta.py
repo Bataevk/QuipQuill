@@ -6,6 +6,7 @@ from conftest import FakeChatClient, FakeEmbedder
 
 from quipquill_builder import cli, story_meta, storyfile
 from quipquill_builder.models import Graph
+from quipquill_builder.validate import validate
 
 DRAFT = {
     "world_summary": "An underground maze of rune halls.",
@@ -91,3 +92,21 @@ def test_meta_bootstraps_toml_from_an_existing_story(graph_file: Path, tmp_path:
     assert data["story_id"] == story_meta_of(story)["story_id"]
     assert (data["title"], data["world_summary"]) == ("Old Story", "Kept.")
     assert "style" not in data  # empty texts are not copied
+
+
+def test_luck_goes_from_meta_toml_into_the_story(graph_file: Path, tmp_path: Path) -> None:
+    story = tmp_path / "rune-halls.qqstory"
+    toml = tmp_path / "meta.toml"
+    export = ["export", str(graph_file), "-o", str(story), "--meta", str(toml), "--title", "Halls"]
+    assert cli.main(export) == 0
+    assert "luck" not in story_meta_of(story)  # a fair world unless the author says
+
+    assert cli.main(["meta", str(story), "--meta", str(toml), "--set", "luck=0.2"]) == 0
+    assert story_meta.load(toml)["luck"] == "0.2"
+    assert cli.main(export) == 0  # rebuild keeps it
+    assert story_meta_of(story)["luck"] == "0.2"
+
+    assert cli.main(["meta", str(story), "--set", "luck=lucky"]) == 0
+    with storyfile.connect(story) as conn:
+        issues = validate(conn, check_embeddings=False, require_authored_meta=False)
+    assert "meta_luck" in [i.code for i in issues]

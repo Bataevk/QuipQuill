@@ -27,6 +27,9 @@ REQUIRED_META = (
 )
 # Keys written by `builder meta` (LLM draft + manual edits) rather than by `export`.
 AUTHORED_META = ("world_summary", "world_constraints", "style")
+# Optional authored keys (meta.toml or `builder meta --set`): luck, 0..1, how lucky the world is
+# for the player (ADR 47); missing means a fair world, 0.5.
+OPTIONAL_META = ("luck",)
 
 
 def schema_path() -> Path:

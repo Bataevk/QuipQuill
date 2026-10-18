@@ -23,7 +23,9 @@ import { createGmTools, type GmToolDeps } from './tools';
 export interface GmAgentOptions {
   model: BaseChatModel;
   world: World;
-  meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary' | 'worldConstraints'>;
+  meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary' | 'worldConstraints'> & Partial<Pick<StoryMeta, 'luck'>>;
+  /** Chance for roll_luck, [0, 1); default Math.random (tests pass fixed values). */
+  random?: () => number;
   embed?: GmToolDeps['embed'];
   /** The actor pack's model and the entities' chats, for react_entity (ADR 43, 45). */
   actor?: ActorDeps;
@@ -59,7 +61,7 @@ export function createGmAgent(options: GmAgentOptions) {
   const afterTurn = options.afterTurn ? [afterTurnMiddleware({ world, meta, ...options.afterTurn })] : [];
   return createAgent({
     model,
-    tools: createGmTools({ world, embed, actor }),
+    tools: createGmTools({ world, embed, actor, luck: meta.luck, random: options.random }),
     middleware: [
       bugGuardMiddleware(),
       ...guard,

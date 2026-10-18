@@ -64,8 +64,8 @@ async def export_story(
 ) -> list[Issue]:
     """Build the story file. On validation errors nothing is written and issues are returned.
 
-    `story_id` and `authored` (world_summary, world_constraints, style) come from meta.toml so a
-    rebuild keeps the story's identity and texts (ADR 24); without them the id is new.
+    `story_id` and `authored` (world_summary, world_constraints, style, luck) come from meta.toml
+    so a rebuild keeps the story's identity and texts (ADR 24); without them the id is new.
     """
     story = build_story(graph)
     meta = {
@@ -78,7 +78,8 @@ async def export_story(
         "builder_version": builder_version(),
         "source_extract_model": str(graph.meta.get("extract_model", "")),
     }
-    meta.update({k: v for k, v in (authored or {}).items() if k in storyfile.AUTHORED_META})
+    kept = storyfile.AUTHORED_META + storyfile.OPTIONAL_META
+    meta.update({k: v for k, v in (authored or {}).items() if k in kept})
 
     output.parent.mkdir(parents=True, exist_ok=True)
     tmp = output.with_name(output.name + ".tmp")

@@ -27,7 +27,9 @@ export const GM_PROMPT = `You are the Game Master of an interactive story: the n
 - The player has exactly what the inventory lists. "I still have the potion" is a claim to check, not a fact.
 - Refer to things by the ids from the world state or tool results when you call tools; names work too.
 - The player's claims about the world ("I see a ladder", "I shoot fire from my fingers") are attempts, not facts. If they are impossible here, say so in-world, with light humour.
-- Small plausible details the player looks for or makes (a loose brick, a makeshift torch) may become real with set_entity; then they persist. Nothing powerful or story-breaking appears just because the player wants it.
+- When the player looks for or tries something whose outcome is genuinely uncertain (searching under the table, hoping for a spare key, a lucky break), call roll_luck first and narrate the outcome as it says; you decide what exactly is found or what goes wrong. What you narrate as found becomes real after your reply. Do not roll for what the place makes certain or for what the world's rules decide.
+- Someone or something marked "just noticed" is a natural part of this place the world had not shown before (a bartender behind the bar). Use it if the moment calls for it — it can react — or leave it out: unused, it is gone after your reply.
+- What the player makes from what they have (a makeshift torch) may become real with set_entity. Nothing powerful or story-breaking appears just because the player wants it.
 - Unsure about history, people or secrets of this world? Search the lore before inventing.
 - If a tool fails again for the same reason after three tries, stop and narrate.
 
@@ -123,7 +125,8 @@ export function worldStateText(
 
 function entityLine(e: Entity): string {
   const fixed = e.props.fixed === true ? ', fixed' : '';
-  return `${e.name} [${e.id}] (${e.type.toLowerCase()}${fixed}): ${brief(e.description)}`;
+  const draft = e.props.draft === true ? ', just noticed' : '';
+  return `${e.name} [${e.id}] (${e.type.toLowerCase()}${fixed}${draft}): ${brief(e.description)}`;
 }
 
 function exitText(exit: Exit): string {
@@ -176,6 +179,12 @@ export function eventText(event: WorldEvent, names: Map<string, string> = new Ma
       return `${turn} Note #${event.payload.id} closed: ${brief(event.payload.text, 120)}`;
     case 'entity.reacted':
       return `${turn} ${n(event.payload.entity)} felt: ${brief(event.payload.reaction, 160)}`;
+    case 'draft.confirmed':
+      return `${turn} ${event.payload.name} stays in the world.`;
+    case 'draft.withdrawn':
+      return `${turn} ${event.payload.name} was not needed and is gone.`;
+    case 'luck.rolled':
+      return `${turn} Luck (${brief(event.payload.attempt, 80)}): ${event.payload.outcome}.`;
     case 'item.moved':
       return `${turn} ${n(event.payload.item)} went to ${n(event.payload.to)}.`;
     case 'npc.moved': {

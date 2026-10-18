@@ -279,6 +279,28 @@ describe('Game', () => {
       expect(game.lastGeneration).toEqual({ error: 'aborted' });
       game = await open();
     });
+
+    it('a turn whose background work was lost is finished when the game opens again, once (ADR 48)', async () => {
+      const gen = gatedGenerator();
+      await playing(gen.model);
+      master.push({ text: 'Mags shrugs.' });
+      await game.send("I won't join.");
+      await vi.waitFor(() => expect(gen.calls).toHaveLength(1));
+      await game.close(); // the app is killed: the generator never finished
+
+      const again = new ScriptedChatModel([{ text: EDIT }]);
+      generator = again;
+      game = await open();
+      await game.whenGenerated();
+      expect(again.calls).toHaveLength(1);
+      expect(again.calls[0][1].text).toContain("Player: I won't join.");
+      expect((await game.world.state.entity(MAGS))?.description).toBe('She no longer counts on the stranger.');
+
+      await game.close();
+      game = await open(); // done now: not run a second time
+      await game.whenGenerated();
+      expect(again.calls).toHaveLength(1);
+    });
   });
 
   it('folds an overflowing entity chat into its notes after the turn, in the background (ADR 45)', async () => {

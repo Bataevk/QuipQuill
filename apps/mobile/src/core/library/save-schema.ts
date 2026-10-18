@@ -116,6 +116,15 @@ export const SAVE_SCHEMA_STEPS = [
                                 'reaction', json_extract(payload, '$.reaction'))
     WHERE kind = 'npc.reacted';
    DELETE FROM model_messages WHERE chat_id LIKE 'npc:%';`,
+  // v5 (stage 6.2k, ADR 48): which player turns already had their background work (generator,
+  // entity memory), so a game reopened after the app was killed can finish it. Turns played
+  // before count as done.
+  `CREATE TABLE after_turns (
+     turn        INTEGER PRIMARY KEY,
+     finished_at TEXT NOT NULL
+   ) STRICT;
+   INSERT INTO after_turns (turn, finished_at)
+     SELECT DISTINCT turn, '' FROM events WHERE turn > 0;`,
 ] as const;
 
 /** The schema version whose saves can no longer be played once started (state_* copies). */

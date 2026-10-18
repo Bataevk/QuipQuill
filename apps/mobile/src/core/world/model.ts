@@ -58,6 +58,20 @@ export interface EventPayloads {
    * 43, 45): `reaction` is its line (words and/or deeds), or "[silence]".
    */
   'entity.reacted': { entity: string; situation: string; reaction: string };
+  /** A draft the Guard added before the master (ADR 48) was used this turn and stays. */
+  'draft.confirmed': { entity: string; name: string };
+  /** A draft nobody used this turn is gone from the world. */
+  'draft.withdrawn': { entity: string; name: string };
+  /** A roll of the player's luck at the master's call (ADR 47); the master narrates the outcome. */
+  'luck.rolled': {
+    attempt: string;
+    likelihood: string;
+    stakes: string;
+    luck: number;
+    chance: number;
+    roll: number;
+    outcome: 'success' | 'failure' | 'mishap';
+  };
 }
 
 export type EventKind = keyof EventPayloads;

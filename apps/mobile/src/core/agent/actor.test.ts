@@ -292,6 +292,28 @@ describe('react_entity and the actor pack (ADR 45)', () => {
   });
 });
 
+describe('a draft the Guard added can react (ADR 48)', () => {
+  it('the bartender, just noticed, speaks in this turn and stays', async () => {
+    says('npc:bartender', '"What\'ll it be?"');
+    const guardModel = new ScriptedChatModel([
+      {
+        text: JSON.stringify({
+          verdict: 'pass',
+          reason: 'r',
+          reply: '',
+          expected: [{ name: 'bartender', type: 'npc', description: 'A broad man behind the bar.', likelihood: 'certain' }],
+        }),
+      },
+    ]);
+    master.push(react('bartender', 'A stranger waves you over for an ale.'), { text: 'He reaches for a mug.' });
+    const agent = createGmAgent({ model: master, world, meta, guardModel, actor: { model: actorModel, chats } });
+    const result = await runTurn({ agent, world, chats, transcript, input: 'I wave the bartender over.' });
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted', 'draft.confirmed']);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'npc:bartender', 'gm']);
+    expect((await world.state.entity('npc:bartender'))?.props.draft).toBeUndefined();
+  });
+});
+
 describe('a turn cut in the middle (retryTurn)', () => {
   const retry = () => retryTurn({ agent: agentFor(), world, chats, transcript });
 

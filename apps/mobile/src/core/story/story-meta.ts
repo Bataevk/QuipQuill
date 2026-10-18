@@ -17,7 +17,12 @@ export interface StoryMeta {
   embedModel: string;
   embedDim: number;
   builtAt: string;
+  /** How lucky this world is, 0..1 (optional `meta.luck`, ADR 47): 0.5 is fair, below 0.25 brings mishaps. */
+  luck: number;
 }
+
+/** A fair world, when the story does not say. */
+export const DEFAULT_LUCK = 0.5;
 
 /** The file is not a story this app can play; `message` is safe to show to the player. */
 export class StoryFormatError extends Error {
@@ -60,5 +65,12 @@ export async function readStoryMeta(db: Db): Promise<StoryMeta> {
     embedModel: text('embed_model'),
     embedDim,
     builtAt: text('built_at'),
+    luck: parseLuck(meta.get('luck')),
   };
+}
+
+/** `meta.luck` as a number in 0..1; missing or unreadable → DEFAULT_LUCK. */
+export function parseLuck(value: string | undefined): number {
+  const luck = value === undefined || !value.trim() ? NaN : Number(value);
+  return Number.isFinite(luck) ? Math.min(1, Math.max(0, luck)) : DEFAULT_LUCK;
 }

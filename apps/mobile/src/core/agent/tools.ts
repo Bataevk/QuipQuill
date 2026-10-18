@@ -10,7 +10,9 @@ import { z } from 'zod';
 
 import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
+import { DEFAULT_LUCK } from '../story/story-meta';
 import { type ActorDeps, reactionAsked } from './actor';
+import { LIKELIHOODS, type Likelihood, type LuckOutcome, rollLuck, STAKES, type Stakes } from './luck';
 import { brief } from './prompt';
 
 export interface GmToolDeps {
@@ -19,6 +21,10 @@ export interface GmToolDeps {
   embed?: (text: string) => Promise<Float32Array>;
   /** The actor pack's model; without it nothing can react. */
   actor?: ActorDeps;
+  /** The story's luck, 0..1 (`meta.luck`, ADR 47); default DEFAULT_LUCK. */
+  luck?: number;
+  /** Chance for roll_luck, [0, 1); default Math.random. */
+  random?: () => number;
 }
 
 export const GM_TOOL_NAMES = [
@@ -29,11 +35,23 @@ export const GM_TOOL_NAMES = [
   'cancel_relation',
   'note',
   'react_entity',
+  'roll_luck',
 ] as const;
 
 const LORE_HITS = 5;
 
-export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredToolInterface[] {
+/** What roll_luck tells the master: the outcome; what it is, he decides (ADR 47). */
+const LUCK_TEXT: Record<LuckOutcome, (stakes: Stakes) => string> = {
+  success: (stakes) =>
+    `Luck: it works out. Narrate what the player finds or gains: fitting the place and the story, ${stakes} at most. ` +
+    'Just tell it; the world records it after your reply.',
+  failure: () => 'Luck: it does not work out. Nothing is found or gained; narrate that plainly.',
+  mishap: () =>
+    'Luck: bad luck. It fails, and something small goes wrong for the player, fitting the place: a noise, a cut, ' +
+    'a watchful eye, something dropped. You decide what; keep it small and narrate it.',
+};
+
+export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random = Math.random }: GmToolDeps): StructuredToolInterface[] {
   // The agent may run several tool calls of one model reply concurrently; world commands must
   // apply in the order the model wrote them (move, then take).
   const run = serial();
@@ -219,6 +237,29 @@ export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredTo
     },
   );
 
+  const rollLuckTool = tool(
+    guarded('roll_luck', async (input: { attempt: string; likelihood: Likelihood; stakes: Stakes }) => {
+      const roll = rollLuck(input, luck, random);
+      const recorded = await world.recordLuck(roll);
+      if (!recorded.ok) return `Error: ${recorded.error}`;
+      return LUCK_TEXT[roll.outcome](roll.stakes);
+    }),
+    {
+      name: 'roll_luck',
+      description:
+        "Roll the player's luck when the outcome of what they try is genuinely uncertain and matters: searching " +
+        'for something useful (a coin under the table, a spare key), hoping for a lucky break, a small risky ' +
+        'move. Not for what the place makes certain (a bartender in a bar), not for what the world rules decide ' +
+        '(exits, what is here), not for what people decide (react_entity). Call it before you narrate the ' +
+        'outcome; then narrate it as the result says.',
+      schema: z.object({
+        attempt: z.string().describe('What the player tries or hopes for, e.g. "search under the tables for anything useful"'),
+        likelihood: z.enum(LIKELIHOODS).describe('How likely it is to work out here, as you judge the place and the moment'),
+        stakes: z.enum(STAKES).describe('What they stand to gain: trivial (a coin), useful (a spare key), valuable (real help)'),
+      }),
+    },
+  );
+
   /** What a world change means, for the model (names with ids). */
   async function said(e: WorldEvent): Promise<string> {
     const n = async (id: string) => `${await name(id)} [${id}]`;
@@ -250,7 +291,7 @@ export function createGmTools({ world, embed, actor }: GmToolDeps): StructuredTo
     }
   }
 
-  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool];
+  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool, rollLuckTool];
 }
 
 const CREATABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;

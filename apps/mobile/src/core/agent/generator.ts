@@ -2,7 +2,8 @@
  * The background world generator (stage 6.2d, ADR 42): after the master's turn, one call with a
  * structured answer reads what happened and brings the world in line with it — how people now
  * stand with the player and each other, where they went, what they became, small things the
- * narration made real or someone truthfully spoke of (gaps, ADR 45). Changes go through the same world commands as the master's tools, with
+ * narration made real or someone truthfully spoke of (gaps, ADR 45), what luck rolls brought, and
+ * what the place itself implies (ADR 47). Changes go through the same world commands as the master's tools, with
  * `actor = 'generator'`; a change the world refuses is dropped, never shown to the player.
  * Successor of the legacy prototype's `updator` (docs/notes/legacy-prototype.md).
  */
@@ -13,6 +14,7 @@ import { z } from 'zod';
 import type { StoryMeta } from '../story/story-meta';
 import { fail, PLAYER_ID, type Entity, type EntityType, type Outcome, type WorldEvent } from '../world/model';
 import type { World } from '../world/world';
+import { LIKELIHOODS, type Likelihood } from './luck';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
 import { exclusive } from './turn-lock';
 
@@ -22,10 +24,12 @@ export const GENERATOR_PROMPT = `You keep the world of an interactive story true
 - relations: how a person now stands with the player or with someone else, from the person's side — joined or refused a plan, betrayed, rescued, owes, fears, distrusts. If a tie the story planned is no longer true, rewrite it; if a tie has ended (someone left a crew, an alliance broke), put it in cancelled instead.
 - edits: a lasting change to a person or thing — attitude, plans, what they now know, their state. Give the whole new description: keep everything that is still true and rewrite only what changed. A person whose description still says they recruited, trust or wait for the player when the turn made that untrue must be edited.
 - moves: a person or creature the narration sent elsewhere (left, followed, fled, was taken away) who is not there yet in the world state. Destination: any location by id.
-- additions: something the turn made real or implied that the world does not have yet — a small thing, a passer-by, what someone truthfully said is there. where: the id of the location or container it is in; empty — the current location. Never places, never anything powerful.
+- additions: something the world does not have yet. where: the id of the location or container it is in, "player" if the player now carries it; empty — the current location. Never places, never anything powerful. Each has a basis:
+  - narrated: the turn made it real — the Game Master narrated it (what the player found or got from a luck roll, what a mishap brought), or someone truthfully said it is there (the bag of tools under the bench, the service door in the alley). Add it where it was said to be. When someone lies, boasts or only guesses (their description, ties and manner tell), add nothing.
+  - expected: a gap the place itself implies, which nobody had to find — a bartender behind a bar, a lamp in a lit room. likelihood: how sure that this place has it (certain, likely, possible, unlikely); only certain and likely are added, at most two a turn.
 
-# Look for gaps
-Compare what people said and what the narration showed with the world state. When someone speaks truthfully of a thing in this world that does not exist yet (the bag of tools under the bench, the service door in the alley), add it where they said, so the player finds it. When they lie, boast or only guess (their description, ties and manner tell), add nothing. Add only what is plausible for that place and moment: a few coins in a drunk's pocket, yes; a legendary golden sword, no.
+# Luck
+Finds and strokes of luck are never yours to invent: they come only from the Game Master's luck rolls (listed under "Luck this turn") and what he narrated of them. A success he narrated as a find is an addition with basis narrated (where "player" if it is now in their hands); a mishap he narrated is recorded as whatever it changed (an edit, a relation, an addition). A failure adds nothing.
 
 # Rules
 - Record only what this turn established. Never invent new plot, never contradict the narration, never undo what is already recorded.
@@ -62,6 +66,8 @@ export const GENERATOR_RESPONSE_FORMAT = {
             type: { type: 'string', enum: ['item', 'document', 'npc', 'creature', 'other'] }, // ADDABLE
             description: { type: 'string' },
             where: { type: 'string' },
+            basis: { type: 'string', enum: ['narrated', 'expected'] },
+            likelihood: { type: 'string', enum: [...LIKELIHOODS] },
           }),
         },
       },
@@ -77,16 +83,30 @@ function obj<P extends Record<string, unknown>>(properties: P) {
 
 const text = z.string().trim().min(1);
 const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
+/** Gaps the place implies that are added (ADR 47); and how many a turn. */
+const SURE: readonly Likelihood[] = ['certain', 'likely'];
+const MAX_EXPECTED = 2;
 const Changes = z.object({
   relations: z.array(z.object({ a: text, b: text, description: text })).default([]),
   cancelled: z.array(z.object({ a: text, b: text })).default([]),
   moves: z.array(z.object({ who: text, to: text })).default([]),
   edits: z.array(z.object({ target: text, description: text })).default([]),
   additions: z
-    .array(z.object({ name: text, type: z.enum(ADDABLE), description: z.string(), where: z.string().trim().default('') }))
+    .array(
+      z.object({
+        name: text,
+        type: z.enum(ADDABLE),
+        description: z.string(),
+        where: z.string().trim().default(''),
+        basis: z.enum(['narrated', 'expected']).default('narrated'),
+        likelihood: z.enum(LIKELIHOODS).default('certain'),
+      }),
+    )
     .default([]),
 });
 export type WorldChanges = z.infer<typeof Changes>;
+/** The model's answer before defaults: `basis`, `likelihood` and `where` may be left out. */
+export type WorldChangesInput = z.input<typeof Changes>;
 
 /** People in the turn's context at most: those here, then those the turn touched. */
 const MAX_PEOPLE = 8;
@@ -161,7 +181,12 @@ export async function generatorMessages(
       ? [`- ${names.get(e.payload.entity) ?? e.payload.entity}: ${brief(e.payload.reaction, 400)}`]
       : [],
   );
-  const recorded = events.filter((e) => e.kind !== 'entity.reacted').map((e) => `- ${eventText(e, names)}`);
+  const luck = events.flatMap((e) =>
+    e.kind === 'luck.rolled' ? [`- ${e.payload.attempt} (${e.payload.stakes}): ${e.payload.outcome}`] : [],
+  );
+  const recorded = events
+    .filter((e) => e.kind !== 'entity.reacted' && e.kind !== 'luck.rolled')
+    .map((e) => `- ${eventText(e, names)}`);
   const people = await Promise.all((await involved(world, events)).map((npc) => personText(world, npc)));
 
   const context = [
@@ -172,6 +197,7 @@ export async function generatorMessages(
       `Player: ${turn.input.trim()}`,
       `Game Master: ${turn.reply.trim() || '(no text)'}`,
       reactions.length ? `What people said and did:\n${reactions.join('\n')}` : '',
+      luck.length ? `Luck this turn:\n${luck.join('\n')}` : '',
       `Already recorded this turn:\n${recorded.join('\n') || '- nothing'}`,
     ]
       .filter(Boolean)
@@ -222,19 +248,32 @@ export async function applyChanges(world: World, changes: WorldChanges): Promise
           : world.setEntity({ id: e.target, description: e.description }),
       );
     }
+    let expected = 0;
     for (const a of changes.additions) {
-      const where = a.where ? await world.state.entity(a.where) : undefined;
-      if (a.where && !where) {
+      if (a.basis === 'expected') {
+        if (!SURE.includes(a.likelihood)) {
+          await apply(`add ${a.name} (expected)`, refuse(`only certain or likely gaps are added, not ${a.likelihood}`));
+          continue;
+        }
+        if (++expected > MAX_EXPECTED) {
+          await apply(`add ${a.name} (expected)`, refuse(`at most ${MAX_EXPECTED} expected additions a turn`));
+          continue;
+        }
+      }
+      const toPlayer = a.where === PLAYER_ID;
+      const where = a.where && !toPlayer ? await world.state.entity(a.where) : undefined;
+      if (a.where && !toPlayer && !where) {
         await apply(`add ${a.name} in ${a.where}`, refuse(`there is no ${a.where}`));
         continue;
       }
       const before = result.applied.length;
       await apply(`add ${a.name}`, world.setEntity({ name: a.name, type: a.type, description: a.description }));
       const added = result.applied.length > before ? result.applied.at(-1) : undefined;
-      // Created here, then put where it was said to be (if that fails, it stays here).
-      if (where && added?.kind === 'entity.added') {
-        await apply(`put ${a.name} in ${where.id}`, world.setRelation(added.payload.entity, 'LOCATED_IN', where.id));
-      }
+      if (added?.kind !== 'entity.added') continue;
+      // Created here, then put where it was said to be, or into the player's hands (if that fails, it stays here).
+      const id = added.payload.entity;
+      if (toPlayer) await apply(`give ${a.name} to the player`, world.setRelation(PLAYER_ID, 'HAS_ITEM', id));
+      else if (where) await apply(`put ${a.name} in ${where.id}`, world.setRelation(id, 'LOCATED_IN', where.id));
     }
   });
   return result;

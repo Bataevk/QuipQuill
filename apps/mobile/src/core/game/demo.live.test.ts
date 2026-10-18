@@ -134,6 +134,12 @@ it(`plays the demo scenario ${RUNS} times in a row without errors`, async () => 
   for (let run = 1; run <= RUNS; run++) console.log(table(`Run ${run}`, await playOnce(run)));
 });
 
+const LUCK = [
+  'I search under the tables and benches for anything useful someone dropped.',
+  'I go back to the bar and look around the taproom.',
+  'I ask the bartender for a mug of ale.',
+] as const;
+
 const REFUSAL = [
   'I ask Mags what exactly she needs from me tonight.',
   "I tell Mags I'm out: I won't rob a bank for anyone. She should find another locksmith.",
@@ -180,6 +186,32 @@ it('stages 6.2d, 6.2h: after the player refuses the heist, the world and the peo
     const turns = steps.filter((s) => !s.step.startsWith('adaptation') && !s.step.startsWith('choice'));
     const average = turns.reduce((sum, s) => sum + s.cost, 0) / turns.length;
     console.log(`\nAverage cost of a player turn with the generator: $${average.toFixed(4)}; total ${formatUsage(game.sessionUsage)}`);
+  } finally {
+    await game.close();
+  }
+});
+
+it('stages 6.2j, 6.2k: luck and the Guard\'s drafts (ADR 47, 48)', async () => {
+  const game = await openNewGame('Luck');
+  const steps: Step[] = [];
+  const timed = recorder(game, steps);
+  try {
+    await timed('adaptation', () => game.start());
+    await timed('choice + opening scene', () => game.choose(0));
+    const before = new Set((await game.world.scene()).here.map((e) => e.id));
+    for (const move of LUCK) await timed(move, () => game.send(move));
+    console.log(table('Luck', steps));
+    const events = await game.world.log.recent(100);
+    const rolls = events.filter((e) => e.kind === 'luck.rolled');
+    console.log('\nRolls:', rolls.map((e) => JSON.stringify(e.payload)));
+    console.log('Drafts:', events.filter((e) => e.actor === 'guard').map((e) => `${e.kind} ${JSON.stringify(e.payload).slice(0, 120)}`));
+    console.log('Generator added:', events.filter((e) => e.actor === 'generator').map((e) => `${e.kind} ${JSON.stringify(e.payload).slice(0, 200)}`));
+    const scene = await game.world.scene();
+    console.log('New here:', scene.here.filter((e) => !before.has(e.id)).map((e) => e.name));
+    console.log('Inventory:', scene.inventory.map((e) => e.name));
+    const lines = await game.lines();
+    for (const line of lines.slice(-6)) console.log(`[${line.speaker}] ${line.text.slice(0, 400)}`);
+    expect(rolls.length).toBeGreaterThan(0);
   } finally {
     await game.close();
   }

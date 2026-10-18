@@ -8,10 +8,10 @@ import tomllib
 import uuid
 from pathlib import Path
 
-from quipquill_builder.storyfile import AUTHORED_META
+from quipquill_builder.storyfile import AUTHORED_META, OPTIONAL_META
 
 IDENTITY_KEYS = ("story_id", "title", "language")
-KEYS = IDENTITY_KEYS + AUTHORED_META
+KEYS = IDENTITY_KEYS + AUTHORED_META + OPTIONAL_META
 
 
 class StoryMetaError(ValueError):

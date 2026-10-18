@@ -1,6 +1,7 @@
 import type { Db } from '../storage/db';
+import { nowIso } from '../util/ids';
 import type { VectorIndex } from '../vector/vector-index';
-import { putEntity, relate, unlocate, unplace, unrelate } from './dynamic-graph';
+import { forget, putEntity, relate, unlocate, unplace, unrelate } from './dynamic-graph';
 import { EventLog } from './event-log';
 import { LoreVectors, type Embed } from './lore-vectors';
 import {
@@ -10,6 +11,7 @@ import {
   type Entity,
   type EntityPatch,
   type EntityType,
+  type EventPayloads,
   type Exit,
   type Note,
   type Outcome,
@@ -268,7 +270,14 @@ export class World {
    * something new in the current location — name, type and description required; only small
    * things and beings, never places — `entity.added`.
    */
-  setEntity(input: { id?: string; name?: string; type?: string; description?: string }): Promise<Outcome> {
+  setEntity(input: {
+    id?: string;
+    name?: string;
+    type?: string;
+    description?: string;
+    /** A new entity as a draft (the Guard's expected gap, ADR 48): kept only if the turn uses it. */
+    draft?: boolean;
+  }): Promise<Outcome> {
     return this.command('gm', async ({ db, state, log }, player) => {
       const name = input.name?.trim();
       const type = input.type?.trim().toUpperCase() as EntityType | undefined;
@@ -320,7 +329,8 @@ export class World {
         relation: { type: 'LOCATED_IN', target: here.id },
       });
       const description = input.description;
-      await putEntity(db, event.seq, { id, type, subtype: null, name, description, props: { added: true } });
+      const props = input.draft ? { added: true, draft: true } : { added: true };
+      await putEntity(db, event.seq, { id, type, subtype: null, name, description, props });
       await relate(db, event.seq, id, here.id, 'LOCATED_IN');
       return event;
     });
@@ -378,6 +388,56 @@ export class World {
     return this.command('gm', async ({ state, log }) => {
       if (!(await state.entity(input.entity))) reject(`There is no ${input.entity}.`);
       return log.append(this.turn, this.actor, 'entity.reacted', input);
+    });
+  }
+
+  /** Every event of the current turn, in order. */
+  turnEvents(): Promise<WorldEvent[]> {
+    return this.log.ofTurn(this.turn);
+  }
+
+  /** The drafts in the world now (ADR 48). */
+  async drafts(): Promise<Entity[]> {
+    return (await this.state.allEntities()).filter((e) => e.props.draft === true);
+  }
+
+  /** `draft.confirmed`: the draft was used; it stays as an ordinary entity. */
+  confirmDraft(id: string): Promise<Outcome> {
+    return this.command('gm', async ({ db, state, log }) => {
+      const entity = await state.entity(id);
+      if (!entity || entity.props.draft !== true) reject(`${id} is not a draft.`);
+      const event = await log.append(this.turn, this.actor, 'draft.confirmed', { entity: id, name: entity.name });
+      const { draft: _, ...props } = entity.props;
+      await putEntity(db, event.seq, { ...entity, props });
+      return event;
+    });
+  }
+
+  /** `draft.withdrawn`: nobody used the draft; it is removed from the world whole. */
+  withdrawDraft(id: string): Promise<Outcome> {
+    return this.command('gm', async ({ db, state, log }) => {
+      const entity = await state.entity(id);
+      if (!entity || entity.props.draft !== true) reject(`${id} is not a draft.`);
+      const event = await log.append(this.turn, this.actor, 'draft.withdrawn', { entity: id, name: entity.name });
+      await forget(db, id);
+      return event;
+    });
+  }
+
+  /** Whether the background work of `turn` has finished (ADR 48). */
+  async afterTurnDone(turn: number): Promise<boolean> {
+    return !!(await this.db.get('SELECT 1 FROM after_turns WHERE turn = ?', [turn]));
+  }
+
+  async markAfterTurnDone(turn: number): Promise<void> {
+    await this.db.run('INSERT OR IGNORE INTO after_turns (turn, finished_at) VALUES (?, ?)', [turn, nowIso()]);
+  }
+
+  /** `luck.rolled`: journal only — the generator records what the master made of it. */
+  recordLuck(roll: EventPayloads['luck.rolled']): Promise<Outcome> {
+    return this.command('gm', async ({ log }) => {
+      if (!roll.attempt.trim()) reject('Say what the player attempts.');
+      return log.append(this.turn, this.actor, 'luck.rolled', { ...roll, attempt: roll.attempt.trim() });
     });
   }
 

@@ -10,9 +10,9 @@ import type { CharacterProposal } from '../agent/character';
 import { lastProposal } from '../agent/character';
 import { ChatStore, GM_CHAT } from '../agent/chat-store';
 import { BackgroundWork } from '../agent/background';
+import { type AfterTurnOptions, startAfterTurn, turnToSettle } from '../agent/middleware/after-turn';
 import type { GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
-import { sourceOf } from '../agent/messages';
 import { queueModels } from '../agent/models';
 import type { Entity } from '../world/model';
 import { isUnfinished, retryTurn, runTurn, type TurnResult } from '../agent/run-turn';
@@ -106,6 +106,7 @@ export class Game {
   lastGeneration: GeneratorResult | { error: string } | undefined;
   /** The generator and entity memory after a player's turn (AfterTurn middleware, stage 6.2i). */
   private readonly background: BackgroundWork;
+  private readonly afterTurn: AfterTurnOptions;
   /** The running action's metering; background work adds its cost after it. */
   private acting: Promise<void> = Promise.resolve();
   private readonly generatedListeners = new Set<() => void>();
@@ -134,6 +135,15 @@ export class Game {
       );
     const embeddings = init.embeddings;
     this.background = new BackgroundWork({ around: (work) => this.meteredBackground(work) });
+    this.afterTurn = {
+      world: init.world,
+      meta: init.meta,
+      chats: this.chats,
+      work: this.background,
+      generatorModel: models.generatorModel,
+      memoryModel: models.memoryModel,
+      onGenerated: (result) => (this.lastGeneration = result),
+    };
     this.agent = createGmAgent({
       model: models.model,
       guardModel: models.guardModel,
@@ -142,13 +152,7 @@ export class Game {
       meta: init.meta,
       embed: embeddings ? async (text) => (await embeddings.embed([text]))[0] : undefined,
       actor: { model: models.actorModel, chats: this.chats },
-      afterTurn: {
-        chats: this.chats,
-        work: this.background,
-        generatorModel: models.generatorModel,
-        memoryModel: models.memoryModel,
-        onGenerated: (result) => (this.lastGeneration = result),
-      },
+      afterTurn: this.afterTurn,
     });
     this.sessionDeps = {
       world: init.world,
@@ -175,7 +179,9 @@ export class Game {
       void world.refreshLore().catch(() => 0);
       const characters = await repository.listCharacters();
       const character = characters.find((c) => c.id === save.characterId);
-      return new Game({ save, db, meta, world, character, services, embeddings });
+      const game = new Game({ save, db, meta, world, character, services, embeddings });
+      await game.finishLostAfterTurn();
+      return game;
     } catch (error) {
       await db.close();
       throw error;
@@ -324,6 +330,17 @@ export class Game {
       this.sessionUsage = addUsage(this.sessionUsage, meter.total);
       done();
     }
+  }
+
+  /**
+   * The app was killed after a turn, before its background work finished (ADR 48): run it now,
+   * in the background as usual. A turn still unfinished is left to `recover` (its retry runs it).
+   */
+  private async finishLostAfterTurn(): Promise<void> {
+    const history = await this.chats.load(GM_CHAT);
+    if (isUnfinished(history)) return;
+    const turn = turnToSettle(history);
+    if (turn && !(await this.world.afterTurnDone(turn.turn))) startAfterTurn(this.afterTurn, turn);
   }
 
   /** Waits for the background work of the last turn; it ends by itself within AFTER_TURN_TIMEOUT_MS. */

@@ -7,7 +7,7 @@ import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
-import { generate, GeneratorAnswerError, generatorMessages, type WorldChanges } from './generator';
+import { generate, GeneratorAnswerError, generatorMessages, type WorldChangesInput } from './generator';
 import { ScriptedChatModel } from './testing/scripted-model';
 import { TurnInProgressError, exclusive } from './turn-lock';
 
@@ -45,7 +45,7 @@ afterEach(async () => {
   await env?.cleanup();
 });
 
-const changes = (c: Partial<WorldChanges>): string =>
+const changes = (c: Partial<WorldChangesInput>): string =>
   JSON.stringify({ relations: [], cancelled: [], moves: [], edits: [], additions: [], ...c });
 
 const scripted = (answer: string) => new ScriptedChatModel([{ text: answer }]);
@@ -113,8 +113,8 @@ describe('generator', () => {
       }),
     );
     const [system, context] = await generatorMessages({ world, meta }, TURN);
-    expect(system.text).toContain('# Look for gaps');
-    expect(system.text).toContain('a legendary golden sword, no');
+    expect(system.text).toContain('basis:\n  - narrated: the turn made it real');
+    expect(system.text).toContain('Finds and strokes of luck are never yours to invent');
     expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Lamplight Row. Service door');
 
     const model = scripted(
@@ -131,6 +131,42 @@ describe('generator', () => {
     expect((await world.state.locationOf('ent:service-door'))?.id).toBe(LAMPLIGHT);
     expect(await world.state.entity('item:golden-sword')).toBeUndefined();
     expect((await world.scene()).here.map((e) => e.id)).not.toContain('ent:service-door');
+  });
+
+  it('luck (ADR 47): a find the master narrated goes to the player; gaps the place implies only when sure, two a turn', async () => {
+    expectOk(
+      await world.recordLuck({
+        attempt: 'search under the tables',
+        likelihood: 'possible',
+        stakes: 'trivial',
+        luck: 0.5,
+        chance: 0.4,
+        roll: 0.1,
+        outcome: 'success',
+      }),
+    );
+    const [, context] = await generatorMessages({ world, meta }, TURN);
+    expect(context.text).toContain('Luck this turn:\n- search under the tables (trivial): success');
+
+    const model = scripted(
+      changes({
+        additions: [
+          { name: 'tarnished penny', type: 'item', description: 'Found under a table.', where: 'player', basis: 'narrated' },
+          { name: 'bartender', type: 'npc', description: 'Wipes the bar.', basis: 'expected', likelihood: 'certain' },
+          { name: 'dartboard', type: 'other', description: 'Pocked cork.', basis: 'expected', likelihood: 'possible' },
+          { name: 'pot boy', type: 'npc', description: 'Collects mugs.', basis: 'expected', likelihood: 'likely' },
+          { name: 'cat', type: 'creature', description: 'Asleep by the stove.', basis: 'expected', likelihood: 'likely' },
+        ],
+      }),
+    );
+    const result = await generate({ model, world, meta }, TURN);
+    expect(result.applied.map((e) => e.kind)).toEqual(['entity.added', 'item.taken', 'entity.added', 'entity.added']);
+    expect(result.rejected.map((r) => [r.change, r.error])).toEqual([
+      ['add dartboard (expected)', 'only certain or likely gaps are added, not possible'],
+      ['add cat (expected)', 'at most 2 expected additions a turn'],
+    ]);
+    expect((await world.scene()).inventory.map((e) => e.name)).toContain('tarnished penny');
+    expect((await world.scene()).here.map((e) => e.name)).toEqual(expect.arrayContaining(['bartender', 'pot boy']));
   });
 
   it('drops the changes the world refuses and keeps the rest', async () => {

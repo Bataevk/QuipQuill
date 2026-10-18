@@ -180,6 +180,8 @@ describe('SaveManager', () => {
       expect(JSON.parse(event!.payload)).toEqual({ entity: 'npc:mags-holloway', situation: 'Hi.', reaction: '"Hm."' });
       expect(await db.get('SELECT entity_id FROM notes WHERE id = 1')).toEqual({ entity_id: null });
       expect(await db.all("SELECT * FROM model_messages WHERE chat_id LIKE 'npc:%'")).toEqual([]);
+      // v5: turns played before count as having had their background work
+      expect(await db.all('SELECT turn FROM after_turns')).toEqual([{ turn: 1 }]);
     } finally {
       await db.close();
     }

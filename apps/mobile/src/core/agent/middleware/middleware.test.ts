@@ -471,3 +471,67 @@ describe('AfterTurn (stage 6.2i)', () => {
     expect((await play('Again.', [{ text: 'Fine.' }], { afterTurn })).reply).toBe('Fine.');
   });
 });
+
+describe('Guard drafts (ADR 48)', () => {
+  const verdict = (expected: { name: string; type: string; description: string; likelihood: string }[] = []) => ({
+    text: JSON.stringify({ verdict: 'pass', reason: 'r', reply: '', expected }),
+  });
+  const BARTENDER = { name: 'bartender', type: 'npc', description: 'A broad man behind the bar.', likelihood: 'certain' };
+
+  it('adds a sure gap as a draft before the master; used in the narration, it stays', async () => {
+    const guardModel = new ScriptedChatModel([verdict([BARTENDER])]);
+    const result = await play(
+      'I ask the bartender for an ale.',
+      [
+        (messages) => {
+          expect(systemText(messages)).toContain('bartender [npc:bartender] (npc, just noticed): A broad man behind the bar.');
+          return { text: 'The bartender slides a mug your way.' };
+        },
+      ],
+      { guardModel },
+    );
+    expect(result.events.map((e) => [e.kind, e.actor])).toEqual([
+      ['entity.added', 'guard'],
+      ['draft.confirmed', 'guard'],
+    ]);
+    const bartender = await world.state.entity('npc:bartender');
+    expect(bartender?.props.draft).toBeUndefined();
+    expect((await world.scene()).here.map((e) => e.id)).toContain('npc:bartender');
+  });
+
+  it('removes an unused draft whole, so the name is free later; only sure gaps, two at most', async () => {
+    const guardModel = new ScriptedChatModel([
+      verdict([
+        BARTENDER,
+        { name: 'dartboard', type: 'other', description: 'Pocked cork.', likelihood: 'possible' },
+        { name: 'pot boy', type: 'npc', description: 'Collects mugs.', likelihood: 'likely' },
+        { name: 'cat', type: 'creature', description: 'Asleep.', likelihood: 'certain' },
+      ]),
+    ]);
+    const result = await play('I look around.', [{ text: 'Smoke and gears.' }], { guardModel });
+    expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
+      ['entity.added', expect.objectContaining({ entity: 'npc:bartender' })],
+      ['entity.added', expect.objectContaining({ entity: 'npc:pot-boy' })],
+      ['draft.withdrawn', { entity: 'npc:bartender', name: 'bartender' }],
+      ['draft.withdrawn', { entity: 'npc:pot-boy', name: 'pot boy' }],
+    ]);
+    expect(await world.state.entity('npc:bartender')).toBeUndefined();
+    expect(await world.drafts()).toEqual([]);
+    // the master can still create a bartender of his own later
+    const later = await play(
+      'Is anyone serving?',
+      [{ toolCalls: [{ name: 'set_entity', args: { name: 'bartender', type: 'npc', description: 'Thin, tired.' } }] }, { text: 'A thin man appears.' }],
+    );
+    expect(later.events.map((e) => e.kind)).toEqual(['entity.added']);
+  });
+
+  it('adds nothing when it rejects the input', async () => {
+    const guardModel = new ScriptedChatModel([
+      { text: JSON.stringify({ verdict: 'reject', reason: 'r', reply: 'No sword here.', expected: [BARTENDER] }) },
+    ]);
+    const result = await play('I draw my legendary sword.', [], { guardModel });
+    expect(result.rejected).toBe(true);
+    expect(await world.drafts()).toEqual([]);
+    expect(await world.state.entity('npc:bartender')).toBeUndefined();
+  });
+});
