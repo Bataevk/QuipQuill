@@ -12,9 +12,20 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 
 import type { StoryMeta } from '../story/story-meta';
-import { fail, PLAYER_ID, type Entity, type EntityType, type Outcome, type WorldEvent } from '../world/model';
+import {
+  ADDABLE_TYPES,
+  type Entity,
+  eventEntityIds,
+  fail,
+  isBeing,
+  lowerTypes,
+  type Outcome,
+  PLAYER_ID,
+  type WorldEvent,
+} from '../world/model';
+import { NameBook } from '../world/names';
 import type { World } from '../world/world';
-import { LIKELIHOODS, type Likelihood } from './luck';
+import { LIKELIHOODS, SURE_LIKELIHOODS } from './luck';
 import { CACHE, CACHE_LONG } from './messages';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
 import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
@@ -45,6 +56,8 @@ Finds and strokes of luck are never yours to invent: they come only from the Gam
 # The story
 {{STORY_STYLE}}`;
 
+const ADDABLE = lowerTypes(ADDABLE_TYPES);
+
 /** OpenAI-style `response_format` for the generator model (passed to the provider as is). */
 export const GENERATOR_RESPONSE_FORMAT = jsonSchemaFormat(
   'world_changes',
@@ -60,7 +73,7 @@ export const GENERATOR_RESPONSE_FORMAT = jsonSchemaFormat(
       type: 'array',
       items: strictObject({
         name: { type: 'string' },
-        type: { type: 'string', enum: ['item', 'document', 'npc', 'creature', 'other'] }, // ADDABLE
+        type: { type: 'string', enum: ADDABLE },
         description: { type: 'string' },
         where: { type: 'string' },
         basis: { type: 'string', enum: ['narrated', 'expected'] },
@@ -71,9 +84,7 @@ export const GENERATOR_RESPONSE_FORMAT = jsonSchemaFormat(
 );
 
 const text = z.string().trim().min(1);
-const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
-/** Gaps the place implies that are added (ADR 47); and how many a turn. */
-const SURE: readonly Likelihood[] = ['certain', 'likely'];
+/** Gaps the place implies that are added a turn at most (ADR 47); only sure ones (SURE_LIKELIHOODS). */
 const MAX_EXPECTED = 2;
 export const Changes = z.object({
   relations: z.array(z.object({ a: text, b: text, description: text })).default([]),
@@ -101,7 +112,6 @@ export type WorldChangesInput = z.input<typeof Changes>;
 const MAX_PEOPLE = 8;
 /** The latest actor notes shown for each person (ADR 45). */
 const PERSON_NOTES = 5;
-const BEINGS: readonly EntityType[] = ['NPC', 'CREATURE'];
 
 export interface GeneratorDeps {
   /** QueueChatModel with purpose 'generator' and GENERATOR_RESPONSE_FORMAT. */
@@ -158,12 +168,9 @@ export async function generatorMessages(
 ): Promise<[SystemMessage, HumanMessage]> {
   const { world } = deps;
   const events = await world.log.ofTurn(turn.turn);
-  const names = new Map<string, string>();
-  const name = async (id: string) => {
-    if (!names.has(id)) names.set(id, (await world.state.entity(id))?.name ?? id);
-    return names.get(id)!;
-  };
-  for (const event of events) for (const id of idsOf(event)) await name(id);
+  const book = new NameBook((id) => world.state.entity(id));
+  for (const event of events) for (const id of eventEntityIds(event)) await book.of(id);
+  const names = book.known;
 
   const reactions = events.flatMap((e) =>
     e.kind === 'entity.reacted' && !e.payload.reaction.startsWith('[silence]')
@@ -247,7 +254,7 @@ export async function applyChanges(world: World, changes: WorldChanges): Promise
     let expected = 0;
     for (const a of changes.additions) {
       if (a.basis === 'expected') {
-        if (!SURE.includes(a.likelihood)) {
+        if (!SURE_LIKELIHOODS.includes(a.likelihood)) {
           await apply(`add ${a.name} (expected)`, refuse(`only certain or likely gaps are added, not ${a.likelihood}`));
           continue;
         }
@@ -279,11 +286,11 @@ export async function applyChanges(world: World, changes: WorldChanges): Promise
 async function involved(world: World, events: WorldEvent[]): Promise<Entity[]> {
   const scene = await world.scene();
   const found = new Map<string, Entity>();
-  for (const e of scene.here.filter((x) => BEINGS.includes(x.type))) found.set(e.id, e);
-  for (const id of events.flatMap(idsOf)) {
+  for (const e of scene.here.filter(isBeing)) found.set(e.id, e);
+  for (const id of events.flatMap(eventEntityIds)) {
     if (found.has(id)) continue;
     const entity = await world.state.entity(id);
-    if (entity && BEINGS.includes(entity.type)) found.set(id, entity);
+    if (entity && isBeing(entity)) found.set(id, entity);
   }
   return [...found.values()].slice(0, MAX_PEOPLE);
 }
@@ -302,13 +309,6 @@ async function personText(world: World, npc: Entity): Promise<string> {
   ]
     .filter(Boolean)
     .join('\n');
-}
-
-function idsOf(event: WorldEvent): string[] {
-  const p = event.payload as Record<string, unknown>;
-  return ['npc', 'id', 'entity', 'src', 'dst', 'a', 'b', 'item', 'from', 'to']
-    .map((key) => p[key])
-    .filter((v): v is string => typeof v === 'string' && v.includes(':'));
 }
 
 const refuse = (why: string): Promise<Outcome> => Promise.resolve(fail(why));

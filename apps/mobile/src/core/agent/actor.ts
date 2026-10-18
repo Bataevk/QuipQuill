@@ -9,7 +9,7 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { SystemMessage } from '@langchain/core/messages';
 
-import type { Entity } from '../world/model';
+import { type Entity, isBeing } from '../world/model';
 import type { World } from '../world/world';
 import type { ChatStore } from './chat-store';
 import { brief } from './prompt';
@@ -70,7 +70,7 @@ export async function actorSystemMessage(world: World, entity: Entity): Promise<
   const holder = (await state.placesOf(entity.id)).find((id) => id !== entity.id);
   const location = (await state.locationOf(entity.id)) ?? (holder ? await state.locationOf(holder) : undefined);
   const here = location ? await state.contents(location.id) : [];
-  const others = here.filter((e) => e.id !== entity.id && (e.type === 'NPC' || e.type === 'CREATURE'));
+  const others = here.filter((e) => e.id !== entity.id && isBeing(e));
   const carried = await state.inventory(entity.id);
   const player = await state.player();
   const playerHere = !!player && !!location && (await state.locationOf(player.id))?.id === location.id;

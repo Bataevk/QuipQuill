@@ -3,17 +3,17 @@ import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langc
 import { createMiddleware } from 'langchain';
 import { z } from 'zod';
 
+import { DRAFT_TYPES, lowerTypes } from '../../world/model';
 import type { World } from '../../world/world';
-import { type Likelihood, LIKELIHOODS } from '../luck';
+import { LIKELIHOODS, SURE_LIKELIHOODS } from '../luck';
 import { CACHE, CACHE_LONG, sourceOf, turnStart } from '../messages';
 import { actorOf } from './packs';
 import { renderWorldState } from '../prompt';
 import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from '../structured';
 
 /** What the Guard may add before the master: people and fixtures of the place, never items (ADR 48). */
-const EXPECTED_TYPES = ['npc', 'creature', 'other'] as const;
+const EXPECTED_TYPES = lowerTypes(DRAFT_TYPES);
 /** Gaps the Guard adds as drafts: only sure ones, at most this many a turn. */
-const SURE: readonly Likelihood[] = ['certain', 'likely'];
 export const MAX_DRAFTS = 2;
 
 export const GUARD_PROMPT = `You screen one player input in an interactive story before the Game Master sees it. The player may only attempt things; the Game Master decides what happens.
@@ -125,7 +125,7 @@ export function guardMiddleware(options: GuardOptions) {
 
 /** The Guard's sure gaps as drafts in the current location (a refused one is skipped). */
 async function addDrafts(world: World, expected: GuardVerdict['expected'], onError?: (error: unknown) => void) {
-  const sure = expected.filter((e) => SURE.includes(e.likelihood)).slice(0, MAX_DRAFTS);
+  const sure = expected.filter((e) => SURE_LIKELIHOODS.includes(e.likelihood)).slice(0, MAX_DRAFTS);
   await world.actingAs('guard', async () => {
     for (const e of sure) {
       const added = await world.setEntity({ name: e.name, type: e.type, description: e.description, draft: true });

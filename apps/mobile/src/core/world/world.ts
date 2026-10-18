@@ -5,12 +5,19 @@ import { forget, putEntity, relate, unlocate, unplace, unrelate } from './dynami
 import { EventLog } from './event-log';
 import { LoreVectors, type Embed } from './lore-vectors';
 import {
+  ADDABLE_TYPES,
+  type AddableType,
   fail,
+  isAddableType,
+  isBeing,
+  isCarrier,
+  isContainerLike,
+  isPortable,
+  isTieType,
   ok,
   type Actor,
   type Entity,
   type EntityPatch,
-  type EntityType,
   type EventPayloads,
   type Exit,
   type Note,
@@ -19,6 +26,7 @@ import {
   PLAYER_ID,
   type Tie,
   TIE_TYPES,
+  type TieType,
   type WorldEvent,
 } from './model';
 import { normalizeName, slugify } from './names';
@@ -49,17 +57,13 @@ export interface LoreHit {
   score: number;
 }
 
-/** Entity types the master may add to a scene (the map itself comes only from the story). */
-const ADDABLE: readonly EntityType[] = ['ITEM', 'DOCUMENT', 'NPC', 'CREATURE', 'OTHER'];
-const ID_PREFIX: Record<string, string> = {
+const ID_PREFIX: Record<AddableType, string> = {
   ITEM: 'item',
   DOCUMENT: 'doc',
   NPC: 'npc',
   CREATURE: 'npc',
   OTHER: 'ent',
 };
-const PORTABLE: readonly EntityType[] = ['ITEM', 'DOCUMENT'];
-const BEINGS: readonly EntityType[] = ['NPC', 'CREATURE'];
 export const RECENT_EVENTS = 5;
 
 /** A broken rule inside a transaction: rolls it back and becomes a failed Outcome. */
@@ -252,7 +256,7 @@ export class World {
     const kind = type.trim().toUpperCase();
     if (kind === 'LOCATED_IN') return this.command('gm', (tx, player) => this.place(tx, player, a, b));
     if (kind === 'HAS_ITEM') return this.command('gm', (tx, player) => this.give(tx, player, a, b));
-    if ((TIE_TYPES as readonly string[]).includes(kind)) {
+    if (isTieType(kind)) {
       return this.command('gm', (tx, player) => this.tie(tx, player, a, b, kind, description));
     }
     return Promise.resolve(
@@ -280,7 +284,7 @@ export class World {
   }): Promise<Outcome> {
     return this.command('gm', async ({ db, state, log }, player) => {
       const name = input.name?.trim();
-      const type = input.type?.trim().toUpperCase() as EntityType | undefined;
+      const type = input.type?.trim().toUpperCase();
       const all = await state.allEntities();
       const clash = (exceptId?: string) =>
         name ? all.find((e) => e.id !== exceptId && normalizeName(e.name) === normalizeName(name)) : undefined;
@@ -315,7 +319,7 @@ export class World {
       if (!name || !type || input.description === undefined) {
         reject('To create something, give its name, type and description (or an id to change something).');
       }
-      if (!ADDABLE.includes(type)) reject(`Cannot create a ${type}; allowed types: ${ADDABLE.join(', ')}.`);
+      if (!isAddableType(type)) reject(`Cannot create a ${type}; allowed types: ${ADDABLE_TYPES.join(', ')}.`);
       const other = clash();
       if (other) reject(`Something named "${other.name}" already exists (${other.id}).`);
       const here = await state.locationOf(player.id);
@@ -473,7 +477,7 @@ export class World {
     if (thing.id === player.id) return this.walk(tx, player, b);
     const where = await this.find(state, player, b);
     if (thing.id === where.id) reject(`${thing.name} cannot be inside itself.`);
-    if (BEINGS.includes(thing.type)) {
+    if (isBeing(thing)) {
       if (where.type !== 'LOCATION') reject(`${thing.name} can only go to a location; ${where.name} is not one.`);
       const from = await state.locationOf(thing.id);
       if (from?.id === where.id) reject(`${thing.name} is already in ${where.name}.`);
@@ -487,7 +491,7 @@ export class World {
       return event;
     }
     if (thing.type === 'LOCATION') reject(`${thing.name} is a place; places stay where the story put them.`);
-    if (BEINGS.includes(where.type) || where.type === 'PLAYER') {
+    if (isCarrier(where)) {
       reject(`To give ${thing.name} to ${where.name}, use HAS_ITEM: ${where.name} has ${thing.name}.`);
     }
     if ((await state.inventory(player.id)).some((e) => e.id === thing.id)) {
@@ -537,9 +541,9 @@ export class World {
     const { db, state, log } = tx;
     const holder = await this.find(state, player, a);
     if (holder.id === player.id) return this.take(tx, player, b);
-    if (!BEINGS.includes(holder.type)) return this.place(tx, player, b, a); // a place or a container
+    if (!isBeing(holder)) return this.place(tx, player, b, a); // a place or a container
     const item = await this.find(state, player, b);
-    if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
+    if (!isPortable(item)) reject(`${item.name} cannot be carried.`);
     if ((await state.inventory(holder.id)).some((e) => e.id === item.id)) {
       reject(`${holder.name} already has ${item.name}.`);
     }
@@ -571,7 +575,7 @@ export class World {
       target,
       () => `There is no "${target}" here to take.`,
     );
-    if (!PORTABLE.includes(item.type)) reject(`${item.name} cannot be carried.`);
+    if (!isPortable(item)) reject(`${item.name} cannot be carried.`);
     if (item.props.fixed === true) reject(`${item.name} is fixed in place and cannot be taken.`);
     const holder = held.find((h) => h.item.id === item.id)?.npc;
     if (holder && !(await log.reacted(this.turn, holder.id))) {
@@ -597,7 +601,7 @@ export class World {
     player: Entity,
     a: string,
     b: string,
-    type: string,
+    type: TieType,
     description: string,
   ): Promise<WorldEvent> {
     if (!description.trim()) reject('Describe the tie: how one stands with the other now.');
@@ -654,7 +658,7 @@ export class World {
     if (!here) return [];
     const direct = await state.contents(here.id);
     const nested = await Promise.all(
-      direct.filter((e) => PORTABLE.includes(e.type) || e.type === 'OTHER').map((e) => state.contents(e.id)),
+      direct.filter(isContainerLike).map((e) => state.contents(e.id)),
     );
     return [...direct, ...nested.flat()];
   }
@@ -666,7 +670,7 @@ export class World {
   ): Promise<{ npc: Entity; item: Entity }[]> {
     const here = await state.locationOf(player.id);
     if (!here) return [];
-    const npcs = (await state.contents(here.id)).filter((e) => e.type === 'NPC' || e.type === 'CREATURE');
+    const npcs = (await state.contents(here.id)).filter(isBeing);
     const held = await Promise.all(
       npcs.map(async (npc) => (await state.inventory(npc.id)).map((item) => ({ npc, item }))),
     );

@@ -12,6 +12,30 @@ export type EntityType =
 
 export type Props = Record<string, unknown>;
 
+/** Entity types the master and the generator may create; the map itself comes only from the story. */
+export const ADDABLE_TYPES = ['ITEM', 'DOCUMENT', 'NPC', 'CREATURE', 'OTHER'] as const satisfies readonly EntityType[];
+export type AddableType = (typeof ADDABLE_TYPES)[number];
+/** What the Guard may add as a draft before the master: people and fixtures, never items (ADR 48). */
+export const DRAFT_TYPES = ['NPC', 'CREATURE', 'OTHER'] as const satisfies readonly AddableType[];
+const PORTABLE_TYPES: readonly EntityType[] = ['ITEM', 'DOCUMENT'];
+const BEING_TYPES: readonly EntityType[] = ['NPC', 'CREATURE'];
+const CONTAINER_LIKE_TYPES: readonly EntityType[] = ['ITEM', 'DOCUMENT', 'OTHER'];
+
+export const isAddableType = (type: string): type is AddableType => (ADDABLE_TYPES as readonly string[]).includes(type);
+/** Can be carried: items and documents. */
+export const isPortable = (entity: Pick<Entity, 'type'>) => PORTABLE_TYPES.includes(entity.type);
+/** People and creatures: they go to any location, react and carry things. */
+export const isBeing = (entity: Pick<Entity, 'type'>) => BEING_TYPES.includes(entity.type);
+/** Those who carry things (`HAS_ITEM` = inventory) rather than contain them: beings and the player. */
+export const isCarrier = (entity: Pick<Entity, 'type'>) => isBeing(entity) || entity.type === 'PLAYER';
+/** May have things inside (a chest, a desk, a letter in a folder): one level of it is in reach. */
+export const isContainerLike = (entity: Pick<Entity, 'type'>) => CONTAINER_LIKE_TYPES.includes(entity.type);
+
+/** Type names as the model writes them in tools and answers: 'item', 'npc'… */
+export function lowerTypes<const T extends readonly EntityType[]>(types: T) {
+  return types.map((type) => type.toLowerCase()) as { -readonly [K in keyof T]: Lowercase<T[K]> };
+}
+
 export interface Entity {
   id: string;
   type: EntityType;
@@ -30,8 +54,11 @@ export interface Exit {
 /** The player character's entity id (ADR 43): one player per playthrough. */
 export const PLAYER_ID = 'player';
 
-/** 'gm' | 'generator' | 'npc:<id>' | 'system' */
-export type Actor = string;
+/**
+ * Who an event is journaled for: the master, the background generator, the Guard (drafts), the
+ * system (session start, entity memory); `npc:<id>` comes only from saves of stage 4.3.
+ */
+export type Actor = 'gm' | 'generator' | 'guard' | 'system' | `npc:${string}`;
 
 /** Payload of each event kind. One event = one transaction with its state change. */
 export interface EventPayloads {
@@ -40,7 +67,7 @@ export interface EventPayloads {
   'player.moved': { from: string; to: string };
   'item.taken': { item: string; from: string };
   'item.dropped': { item: string; to: string };
-  'entity.added': { entity: string; relation: { type: string; target: string } };
+  'entity.added': { entity: string; relation: { type: RelationType; target: string } };
   'entity.edited': { id: string; before: EntityPatch; after: EntityPatch };
   /** A master's note, or with `entity` an actor's note: what that entity decided (ADR 43). */
   'note.added': { id: number; text: string; entity?: string };
@@ -50,7 +77,7 @@ export interface EventPayloads {
   /** A person or creature went to another location, in sight or not (ADR 42). */
   'npc.moved': { npc: string; from: string; to: string };
   /** A tie was written or rewritten; `before` is its old description, null if it is new. */
-  'relation.set': { src: string; dst: string; type: string; description: string; before: string | null };
+  'relation.set': { src: string; dst: string; type: TieType; description: string; before: string | null };
   /** The ties between two entities that are no longer true (story ones get CANCEL, ADR 42). */
   'relation.cancelled': { a: string; b: string; removed: Tie[] };
   /**
@@ -76,6 +103,17 @@ export interface EventPayloads {
 
 export type EventKind = keyof EventPayloads;
 
+/**
+ * The entity ids an event names (prefixed ids only, so not the player), in a fixed order: the
+ * generator takes the people of a turn in this order.
+ */
+export function eventEntityIds(event: WorldEvent): string[] {
+  const p = event.payload as Record<string, unknown>;
+  return ['npc', 'id', 'entity', 'src', 'dst', 'a', 'b', 'item', 'from', 'to']
+    .map((key) => p[key])
+    .filter((v): v is string => typeof v === 'string' && v.includes(':'));
+}
+
 export type WorldEvent = {
   [K in EventKind]: {
     seq: number;
@@ -87,16 +125,25 @@ export type WorldEvent = {
   };
 }[EventKind];
 
-/** A relation that is not about place or possessions: who knows, serves, owes, hates whom. */
+/** Where things are and how places connect: `LOCATED_IN`, `HAS_ITEM`; `LEADS_TO` only from the story. */
+export const PLACEMENT_TYPES = ['LOCATED_IN', 'HAS_ITEM', 'LEADS_TO'] as const;
+/**
+ * Relation types that are ties: who knows, serves, owes, hates whom (set_relation,
+ * cancel_relation, `state.ties`). The builder writes no other types besides PLACEMENT_TYPES.
+ */
+export const TIE_TYPES = ['INTERACTS_WITH', 'HAS_ATTRIBUTE'] as const;
+export type TieType = (typeof TIE_TYPES)[number];
+export type RelationType = (typeof PLACEMENT_TYPES)[number] | TieType;
+
+export const isTieType = (type: string): type is TieType => (TIE_TYPES as readonly string[]).includes(type);
+
+/** A tie between two entities, as the world has it (`relation.cancelled` keeps the ones it removed). */
 export interface Tie {
   src: string;
   dst: string;
-  type: string;
+  type: TieType;
   description: string;
 }
-
-/** Relation types that are ties (state.ties); placement goes through move, take, drop, move_npc. */
-export const TIE_TYPES = ['INTERACTS_WITH', 'HAS_ATTRIBUTE'] as const;
 
 export interface EntityPatch {
   name?: string;

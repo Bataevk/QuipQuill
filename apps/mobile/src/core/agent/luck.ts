@@ -10,6 +10,8 @@
 /** How likely the attempt is to work in this place, as the master judges it. */
 export const LIKELIHOODS = ['certain', 'likely', 'possible', 'unlikely'] as const;
 export type Likelihood = (typeof LIKELIHOODS)[number];
+/** Gaps the place implies that become real (ADR 47, 48): only sure ones. */
+export const SURE_LIKELIHOODS: readonly Likelihood[] = ['certain', 'likely'];
 
 /** What the player stands to gain. */
 export const STAKES = ['trivial', 'useful', 'valuable'] as const;

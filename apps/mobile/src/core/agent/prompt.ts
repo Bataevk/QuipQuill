@@ -7,7 +7,8 @@
 import { SystemMessage } from '@langchain/core/messages';
 
 import type { StoryMeta } from '../story/story-meta';
-import type { Entity, Exit, WorldEvent } from '../world/model';
+import { type Entity, eventEntityIds, type Exit, isContainerLike, type WorldEvent } from '../world/model';
+import { NameBook } from '../world/names';
 import type { Scene, World } from '../world/world';
 import { CACHE_LONG } from './messages';
 
@@ -74,22 +75,21 @@ const BRIEF = 240;
 /** The world state: rebuilt before every model call from `world_*`, notes and recent events. */
 export async function renderWorldState(world: World): Promise<string> {
   const scene = await world.scene();
-  const names = new Map<string, string>();
-  const remember = (entities: Entity[]) => entities.forEach((e) => names.set(e.id, e.name));
-  remember([scene.player, ...scene.here, ...scene.inventory, ...scene.exits.map((x) => x.to)]);
-  if (scene.location) remember([scene.location]);
-  for (const event of scene.recent) {
-    for (const id of eventIds(event)) {
-      if (!names.has(id)) names.set(id, (await world.state.entity(id))?.name ?? id);
-    }
-  }
+  const book = new NameBook((id) => world.state.entity(id), [
+    scene.player,
+    ...scene.here,
+    ...scene.inventory,
+    ...scene.exits.map((x) => x.to),
+    ...(scene.location ? [scene.location] : []),
+  ]);
+  for (const event of scene.recent) for (const id of eventEntityIds(event)) await book.of(id);
   const nested = new Map<string, Entity[]>();
-  const containers = scene.here.filter((e) => e.type === 'ITEM' || e.type === 'DOCUMENT' || e.type === 'OTHER');
+  const containers = scene.here.filter(isContainerLike);
   for (const thing of containers) {
     const inside = await world.state.contents(thing.id);
     if (inside.length) nested.set(thing.id, inside);
   }
-  return worldStateText(scene, nested, names);
+  return worldStateText(scene, nested, book.known);
 }
 
 /** Pure part of renderWorldState, separated for tests. */
@@ -137,13 +137,6 @@ function exitText(exit: Exit): string {
 export function brief(text: string, max = BRIEF): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   return clean.length <= max ? clean : `${clean.slice(0, max - 1).trimEnd()}…`;
-}
-
-function eventIds(event: WorldEvent): string[] {
-  const p = event.payload as Record<string, unknown>;
-  return ['from', 'to', 'item', 'entity', 'id', 'npc', 'src', 'dst', 'a', 'b']
-    .map((key) => p[key])
-    .filter((v): v is string => typeof v === 'string' && v.includes(':'));
 }
 
 /** One recent event as a short English line (names instead of ids where known). */

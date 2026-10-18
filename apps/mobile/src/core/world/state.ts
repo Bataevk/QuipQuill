@@ -1,5 +1,5 @@
 import type { Db } from '../storage/db';
-import type { Entity, EntityType, Exit, Props } from './model';
+import { type Entity, type EntityType, type Exit, isContainerLike, type Props, TIE_TYPES, type TieType } from './model';
 import { normalizeName, similarity } from './names';
 
 type EntityRow = {
@@ -14,9 +14,10 @@ type EntityRow = {
 const ENTITY_COLUMNS = 'e.id, e.type, e.subtype, e.name, e.description, e.props';
 const FUZZY_THRESHOLD = 0.8;
 
-export interface Tie {
+/** A tie as one side sees it: the other side, the type, how they stand. */
+export interface TieView {
   other: Entity;
-  type: string;
+  type: TieType;
   description: string;
 }
 
@@ -104,17 +105,16 @@ export class WorldState {
   }
 
   /**
-   * What an entity is tied to besides place and possessions (INTERACTS_WITH, HAS_ATTRIBUTE…),
-   * both directions, with the story's description of the tie — an NPC's acquaintances,
-   * grudges and interests.
+   * What an entity is tied to besides place and possessions (TIE_TYPES), both directions, with
+   * the description of the tie — an NPC's acquaintances, grudges and interests.
    */
-  async ties(id: string): Promise<Tie[]> {
-    const rows = await this.db.all<EntityRow & { tie: string; about: string }>(
+  async ties(id: string): Promise<TieView[]> {
+    const rows = await this.db.all<EntityRow & { tie: TieType; about: string }>(
       `SELECT ${ENTITY_COLUMNS}, r.type AS tie, r.description AS about
          FROM world_relations r JOIN world_entities e ON e.id = CASE WHEN r.src = ? THEN r.dst ELSE r.src END
-        WHERE (r.src = ? OR r.dst = ?) AND r.type NOT IN ('LEADS_TO', 'LOCATED_IN', 'HAS_ITEM')
+        WHERE (r.src = ? OR r.dst = ?) AND r.type IN (${TIE_TYPES.map(() => '?').join(', ')})
         ORDER BY r.id`,
-      [id, id, id],
+      [id, id, id, ...TIE_TYPES],
     );
     return rows.map((row) => ({ other: toEntity(row), type: row.tie, description: row.about }));
   }
@@ -174,10 +174,6 @@ export class WorldState {
   private async many(sql: string, params: string[] = []): Promise<Entity[]> {
     return (await this.db.all<EntityRow>(sql, params)).map(toEntity);
   }
-}
-
-function isContainerLike(entity: Entity): boolean {
-  return entity.type === 'ITEM' || entity.type === 'DOCUMENT' || entity.type === 'OTHER';
 }
 
 function toEntity(row: EntityRow): Entity {

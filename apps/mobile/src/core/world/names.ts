@@ -37,3 +37,28 @@ export function similarity(a: string, b: string): number {
   }
   return 1 - prev[b.length] / Math.max(a.length, b.length);
 }
+
+/**
+ * Names by entity id for one piece of text the model reads, each looked up once; an id the world
+ * does not know stays as it is. Short-lived: a rename later is not seen.
+ */
+type Named = { id: string; name: string };
+
+export class NameBook {
+  readonly known = new Map<string, string>();
+  private readonly lookup: (id: string) => Promise<Named | undefined>;
+
+  constructor(lookup: (id: string) => Promise<Named | undefined>, entities: Named[] = []) {
+    this.lookup = lookup;
+    this.remember(entities);
+  }
+
+  remember(entities: Named[]): void {
+    for (const e of entities) this.known.set(e.id, e.name);
+  }
+
+  async of(id: string): Promise<string> {
+    if (!this.known.has(id)) this.known.set(id, (await this.lookup(id))?.name ?? id);
+    return this.known.get(id)!;
+  }
+}

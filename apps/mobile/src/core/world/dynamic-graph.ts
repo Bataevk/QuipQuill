@@ -1,5 +1,5 @@
 import type { Db } from '../storage/db';
-import type { Entity } from './model';
+import type { Entity, RelationType } from './model';
 
 /**
  * Writes to the dynamic graph (`dyn_*`, ADR 42). The story's `entities` / `relations` are never
@@ -29,7 +29,7 @@ export async function relate(
   seq: number,
   src: string,
   dst: string,
-  type: string,
+  type: RelationType,
   description?: string,
 ): Promise<void> {
   await db.run("DELETE FROM dyn_relations WHERE src = ? AND dst = ? AND type = 'CANCEL' AND description = ?", [
@@ -55,7 +55,7 @@ export async function relate(
 }
 
 /** Takes `src -type-> dst` out of the world: the dynamic row goes, a story relation is cancelled. */
-export async function unrelate(db: Db, seq: number, src: string, dst: string, type: string): Promise<void> {
+export async function unrelate(db: Db, seq: number, src: string, dst: string, type: RelationType): Promise<void> {
   await db.run("DELETE FROM dyn_relations WHERE src = ? AND dst = ? AND type = ? AND type <> 'CANCEL'", [
     src,
     dst,
@@ -72,7 +72,7 @@ export async function unrelate(db: Db, seq: number, src: string, dst: string, ty
 
 /** Removes every placement of an item: `item LOCATED_IN x` and `x HAS_ITEM item`. */
 export async function unplace(db: Db, seq: number, itemId: string): Promise<void> {
-  const placements = await db.all<{ src: string; dst: string; type: string }>(
+  const placements = await db.all<{ src: string; dst: string; type: RelationType }>(
     `SELECT src, dst, type FROM world_relations
       WHERE (src = ? AND type = 'LOCATED_IN') OR (dst = ? AND type = 'HAS_ITEM')`,
     [itemId, itemId],

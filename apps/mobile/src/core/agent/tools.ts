@@ -8,7 +8,8 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import { tool } from 'langchain';
 import { z } from 'zod';
 
-import type { Entity, EntityType, Outcome, WorldEvent } from '../world/model';
+import { ADDABLE_TYPES, type Entity, isCarrier, lowerTypes, type Outcome, type WorldEvent } from '../world/model';
+import { NameBook } from '../world/names';
 import type { World } from '../world/world';
 import { DEFAULT_LUCK } from '../story/story-meta';
 import { type ActorDeps, reactionAsked } from './actor';
@@ -66,7 +67,6 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
           return `Error: ${name} failed unexpectedly (${reason}). Narrate around it; do not retry.`;
         }
       });
-  const name = async (id: string) => (await world.state.entity(id))?.name ?? id;
 
   const inspect = tool(
     guarded('inspect', async ({ target }: { target: string }) => {
@@ -262,6 +262,8 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
 
   /** What a world change means, for the model (names with ids). */
   async function said(e: WorldEvent): Promise<string> {
+    const names = new NameBook((id) => world.state.entity(id));
+    const name = (id: string) => names.of(id);
     const n = async (id: string) => `${await name(id)} [${id}]`;
     switch (e.kind) {
       case 'player.moved':
@@ -294,7 +296,7 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
   return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool, rollLuckTool];
 }
 
-const CREATABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
+const CREATABLE = lowerTypes(ADDABLE_TYPES);
 type Creatable = (typeof CREATABLE)[number];
 const RELATIONS = ['located_in', 'has_item', 'interacts_with', 'has_attribute'] as const;
 type RelationName = (typeof RELATIONS)[number];
@@ -323,17 +325,14 @@ async function describe(world: World, entity: Entity): Promise<string> {
   }
   const places = await Promise.all((await state.placesOf(entity.id)).map((id) => state.entity(id)));
   const where = places.filter((e): e is Entity => !!e);
-  const holder = where.find((e) => BEINGS.includes(e.type));
+  const holder = where.find(isCarrier);
   if (holder) lines.push(`Carried by: ${holder.name} [${holder.id}].`);
   else if (where.length) lines.push(`Where: ${list(where)}.`);
-  const being = BEINGS.includes(entity.type);
+  const being = isCarrier(entity);
   const held = being ? await state.inventory(entity.id) : await state.contents(entity.id);
   if (held.length) lines.push(`${being ? 'Carries' : 'Contains'}: ${list(held)}.`);
   return lines.join('\n');
 }
-
-/** Those who carry things (`HAS_ITEM` = inventory) rather than contain them. */
-const BEINGS: readonly EntityType[] = ['NPC', 'CREATURE', 'PLAYER'];
 
 /** Runs async jobs one at a time, in call order; a failed job does not block the next. */
 function serial(): <T>(job: () => Promise<T>) => Promise<T> {
