@@ -5,7 +5,8 @@
 #
 # Installs Docker from Ubuntu's own packages, adds 2 GB swap (the 1 GB plan is tight),
 # opens only 22/80/443, creates the `deploy` user that CI logs in as, and turns off
-# SSH password login. Secrets (/opt/quipquill/.env, cloud.env) are written separately.
+# SSH password login. /opt/quipquill/.env is written by hand; cloud.config.env and cloud.secret.env
+# come from CI (the GitHub environment `production`, ADR 51).
 set -euo pipefail
 
 DEPLOY_KEY="${1:?usage: bootstrap.sh \"<ssh public key for the deploy user>\"}"

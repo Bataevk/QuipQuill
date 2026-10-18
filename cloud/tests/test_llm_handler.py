@@ -115,8 +115,8 @@ def test_server_chooses_model_params_and_providers(
     assert body["stream_options"] == {"include_usage": True}
     assert body["tools"] == TOOLS
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}  # gm thinks at medium
-    # Route "basic" (the default): Vertex Europe, then Vertex global, then Bedrock (ADR 50).
-    providers = ["google-vertex/europe", "google-vertex/global", "amazon-bedrock"]
+    # Route "basic" (the default): Vertex global, then Bedrock (ADR 51).
+    providers = ["google-vertex/global", "amazon-bedrock"]
     assert body["extra_body"]["provider"] == {
         "order": providers,
         "only": providers,

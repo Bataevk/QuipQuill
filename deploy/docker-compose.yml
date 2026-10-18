@@ -1,6 +1,7 @@
 # Production stack on the VPS (/opt/quipquill). Local development uses the root docker-compose.yml.
 # Values come from /opt/quipquill/.env (DOMAIN, POSTGRES_PASSWORD, RABBITMQ_PASSWORD, CLOUD_IMAGE)
-# and app secrets from /opt/quipquill/cloud.env (JWT_SECRET, OPENROUTER_API_KEY, INVITE_CODES).
+# and the app's settings from /opt/quipquill/cloud.config.env and cloud.secret.env, which CI writes
+# from the GitHub environment `production` on every deploy (ADR 51; templates next to this file).
 # Deploy and rollback: ./deploy.sh <image>. See docs/notes/deploy.md.
 name: quipquill
 
@@ -50,7 +51,8 @@ services:
 
   cloud:
     image: ${CLOUD_IMAGE:?}
-    env_file: cloud.env
+    # Secrets last: they win on a duplicate key.
+    env_file: [cloud.config.env, cloud.secret.env]
     environment:
       ENV: prod
       LOG_FORMAT: json

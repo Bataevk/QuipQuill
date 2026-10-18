@@ -15,7 +15,8 @@
 
 - [`.github/workflows/cloud.yml`](../../.github/workflows/cloud.yml) — на каждый push и PR, затрагивающий `cloud/` или `deploy/`: ruff, pytest (Postgres и RabbitMQ — сервисы job'а). На `project-131027` (или кнопкой **Run workflow**) дальше: сборка образа → GHCR → окружение `production` → копирование `deploy/*` на сервер → `deploy.sh <образ>` → проверка `/health`, `/health/db`, `/health/mq` по HTTPS.
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — builder (ruff, pytest) и мобильное ядро (`tsc`, `expo lint`, vitest).
-- Окружение `production` разрешает деплой только из ветки `project-131027`. В нём секреты `DEPLOY_SSH_KEY` (ключ пользователя `deploy`), `DEPLOY_KNOWN_HOSTS` и переменные `DEPLOY_HOST`, `DEPLOY_DOMAIN`.
+- Окружение `production` разрешает деплой только из ветки `project-131027`. В нём секреты `DEPLOY_SSH_KEY` (ключ пользователя `deploy`), `DEPLOY_KNOWN_HOSTS`, **`CLOUD_SECRET_ENV`** и переменные `DEPLOY_HOST`, `DEPLOY_DOMAIN`, **`CLOUD_CONFIG_ENV`**.
+- **Настройки облака — два env-файла в GitHub** (ADR 51): переменная `CLOUD_CONFIG_ENV` — несекретные (`DAILY_COST_LIMIT_USD`, `PROVIDER_ORDER`, `LOG_LEVEL`…), секрет `CLOUD_SECRET_ENV` — `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES`. В каждую вставляется **файл целиком**, по шаблонам [deploy/cloud.config.env.example](../../deploy/cloud.config.env.example) и [deploy/cloud.secret.env.example](../../deploy/cloud.secret.env.example). Шаг **Env files** перед выкаткой пишет их в `/opt/quipquill/cloud.config.env` и `cloud.secret.env` (права 600); compose читает оба, секреты — последними. Пока значение в GitHub не задано, на сервере остаётся свой файл (старый `cloud.env` один раз становится `cloud.secret.env`), а в запуске — предупреждение.
 - Образ тянется токеном самого job'а (`docker login` на время деплоя, затем `logout`), поэтому пакет в GHCR может оставаться приватным.
 
 ## Сервер
@@ -25,15 +26,17 @@
 | Файл | Что | Откуда |
 |---|---|---|
 | `docker-compose.yml`, `Caddyfile`, `deploy.sh` | стек | копирует CI из `deploy/` |
-| `.env` | `DOMAIN`, `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `CLOUD_IMAGE` (тег пишет `deploy.sh`) | создан вручную, не в git |
-| `cloud.env` | `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES`, `DAILY_COST_LIMIT_USD=1` | создан вручную, не в git |
+| `.env` | `DOMAIN`, `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `CLOUD_IMAGE` (тег пишет `deploy.sh`) | создан вручную, не в git (переменные compose, не облака) |
+| `cloud.config.env` | несекретные настройки облака | пишет CI из переменной `CLOUD_CONFIG_ENV` |
+| `cloud.secret.env` | `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES` | пишет CI из секрета `CLOUD_SECRET_ENV` |
+| `cloud.env` | до ADR 51: всё вместе | больше не читается; удалить после переноса в GitHub |
 
 Доступ: `ssh -i ~/.ssh/quipquill_vps root@146.103.120.112` (ключ администратора на Mac владельца). Вход по паролю отключён (`/etc/ssh/sshd_config.d/01-quipquill.conf`), открыты только 22, 80, 443 (ufw). Первичная настройка — [deploy/bootstrap.sh](../../deploy/bootstrap.sh) (повторный запуск безопасен).
 
-Инвайт-код для регистрации — в `cloud.env`:
+Инвайт-код для регистрации — в `cloud.secret.env` (и в секрете `CLOUD_SECRET_ENV`):
 
 ```bash
-ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 grep INVITE /opt/quipquill/cloud.env
+ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 grep INVITE /opt/quipquill/cloud.secret.env
 ```
 
 ## Частые действия
@@ -52,9 +55,9 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 
 Если пакет приватный, перед ручным откатом нужен `docker login ghcr.io` с личным токеном (`read:packages`); проще перезапустить нужный старый запуск workflow (**Re-run jobs**).
 
-Сменить секрет: отредактировать `cloud.env`, затем `docker compose up -d cloud` в `/opt/quipquill`.
+Сменить настройку или секрет: отредактировать `CLOUD_CONFIG_ENV` / `CLOUD_SECRET_ENV` в окружении `production` (Settings → Environments → production) и перезапустить последний запуск `cloud` (**Re-run jobs**) или нажать **Run workflow**. Срочно, без CI: поправить файл на сервере и `docker compose up -d cloud` в `/opt/quipquill` — следующий деплой перезапишет его значением из GitHub.
 
-Провайдер лежит: временно задать порядок для всех маршрутов — `PROVIDER_ORDER=["amazon-bedrock"]` в `cloud.env` и `docker compose up -d cloud` (ADR 50; без переменной — порядок маршрута: Vertex Europe → Vertex global → Bedrock). Какой провайдер обслужил вызов и задержка — в логе `cloud`: строки `llm … provider= ttft= total=`.
+Провайдер лежит: временно задать порядок для всех маршрутов — `PROVIDER_ORDER=["amazon-bedrock"]` в `CLOUD_CONFIG_ENV` (ADR 50; без переменной — порядок маршрута: Vertex global → Bedrock, ADR 51). Какой провайдер обслужил вызов и задержка — в логе `cloud`: строки `llm … provider= ttft= total=`.
 
 ## Приложение против сервера
 

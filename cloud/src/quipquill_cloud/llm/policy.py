@@ -35,13 +35,10 @@ class Route:
     providers: tuple[str, ...]
 
 
-# ADR 50 (owner, 2026-10-18): Vertex in Europe first (latency ~0.4 s instead of ~2.4 s, +10% in
-# price), then Vertex global, then Bedrock. Only providers that do not log prompts (ADR 16).
+# ADR 51 (owner, 2026-10-18): Vertex global, then Bedrock. Vertex in Europe was dropped: in the
+# live runs it was faster but not worth its price. Only providers that do not log prompts (ADR 16).
 ROUTES: dict[str, Route] = {
-    "basic": Route(
-        model=HAIKU,
-        providers=("google-vertex/europe", "google-vertex/global", "amazon-bedrock"),
-    ),
+    "basic": Route(model=HAIKU, providers=("google-vertex/global", "amazon-bedrock")),
 }
 DEFAULT_ROUTE = "basic"
 

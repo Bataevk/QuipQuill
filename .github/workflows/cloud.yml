@@ -101,6 +101,29 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
       - name: Copy stack files
         run: scp deploy/docker-compose.yml deploy/Caddyfile deploy/deploy.sh "deploy@${{ vars.DEPLOY_HOST }}:/opt/quipquill/"
+      - name: Env files
+        env:
+          HOST: deploy@${{ vars.DEPLOY_HOST }}
+          CONFIG_ENV: ${{ vars.CLOUD_CONFIG_ENV }}
+          SECRET_ENV: ${{ secrets.CLOUD_SECRET_ENV }}
+        run: |
+          # Each file comes whole from the environment `production` (ADR 51; templates in deploy/).
+          # Until a value is set there, the server keeps its own file (the old cloud.env becomes
+          # cloud.secret.env once), so a deploy never starts the cloud without its secrets.
+          # shellcheck disable=SC2029 # the file name is meant to expand here, on the runner
+          put() { printf '%s\n' "$2" | ssh "$HOST" "umask 077 && cat > /opt/quipquill/$1"; }
+          if [ -n "$CONFIG_ENV" ]; then
+            put cloud.config.env "$CONFIG_ENV"
+          else
+            echo "::warning::CLOUD_CONFIG_ENV is not set: keeping the server's cloud.config.env"
+            ssh "$HOST" 'cd /opt/quipquill && { [ -f cloud.config.env ] || touch cloud.config.env; }'
+          fi
+          if [ -n "$SECRET_ENV" ]; then
+            put cloud.secret.env "$SECRET_ENV"
+          else
+            echo "::warning::CLOUD_SECRET_ENV is not set: keeping the server's cloud.secret.env"
+            ssh "$HOST" 'cd /opt/quipquill && { [ -f cloud.secret.env ] || cp -p cloud.env cloud.secret.env; }'
+          fi
       - name: Roll out
         # The job token pulls the image (the GHCR package may be private); logout right after.
         env:
