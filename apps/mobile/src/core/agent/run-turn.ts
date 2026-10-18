@@ -1,12 +1,22 @@
-import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 
 import type { WorldEvent } from '../world/model';
 import type { World } from '../world/world';
 import { ChatSync, GM_CHAT, type ChatStore } from './chat-store';
-import { actorChannel } from './actor';
+import { actorChannel } from '../protocol/channels';
 import type { GmAgent } from './gm-agent';
-import { actorOf } from './middleware/packs';
-import { inputMessage, type InputSource, turnOf, turnStart } from './messages';
+import {
+  actorOf,
+  currentTurn,
+  GUARD_REPLY_EXTRA,
+  inputMessage,
+  type InputSource,
+  isBlocked,
+  isGuardReply,
+  masterReplies,
+  turnOf,
+  turnStart,
+} from './messages';
 import type { TranscriptStore } from './transcript';
 import { exclusive } from './turn-lock';
 
@@ -107,7 +117,7 @@ async function play(
   for await (const state of stream) {
     messages = state.messages;
     await sync.save(messages);
-    for (const message of messages.slice(Math.max(turnStart(messages), 0))) {
+    for (const message of currentTurn(messages)) {
       if (!AIMessage.isInstance(message) || shown.has(message.id) || !message.text.trim()) continue;
       shown.add(message.id);
       const actor = actorOf(message);
@@ -115,21 +125,18 @@ async function play(
         await transcript.append(actorChannel(actor), message.text.trim(), { name: actor.name });
         continue;
       }
-      const rejected = message.response_metadata?.guard === 'reject';
-      await transcript.append('gm', message.text.trim(), rejected ? { guard: 'reject' } : {});
+      await transcript.append('gm', message.text.trim(), isGuardReply(message) ? GUARD_REPLY_EXTRA : {});
     }
   }
 
-  const own = messages.slice(Math.max(turnStart(messages), 0));
-  const texts = own.filter((m) => AIMessage.isInstance(m) && m.text.trim() && !actorOf(m)) as AIMessage[];
-  const lastMessage = own.at(-1);
+  const own = currentTurn(messages);
+  const texts = masterReplies(own);
   return {
     turn,
     reply: texts.map((m) => m.text.trim()).join('\n\n'),
     messages: own,
     events: await world.log.ofTurn(turn),
-    rejected: texts.some((m) => m.response_metadata?.guard === 'reject'),
-    cutShort:
-      !!lastMessage && ToolMessage.isInstance(lastMessage) && lastMessage.additional_kwargs?.qq_blocked === true,
+    rejected: texts.some(isGuardReply),
+    cutShort: isBlocked(own.at(-1)),
   };
 }

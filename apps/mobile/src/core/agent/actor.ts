@@ -29,9 +29,6 @@ export interface ActorDeps {
   chats: ChatStore;
 }
 
-/** The entity's channel, chat id and `transcript` speaker: 'npc:<id>'. */
-export const actorChannel = (entity: { id: string }) => `npc:${entity.id.replace(/^npc:/, '')}`;
-
 /** What react_entity returns to the master; the actor pack finds the entity by it. */
 export function reactionAsked(entity: Entity): string {
   return `${entity.name} [${entity.id}] reacts now.`;

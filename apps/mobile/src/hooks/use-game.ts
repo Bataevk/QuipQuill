@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
 import type { Game, GamePhase, GameStep } from '@/core/game/game';
+import { GM_CHANNEL } from '@/core/protocol/channels';
 import { isStoryChannel, LiveFeed, type LiveBubble } from '@/core/protocol/live-feed';
 import { formatUsage } from '@/core/protocol/usage-meter';
 import { getCloud, openGame } from '@/platform/services';
@@ -147,7 +148,7 @@ export function useGame(saveId: string): GameView {
           if (change === 'new' && 'requestId' in event && event.requestId) {
             const requestId = event.requestId;
             if (!feed.current.speakerKnown(requestId)) {
-              void game.speakerOf(feed.current.channelOf(requestId) ?? 'gm').then((name) => {
+              void game.speakerOf(feed.current.channelOf(requestId) ?? GM_CHANNEL).then((name) => {
                 feed.current.setSpeaker(requestId, name);
                 setLive(feed.current.bubbles());
               });

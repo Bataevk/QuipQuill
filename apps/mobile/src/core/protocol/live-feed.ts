@@ -1,3 +1,4 @@
+import { GM_CHANNEL, isActorChannel } from './channels';
 import type { ServerEvent } from './messages';
 import { StreamText } from './stream-text';
 
@@ -13,7 +14,7 @@ export interface LiveBubble {
 
 /** Channels drawn as bubbles: the master and NPCs (not the guard, summaries or adaptation). */
 export const isStoryChannel = (channel: string | undefined) =>
-  channel === 'gm' || (channel?.startsWith('npc:') ?? false);
+  channel === GM_CHANNEL || isActorChannel(channel);
 
 /**
  * The live part of the game screen while one action runs (stage 5.2): a bubble per generation
@@ -49,7 +50,7 @@ export class LiveFeed {
     if (!entry) {
       if (event.type !== 'delta' && event.type !== 'replay') return undefined; // late done/error, status
       const speaker = typeof event.meta?.speaker === 'string' ? event.meta.speaker : undefined;
-      entry = { stream: new StreamText(event.requestId), channel: event.channel ?? 'gm', speaker };
+      entry = { stream: new StreamText(event.requestId), channel: event.channel ?? GM_CHANNEL, speaker };
       this.streams.set(event.requestId, entry);
       created = true;
     }

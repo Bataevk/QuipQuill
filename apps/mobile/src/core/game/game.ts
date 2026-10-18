@@ -27,6 +27,7 @@ import { TranscriptStore, type TranscriptLine } from '../agent/transcript';
 import type { Character, SaveRecord } from '../library/app-db';
 import type { Library } from '../library/library';
 import type { CloudSocket } from '../net/cloud-socket';
+import { entityIdOf, GM_CHANNEL } from '../protocol/channels';
 import { QueueChatModel } from '../net/queue-chat-model';
 import type { ServerEvent } from '../protocol/messages';
 import { type ActionUsage, addUsage, emptyUsage, UsageMeter } from '../protocol/usage-meter';
@@ -131,7 +132,7 @@ export class Game {
     const models: GameModels =
       init.services.models?.(init.save.id) ??
       queueModels(
-        new QueueChatModel({ socket: init.services.socket, sessionId: init.save.id, channel: 'gm', purpose: 'gm' }),
+        new QueueChatModel({ socket: init.services.socket, sessionId: init.save.id, channel: GM_CHANNEL, purpose: 'gm' }),
       );
     const embeddings = init.embeddings;
     this.background = new BackgroundWork({ around: (work) => this.meteredBackground(work) });
@@ -295,12 +296,11 @@ export class Game {
 
   /** The name to show for a channel: 'gm' → undefined (the narrator), 'npc:<id>' → its name. */
   async speakerOf(channel: string): Promise<string | undefined> {
-    if (!channel.startsWith('npc:')) return undefined;
+    const id = entityIdOf(channel);
+    if (!id) return undefined;
     const cached = this.names.get(channel);
     if (cached) return cached;
-    const id = channel.slice('npc:'.length);
-    const entity = (await this.world.state.entity(id)) ?? (await this.world.state.entity(channel));
-    const name = entity?.name ?? id;
+    const name = (await this.world.state.entity(id))?.name ?? id.replace(/^npc:/, '');
     this.names.set(channel, name);
     return name;
   }

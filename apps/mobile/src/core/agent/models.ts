@@ -1,6 +1,6 @@
 import type { QueueChatModel } from '../net/queue-chat-model';
 import type { Entity } from '../world/model';
-import { actorChannel } from './actor';
+import { actorChannel, GM_CHANNEL } from '../protocol/channels';
 import { CHARACTER_RESPONSE_FORMAT } from './character';
 import { NOTE_ENTITY_RESPONSE_FORMAT } from './entity-memory';
 import { GENERATOR_RESPONSE_FORMAT } from './generator';
@@ -13,7 +13,7 @@ import { GUARD_RESPONSE_FORMAT } from './middleware/guard';
 export function queueModels(base: QueueChatModel) {
   const plain = { tools: undefined, responseFormat: undefined, meta: undefined };
   return {
-    model: base.with({ ...plain, channel: 'gm', purpose: 'gm' }),
+    model: base.with({ ...plain, channel: GM_CHANNEL, purpose: 'gm' }),
     guardModel: base.with({ ...plain, channel: 'guard', purpose: 'guard', responseFormat: GUARD_RESPONSE_FORMAT }),
     summaryModel: base.with({ ...plain, channel: 'system', purpose: 'summary' }),
     /** Character adaptation before the story (its own chat, ADR 37). */

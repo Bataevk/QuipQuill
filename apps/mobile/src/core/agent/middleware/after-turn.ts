@@ -1,5 +1,5 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, type BaseMessage } from '@langchain/core/messages';
+import type { BaseMessage } from '@langchain/core/messages';
 import { createMiddleware } from 'langchain';
 
 import type { StoryMeta } from '../../story/story-meta';
@@ -8,8 +8,7 @@ import type { BackgroundWork } from '../background';
 import type { ChatStore } from '../chat-store';
 import { noteEntities } from '../entity-memory';
 import { generate, type GeneratorResult } from '../generator';
-import { sourceOf, turnOf, turnStart } from '../messages';
-import { actorOf } from './packs';
+import { isGuardReply, masterReplies, messagesOf, sourceOf, turnOf, turnStart } from '../messages';
 
 /** The limit of each background call: the next action waits for it at most this long. */
 export const AFTER_TURN_TIMEOUT_MS = 30_000;
@@ -39,9 +38,7 @@ export function afterTurnMiddleware(options: AfterTurnOptions) {
   return createMiddleware({
     name: 'AfterTurn',
     afterAgent: (state) => {
-      // The afterAgent state type leaves out the built-in messages, though they are there.
-      const { messages } = state as unknown as { messages: BaseMessage[] };
-      const turn = turnToSettle(messages);
+      const turn = turnToSettle(messagesOf(state));
       if (turn) startAfterTurn(options, turn);
       return;
     },
@@ -62,9 +59,9 @@ export function turnToSettle(messages: BaseMessage[]): SettledTurn | undefined {
   const input = messages[start];
   const turn = input ? turnOf(input) : undefined;
   if (!input || turn === undefined || sourceOf(input) !== 'player') return undefined;
-  const said = messages.slice(start).filter((m) => AIMessage.isInstance(m) && !actorOf(m)) as AIMessage[];
-  if (said.some((m) => m.response_metadata?.guard === 'reject')) return undefined;
-  const reply = said.flatMap((m) => (m.text.trim() ? [m.text.trim()] : [])).join('\n\n');
+  const said = masterReplies(messages.slice(start));
+  if (said.some(isGuardReply)) return undefined;
+  const reply = said.map((m) => m.text.trim()).join('\n\n');
   return { turn, input: input.text, reply };
 }
 

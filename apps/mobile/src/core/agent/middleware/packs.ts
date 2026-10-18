@@ -3,25 +3,20 @@ import { createMiddleware } from 'langchain';
 
 import type { Entity } from '../../world/model';
 import type { World } from '../../world/world';
-import { type ActorDeps, actorChannel, actorSystemMessage, askedOf, isSilence, SILENCE } from '../actor';
-import { estimateTokens, turnStart, withCacheBreakpoints } from '../messages';
-
-/** `additional_kwargs` key of an entity's own line written in the actor pack: `{ id, name }`. */
-const ACTOR_LINE = 'qq_actor';
-/** `additional_kwargs` key of a line that could not be written: the reason. */
-const ACTOR_FAILED = 'qq_actor_failed';
+import { actorChannel } from '../../protocol/channels';
+import { type ActorDeps, actorSystemMessage, askedOf, isSilence, SILENCE } from '../actor';
+import {
+  actorFailureOf,
+  actorLine,
+  actorOf,
+  currentTurn,
+  type EntityRef,
+  estimateTokens,
+  withCacheBreakpoints,
+} from '../messages';
 
 /** The most of an entity's chat the actor pack sends; the background notes keep it near 4K. */
 const ENTITY_CHAT_CAP_TOKENS = 8_000;
-
-type Ref = { id: string; name: string };
-
-/** The entity whose line this is (written in the actor pack), or undefined. */
-export function actorOf(message: BaseMessage | undefined): Ref | undefined {
-  if (!message || !AIMessage.isInstance(message)) return undefined;
-  const ref = message.additional_kwargs?.[ACTOR_LINE] as Ref | undefined;
-  return ref && typeof ref.id === 'string' ? ref : undefined;
-}
 
 /**
  * Which pack the next model call of the turn is in (ADR 43, 45), from the turn's messages alone
@@ -31,10 +26,10 @@ export function actorOf(message: BaseMessage | undefined): Ref | undefined {
  * - **standard** otherwise: the master, with his usual prompt and tools (ADR 46: nothing is
  *   added after a line, so the cached prefix holds).
  */
-export type Pack = { kind: 'standard' } | { kind: 'actor'; entity: Ref; situation: string };
+export type Pack = { kind: 'standard' } | { kind: 'actor'; entity: EntityRef; situation: string };
 
 export function packOf(messages: BaseMessage[]): Pack {
-  const turn = messages.slice(Math.max(turnStart(messages), 0));
+  const turn = currentTurn(messages);
   const at = turn.findLastIndex((m) => AIMessage.isInstance(m) && !actorOf(m));
   if (at >= 0) {
     const asked = turn[at] as AIMessage;
@@ -55,9 +50,9 @@ export function packOf(messages: BaseMessage[]): Pack {
 function shownLine(message: BaseMessage): BaseMessage {
   const ref = actorOf(message);
   if (!ref) return message;
-  const failed = message.additional_kwargs?.[ACTOR_FAILED];
+  const failed = actorFailureOf(message);
   const content = failed
-    ? `Error: ${ref.name} [${ref.id}] could not react right now (${String(failed)}). Narrate around it.`
+    ? `Error: ${ref.name} [${ref.id}] could not react right now (${failed}). Narrate around it.`
     : message.text.trim()
       ? `${ref.name} [${ref.id}]: ${message.text.trim()}`
       : `${ref.name} [${ref.id}] does not react.`;
@@ -108,15 +103,14 @@ export function packsMiddleware({ world, chats, model }: PacksOptions) {
       const pack = packOf(request.messages);
       if (pack.kind === 'actor') {
         const signal = request.runtime?.signal;
-        const tag = (extra: Record<string, unknown>) => ({ [ACTOR_LINE]: pack.entity, ...extra });
         try {
           const entity = await world.state.entity(pack.entity.id);
           if (!entity) throw new Error('it is gone');
           const text = await speak(entity, pack.situation, signal);
-          return new AIMessage({ content: text, additional_kwargs: tag({}) });
+          return actorLine(pack.entity, text);
         } catch (error) {
           if (signal?.aborted) throw error;
-          return new AIMessage({ content: '', additional_kwargs: tag({ [ACTOR_FAILED]: (error as Error).message }) });
+          return actorLine(pack.entity, '', (error as Error).message);
         }
       }
       return handler({ ...request, messages: request.messages.map(shownLine) });

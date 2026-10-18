@@ -1,7 +1,7 @@
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 import { createMiddleware } from 'langchain';
 
-import { answeredIds, turnStart } from '../messages';
+import { answeredIds, blockedResult, currentTurn, isBlocked } from '../messages';
 
 /** Tool calls the master may run in one turn (agent.md). */
 export const MAX_TOOL_CALLS_PER_TURN = 8;
@@ -26,24 +26,15 @@ export function toolLimitMiddleware(limit = MAX_TOOL_CALLS_PER_TURN) {
         const last = messages[at];
         if (!last || !AIMessage.isInstance(last) || !last.tool_calls?.length) return undefined;
         if (messages.slice(at + 1).some((m) => !ToolMessage.isInstance(m))) return undefined;
-        const turn = messages.slice(Math.max(turnStart(messages), 0), at);
-        const results = turn.filter((m) => ToolMessage.isInstance(m));
-        const blockedBefore = results.some((m) => m.additional_kwargs?.qq_blocked === true);
-        const used = results.filter((m) => m.additional_kwargs?.qq_blocked !== true).length;
+        // Everything after `at` is a tool result (checked above), so the turn starts before it.
+        const results = currentTurn(messages.slice(0, at)).filter((m) => ToolMessage.isInstance(m));
+        const blockedBefore = results.some(isBlocked);
+        const used = results.filter((m) => !isBlocked(m)).length;
         const answered = answeredIds(messages);
         const pending = last.tool_calls.filter((call) => !call.id || !answered.has(call.id));
         const allowed = Math.max(0, limit - used);
         if (pending.length <= allowed) return undefined;
-        const blocked = pending.slice(allowed).map(
-          (call) =>
-            new ToolMessage({
-              tool_call_id: call.id ?? '',
-              name: call.name,
-              status: 'error',
-              content: TOOL_LIMIT_TEXT,
-              additional_kwargs: { qq_blocked: true },
-            }),
-        );
+        const blocked = pending.slice(allowed).map((call) => blockedResult(call, TOOL_LIMIT_TEXT));
         if (allowed > 0) return { messages: blocked }; // the allowed calls still run
         return { messages: blocked, jumpTo: blockedBefore ? ('end' as const) : ('model' as const) };
       },

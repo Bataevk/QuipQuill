@@ -1,3 +1,4 @@
+import { GM_CHANNEL, isActorChannel } from './channels';
 import type { ServerEvent } from './messages';
 
 /** What one action (a turn, a proposal) cost, from the `usage` of each `done` (stage 6.1). */
@@ -76,7 +77,7 @@ export class UsageMeter {
     if (event.type !== 'done' || !this.started.has(event.requestId) || this.counted.has(event.requestId)) return;
     this.counted.add(event.requestId);
     const { usage } = event;
-    const channel = event.channel?.startsWith('npc:') ? 'npc' : (event.channel ?? 'gm');
+    const channel = isActorChannel(event.channel) ? 'npc' : (event.channel ?? GM_CHANNEL);
     const call: ChannelUsage = {
       calls: 1,
       costUsd: usage.costUsd,

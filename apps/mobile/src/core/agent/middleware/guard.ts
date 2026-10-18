@@ -6,8 +6,7 @@ import { z } from 'zod';
 import { DRAFT_TYPES, lowerTypes } from '../../world/model';
 import type { World } from '../../world/world';
 import { LIKELIHOODS, SURE_LIKELIHOODS } from '../luck';
-import { CACHE, CACHE_LONG, sourceOf, turnStart } from '../messages';
-import { actorOf } from './packs';
+import { actorOf, CACHE, CACHE_LONG, currentTurn, guardReply, messagesOf, sourceOf } from '../messages';
 import { renderWorldState } from '../prompt';
 import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from '../structured';
 
@@ -103,21 +102,13 @@ export function guardMiddleware(options: GuardOptions) {
           return undefined;
         }
         return {
-          messages: [
-            new AIMessage({
-              content: verdict.reply.trim(),
-              response_metadata: { guard: 'reject', reason: verdict.reason },
-            }),
-          ],
+          messages: [guardReply(verdict.reply.trim(), verdict.reason)],
           jumpTo: 'end' as const,
         };
       },
     },
     afterAgent: async (state) => {
-      // The afterAgent state type leaves out the built-in messages, though they are there.
-      const { messages } = state as unknown as { messages: BaseMessage[] };
-      const own = messages.slice(Math.max(turnStart(messages), 0));
-      const narration = own.flatMap((m) => (AIMessage.isInstance(m) ? [m.text] : [])).join('\n');
+      const narration = currentTurn(messagesOf(state)).flatMap((m) => (AIMessage.isInstance(m) ? [m.text] : [])).join('\n');
       await settleDrafts(options.world, narration, options.onError);
     },
   });

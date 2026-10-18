@@ -9,6 +9,7 @@ import { Button, ErrorText, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { CharacterOption } from '@/core/agent/character';
 import { PROPOSAL_CARD } from '@/core/agent/session';
+import { isActorChannel } from '@/core/protocol/channels';
 import { useGame } from '@/hooks/use-game';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -134,7 +135,7 @@ export default function GameScreen() {
 function Bubble({ speaker, name, text }: { speaker: string; name?: string; text: string }) {
   const theme = useTheme();
   const player = speaker === 'player';
-  const npc = speaker.startsWith('npc:');
+  const npc = isActorChannel(speaker);
   return (
     <View
       style={[

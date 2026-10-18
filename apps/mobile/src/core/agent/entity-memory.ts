@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import type { Entity, WorldEvent } from '../world/model';
 import type { World } from '../world/world';
-import { actorChannel } from './actor';
+import { actorChannel } from '../protocol/channels';
 import { ChatSync, type ChatStore } from './chat-store';
 import { estimateTokens } from './messages';
 import { brief } from './prompt';
