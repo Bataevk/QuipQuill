@@ -13,6 +13,7 @@ import { NameBook, resolveName, type Resolution } from '../world/names';
 import type { World } from '../world/world';
 import { DEFAULT_LUCK } from '../story/story-meta';
 import { type ActorDeps, reactionAsked } from './actor';
+import type { EntityRef } from './messages';
 import { LIKELIHOODS, type Likelihood, type LuckOutcome, rollLuck, STAKES, type Stakes } from './luck';
 import { brief } from './prompt';
 
@@ -56,17 +57,19 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
   // The agent may run several tool calls of one model reply concurrently; world commands must
   // apply in the order the model wrote them (move, then take).
   const run = serial();
-  const guarded =
-    <A>(name: string, body: (args: A, signal?: AbortSignal) => Promise<string>) =>
+  const guardedAs =
+    <A, R>(name: string, body: (args: A, signal?: AbortSignal) => Promise<R>, onError: (text: string) => R) =>
     (args: A, config?: { signal?: AbortSignal }) =>
       run(async () => {
         try {
           return await body(args, config?.signal);
         } catch (error) {
           const reason = (error as Error).message;
-          return `Error: ${name} failed unexpectedly (${reason}). Narrate around it; do not retry.`;
+          return onError(`Error: ${name} failed unexpectedly (${reason}). Narrate around it; do not retry.`);
         }
       });
+  const guarded = <A>(name: string, body: (args: A, signal?: AbortSignal) => Promise<string>) =>
+    guardedAs(name, body, (text) => text);
 
   const inspect = tool(
     guarded('inspect', async ({ target }: { target: string }) => {
@@ -203,16 +206,21 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
   );
 
   const reactEntityTool = tool(
-    guarded('react_entity', async ({ target }: { target: string; situation: string }) => {
-      if (!actor) return 'Error: nothing can react right now. Narrate around it.';
-      const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
-      const found = resolveName(target, nearby);
-      if (found.kind === 'ambiguous') return ambiguous(target, found);
-      if (found.kind === 'none') return `Error: there is no "${target}" here to react.`;
-      return reactionAsked(found.entity);
-    }),
+    guardedAs(
+      'react_entity',
+      async ({ target }: { target: string; situation: string }): Promise<[string, EntityRef | undefined]> => {
+        if (!actor) return ['Error: nothing can react right now. Narrate around it.', undefined];
+        const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
+        const found = resolveName(target, nearby);
+        if (found.kind === 'ambiguous') return [ambiguous(target, found), undefined];
+        if (found.kind === 'none') return [`Error: there is no "${target}" here to react.`, undefined];
+        return reactionAsked(found.entity);
+      },
+      (text): [string, EntityRef | undefined] => [text, undefined],
+    ),
     {
       name: 'react_entity',
+      responseFormat: 'content_and_artifact',
       description:
         'Let something here react, in its own words and/or deeds, to what just happened: a person, a creature, ' +
         'anything that might perceive (a magic mirror, a watchful statue) — here or in the inventory. Use it ' +

@@ -38,7 +38,7 @@ export function packOf(messages: BaseMessage[]): Pack {
     const done = (asked.tool_calls ?? []).every((call) => call.id && results.has(call.id));
     const spoke = after.flatMap((m) => actorOf(m) ?? []);
     for (const call of done ? (asked.tool_calls ?? []) : []) {
-      const entity = call.name === 'react_entity' ? askedOf(results.get(call.id!)!.text) : undefined;
+      const entity = call.name === 'react_entity' ? askedOf(results.get(call.id!)!) : undefined;
       if (!entity || spoke.some((s) => s.id === entity.id)) continue;
       return { kind: 'actor', entity, situation: String(call.args.situation ?? '') };
     }

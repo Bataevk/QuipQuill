@@ -7,11 +7,12 @@
  * (entity-memory.ts). It never changes the world itself.
  */
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { SystemMessage } from '@langchain/core/messages';
+import { SystemMessage, type ToolMessage } from '@langchain/core/messages';
 
 import { type Entity, isBeing } from '../world/model';
 import type { World } from '../world/world';
 import type { ChatStore } from './chat-store';
+import type { EntityRef } from './messages';
 import { brief } from './prompt';
 
 export const SILENCE = '[silence]';
@@ -29,14 +30,22 @@ export interface ActorDeps {
   chats: ChatStore;
 }
 
-/** What react_entity returns to the master; the actor pack finds the entity by it. */
-export function reactionAsked(entity: Entity): string {
-  return `${entity.name} [${entity.id}] reacts now.`;
+/**
+ * What react_entity returns: the text for the master, and the entity as the tool result's
+ * artifact — the actor pack finds it there.
+ */
+export function reactionAsked(entity: Entity): [string, EntityRef] {
+  return [`${entity.name} [${entity.id}] reacts now.`, { id: entity.id, name: entity.name }];
 }
 
-/** The entity a react_entity result asked to react; none for an error. */
-export function askedOf(result: string): { id: string; name: string } | undefined {
-  const match = /^(.+) \[([^\]]+)\] reacts now\.$/.exec(result);
+/**
+ * The entity a react_entity result asked to react; none for an error. Results saved before
+ * stage R.5 have no artifact: their text is read instead.
+ */
+export function askedOf(result: ToolMessage): EntityRef | undefined {
+  const ref = result.artifact as Partial<EntityRef> | undefined;
+  if (typeof ref?.id === 'string' && typeof ref.name === 'string') return { id: ref.id, name: ref.name };
+  const match = /^(.+) \[([^\]]+)\] reacts now\.$/.exec(result.text);
   return match ? { name: match[1], id: match[2] } : undefined;
 }
 

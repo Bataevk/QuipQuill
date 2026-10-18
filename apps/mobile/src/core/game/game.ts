@@ -108,7 +108,7 @@ export class Game {
   /** The generator and entity memory after a player's turn (AfterTurn middleware, stage 6.2i). */
   private readonly background: BackgroundWork;
   private readonly afterTurn: AfterTurnOptions;
-  /** The running action's metering; background work adds its cost after it. */
+  /** Resolves when every action started so far has its metering done; background work adds its cost after. */
   private acting: Promise<void> = Promise.resolve();
   private readonly generatedListeners = new Set<() => void>();
 
@@ -316,20 +316,17 @@ export class Game {
   }
 
   /** Counts what the generations of one action cost (`lastUsage`, `sessionUsage`). */
-  private async metered<T>(work: () => Promise<T>): Promise<T> {
-    const meter = new UsageMeter();
-    const off = this.onStream((event) => meter.apply(event));
-    let done!: () => void;
-    this.acting = new Promise((resolve) => (done = resolve));
-    try {
-      return await work();
-    } finally {
-      off();
+  private metered<T>(work: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const finished = new Promise<void>((resolve) => (release = resolve));
+    // Chained, not replaced: background work waits for every action in flight, not only the last.
+    this.acting = Promise.all([this.acting, finished]).then(() => undefined);
+    return this.measure(work, (usage) => {
       this.actions += 1;
-      this.lastUsage = meter.total;
-      this.sessionUsage = addUsage(this.sessionUsage, meter.total);
-      done();
-    }
+      this.lastUsage = usage;
+      this.sessionUsage = addUsage(this.sessionUsage, usage);
+      release();
+    });
   }
 
   /**
@@ -352,17 +349,24 @@ export class Game {
    * Meters one background job: its cost joins the turn's (`lastUsage`) once the turn's own
    * metering is done, then `onGenerated` listeners hear of it.
    */
-  private async meteredBackground(work: () => Promise<void>): Promise<void> {
+  private meteredBackground(work: () => Promise<void>): Promise<void> {
+    return this.measure(work, async (usage) => {
+      await this.acting;
+      this.lastUsage = addUsage(this.lastUsage ?? emptyUsage(), usage);
+      this.sessionUsage = addUsage(this.sessionUsage, usage);
+      this.generatedListeners.forEach((listener) => listener());
+    });
+  }
+
+  /** Runs `work` while counting this playthrough's generations; `done` gets their cost, failed or not. */
+  private async measure<T>(work: () => Promise<T>, done: (usage: ActionUsage) => void | Promise<void>): Promise<T> {
     const meter = new UsageMeter();
     const off = this.onStream((event) => meter.apply(event));
     try {
-      await work();
+      return await work();
     } finally {
       off();
-      await this.acting;
-      this.lastUsage = addUsage(this.lastUsage ?? emptyUsage(), meter.total);
-      this.sessionUsage = addUsage(this.sessionUsage, meter.total);
-      this.generatedListeners.forEach((listener) => listener());
+      await done(meter.total);
     }
   }
 

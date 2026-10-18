@@ -1,4 +1,4 @@
-import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CloudSocket } from '@/core/net/cloud-socket';
@@ -14,6 +14,7 @@ import { actorSystemMessage, SILENCE } from './actor';
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
+import { inputMessage } from './messages';
 import { isUnfinished, retryTurn, runTurn } from './run-turn';
 import { conversation, lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
@@ -202,6 +203,26 @@ describe('react_entity and the actor pack (ADR 45)', () => {
     expect(promptOf(0)[1].text).toContain('Also here: Mags Holloway.');
   });
 
+  it('finds the entity by the tool result artifact, brackets in its name or not (R.5)', async () => {
+    const id = 'npc:mirror-cracked';
+    says(id, '"Who dares?"');
+    const result = await play(
+      'I knock on the glass.',
+      {
+        toolCalls: [
+          call('set_entity', { name: 'The Mirror [cracked]', type: 'npc', description: 'A talking mirror.' }),
+          call('react_entity', { target: id, situation: 'Someone knocks on your glass.' }),
+        ],
+      },
+      { text: 'The glass hums.' },
+    );
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted']);
+    expect(actorCalls.map((c) => c.entity.id)).toEqual([id]);
+    const asked = (await chats.load(GM_CHAT)).find((m) => ToolMessage.isInstance(m) && m.name === 'react_entity');
+    expect((asked as ToolMessage).artifact).toEqual({ id, name: 'The Mirror [cracked]' });
+    expect(asked!.text).toBe(`The Mirror [cracked] [${id}] reacts now.`);
+  });
+
   it('two react in one reply: each speaks in turn, the master answers once after both', async () => {
     says(MAGS, '"No."');
     says('npc:innkeeper', '*He wipes the table, pointedly.*');
@@ -342,6 +363,24 @@ describe('a turn cut in the middle (retryTurn)', () => {
       [MAGS, '"Shove off."'],
       ['gm', 'She turns away.'],
     ]);
+  });
+
+  it('a turn saved before R.5 (react_entity result without artifact) still reaches the actor pack', async () => {
+    world.beginTurn();
+    await chats.append(GM_CHAT, [
+      inputMessage('Hi, Mags.', 'player', 1),
+      new AIMessage({
+        content: '',
+        tool_calls: [{ id: 'c1', name: 'react_entity', args: { target: MAGS, situation: 'The recruit says hi.' } }],
+      }),
+      new ToolMessage({ tool_call_id: 'c1', name: 'react_entity', content: 'Mags Holloway [npc:mags-holloway] reacts now.' }),
+    ]);
+    says(MAGS, '"Shove off."');
+    master.push({ text: 'She turns away.' });
+    const result = await retry();
+    expect(actorCalls.map((c) => c.entity.id)).toEqual([MAGS]);
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted']);
+    expect(result.reply).toBe('She turns away.');
   });
 
   it('cut after the reaction was journaled but before the line was saved: it is not asked twice', async () => {

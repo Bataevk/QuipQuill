@@ -165,7 +165,8 @@ function withBreakpoint(message: BaseMessage): BaseMessage {
   const content = [{ type: 'text' as const, text: message.text, cache_control: CACHE }];
   const common = { id: message.id, content, additional_kwargs: message.additional_kwargs };
   if (ToolMessage.isInstance(message)) {
-    return new ToolMessage({ ...common, tool_call_id: message.tool_call_id, name: message.name, status: message.status });
+    const { tool_call_id, name, status, artifact } = message;
+    return new ToolMessage({ ...common, tool_call_id, name, status, artifact });
   }
   if (AIMessage.isInstance(message)) {
     return new AIMessage({

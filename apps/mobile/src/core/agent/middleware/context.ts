@@ -177,6 +177,7 @@ function shorten(message: BaseMessage): BaseMessage {
     tool_call_id: message.tool_call_id,
     name: message.name,
     status: message.status,
+    artifact: message.artifact,
     additional_kwargs: message.additional_kwargs,
     content: `${message.text.slice(0, MAX_TOOL_CHARS)}… [cut]`,
   });
