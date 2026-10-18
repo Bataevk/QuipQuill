@@ -63,6 +63,13 @@
 | 6.2k | Черновики Guard и восстановление фона | ✅ | 7 |
 | 6.2 | Настройка промптов по сценариям | — | 7 |
 | 6.3 | Сборки и деплой | ▶ | 5 |
+| **R** | **Рефакторинг** | | |
+| R.1 | Структурированные вызовы LLM: общий помощник | — | 8 |
+| R.2 | Словарь модели мира: типы сущностей, связей, акторов | — | 8 |
+| R.3 | Сообщения хода и каналы | — | 8 |
+| R.4 | Чистка `World` | — | 8 |
+| R.5 | Связь react_entity → актёр, учёт стоимости в `Game` | — | 8 |
+| R.6 | Cloud и builder: маршрутизация событий, сервисы, обработчик LLM | — | 8 |
 | **7+** | **После прототипа (MVP)** | см. [backlog.md](backlog.md) | |
 
 ### Параллельные дорожки
@@ -354,3 +361,79 @@ graph LR
 ### 6.3 Сборки и деплой
 - **Сделать:** иконка, сплэш, название; `eas.json` (development / preview); сборка TestFlight или Ad Hoc для iOS и APK для Android; деплой cloud на VPS (docker compose + Caddy для TLS) — ✅ вместе с CI/CD, см. [deploy](../notes/deploy.md); `docs/notes/demo-script.md` — сценарий показа инвестору.
 - **Готово, когда:** партнёр ставит приложение на свой телефон и проходит демо против облака.
+
+---
+
+## Фаза R. Рефакторинг
+
+По итогам инспекции кода (2026-10-18). Цель фазы — убрать дублирование и строковые соглашения, которые накопились за этапы 4–6. Поведение игры не меняется.
+
+Общие правила для всех этапов R:
+- **Тексты промптов и описания инструментов не трогать** (байт в байт): от них зависят поведение модели и кэш префикса (ADR 46, 49). Если правка всё-таки меняет текст, который уходит модели, это отдельное решение владельца.
+- Схемы сохранения и протокол не меняются; старые сохранения открываются как раньше.
+- До начала и после этапа зелёные `npx tsc --noEmit`, `npx expo lint` и `npm test` в `apps/mobile`, а для Python — `make cloud-test`, `make cloud-lint`, `uv run pytest` и `uv run ruff check` в `builder/`. Исходное состояние на 2026-10-18: 200 тестов ядра зелёные, ruff чистый, у линтера одно предупреждение (`names` в `world.ts`).
+- Этапы независимы, кроме R.3 → R.5 (R.5 опирается на помощники сообщений из R.3). Каждый этап — отдельный коммит.
+
+### R.1 Структурированные вызовы LLM: общий помощник
+- **Цель:** у вызовов со структурным ответом одна реализация таймаута, разбора и схемы.
+- **Читать:** ADR 10, 49; `src/core/agent/character.ts`, `generator.ts`, `entity-memory.ts`, `middleware/guard.ts`, `middleware/context.ts`; заметку backlog (ADR 49) о вызовах без `response_format`.
+- **Сделать:**
+  - `src/core/agent/structured.ts`:
+    - `invokeWithTimeout(model, messages, { timeoutMs, signal })` — сейчас пара `AbortSignal.timeout` + `AbortSignal.any` повторяется в пяти местах;
+    - `parseJsonAnswer(schema, text)` — снятие ограды ```` ```json ````, `JSON.parse` и zod; сейчас одно и то же регулярное выражение есть в четырёх файлах.
+  - `response_format` строить из zod-схемы (`z.toJSONSchema`, zod 4), а не писать JSON Schema руками рядом с zod-схемой (`CHARACTER_`, `GENERATOR_`, `NOTE_ENTITY_`, `GUARD_RESPONSE_FORMAT`). Strict-режим требует, чтобы все поля были в `required` и было `additionalProperties: false`, — проверить на полях с `.default()`. Если сгенерированная схема не совпадает с нынешней, оставить ручную и добавить тест на соответствие zod.
+  - Помощник не должен зависеть от `response_format`, чтобы проверку из backlog (JSON в тексте, без структурного ответа) можно было сделать одним флагом.
+- **Готово, когда:** в `agent/` нет копий разбора JSON и пары таймаут + signal вне `structured.ts`; снапшот-тест: четыре `response_format` равны прежним (или осознанно отличаются, и это записано в `spikes.md` с живым прогоном `npm run test:cloud`); тесты, `tsc` и линтер зелёные.
+
+### R.2 Словарь модели мира: типы сущностей, связей, акторов
+- **Цель:** наборы типов и строки связей определены в одном месте, а одно имя не означает разные вещи.
+- **Читать:** [data-model](../architecture/data-model.md), ADR 42, 43, 47; `src/core/world/model.ts`, `world.ts`, `state.ts`; `src/core/agent/tools.ts`, `generator.ts`, `prompt.ts`, `actor.ts`, `luck.ts`, `middleware/guard.ts`.
+- **Сделать:**
+  - Перенести в `world/model.ts` общие наборы типов и предикаты (`isBeing`, `isPortable`, `isContainerLike`) вместо локальных `ADDABLE`, `PORTABLE`, `BEINGS`, `CREATABLE`, `EXPECTED_TYPES`. Сейчас они разбросаны по `world.ts`, `tools.ts`, `generator.ts` и `guard.ts`, причём `BEINGS` в `tools.ts` включает `PLAYER`, а в `world.ts` и `generator.ts` — нет. Заодно заменить фильтры `type === 'NPC' || type === 'CREATURE'` в `actor.ts` и `world.ts`, а также проверки «контейнероподобного» в `state.ts`, `prompt.ts` и `world.ts`. Варианты в нижнем регистре для zod и инструментов выводить из этих же наборов.
+  - Перенести `SURE` (certain, likely) из `guard.ts` и `generator.ts` в `luck.ts`.
+  - Сузить `Actor = string` до ``'gm' | 'generator' | 'guard' | 'system' | `npc:${string}` ``, а для строк связей завести `RelationType` (`LOCATED_IN`, `HAS_ITEM`, `LEADS_TO` и типы из `TIE_TYPES`).
+  - Убрать два разных типа с именем `Tie` (`state.ts` и `model.ts`): один переименовать, например в `TieView`. «Связь-отношение» определять одинаково: `state.ties()` (`NOT IN (...)`) и `World.tiesBetween()` (`TIE_TYPES`) должны брать один источник. Исправить устаревший комментарий у `TIE_TYPES` (там ещё упоминаются move, take, drop, move_npc).
+  - Объединить `eventIds` (`prompt.ts`) и `idsOf` (`generator.ts`) в одну функцию. Объединить кэш «id → имя» из `tools.ts` (`name`), `generator.ts` и `prompt.ts` в общий помощник.
+- **Готово, когда:** `grep` по `agent/` и `world/` не находит локальных наборов типов и сравнений `=== 'NPC'`; `tsc` проходит с новыми типами `Actor` и `RelationType`; тесты и линтер зелёные.
+
+### R.3 Сообщения хода и каналы
+- **Цель:** соглашения о сообщениях хода и каналах (`npc:`) живут в одном модуле, а не в виде строк по всему коду.
+- **Читать:** ADR 35, 43, 45, 46; `src/core/agent/messages.ts`, `run-turn.ts`, `middleware/` (`guard`, `after-turn`, `packs`, `tool-limit`, `context`); `src/core/protocol/live-feed.ts`, `usage-meter.ts`; `src/core/game/game.ts`; `src/app/game/[id].tsx`.
+- **Сделать:**
+  - В `messages.ts`:
+    - `currentTurn(messages)` вместо шести копий `messages.slice(Math.max(turnStart(messages), 0))`;
+    - `masterTexts(turn)` — текст мастера за ход без реплик актёров. Сейчас он собирается тремя способами: `play` в `run-turn.ts`, `turnToSettle`, `afterAgent` в Guard;
+    - маркеры с проверками: отказ Guard (`response_metadata.guard === 'reject'` в пяти местах), `qq_blocked` (ToolLimit и run-turn) — по образцу `qq_source` и `qq_turn`;
+    - `messagesOf(state)` — одно место для приведения типа в `afterAgent` (сейчас `as unknown as` в Guard и AfterTurn).
+  - `src/core/protocol/channels.ts`: `GM_CHANNEL`, `actorChannel(id)`, `entityIdOf(channel)`, `isActorChannel(channel)`. Сейчас разбор `npc:` повторяется в `actor.ts`, `game.ts` (`speakerOf` с двойным поиском), `live-feed.ts`, `usage-meter.ts` и `[id].tsx`.
+- **Готово, когда:** вне `messages.ts` и `channels.ts` нет литералов `'npc:'`, `qq_blocked` и `guard: 'reject'`; тесты (в том числе повтор хода и пакеты актёров), `tsc` и линтер зелёные.
+
+### R.4 Чистка `World`
+- **Цель:** `world.ts` (~720 строк) без повторов и мёртвого кода; правила команд читаются без лишнего шума.
+- **Читать:** ADR 29, 42, 43, 48; `src/core/world/world.ts`, `state.ts`, `names.ts`, `dynamic-graph.ts`; `world.test.ts`.
+- **Сделать:**
+  - `appendNote(text, entity?)` — одна выдача id заметки (`max(id) + 1`) вместо копий в `addNote` и `addActorNote`.
+  - `moveInto(db, seq, id, target)` — пара `unplace`/`unlocate` + `relate`, которая повторяется пять раз (`walk`, `npc.moved`, `item.dropped`, `item.moved`, `give`).
+  - `hereOf(state, player)` с отказом «The player is nowhere…» вместо четырёх копий. Текст ошибки для модели тот же.
+  - Убрать неиспользуемый параметр `player` у `find` и `pair`. Заменить `command('gm' | 'system', …)`: аргумент на деле означает «нужен ли игрок», журналируется же `this.actor`. Удалить мёртвую функцию `names()` (предупреждение линтера).
+  - Перенести `WorldState.resolve` (чистая функция, БД не нужна) в `names.ts`. Объединить форматирование неоднозначного ответа: сейчас оно есть в `world.ts` (`pick`, формат `(id)`) и дважды в `tools.ts` (`[id]`). Формат текста для модели не меняется.
+  - По желанию, если файл всё ещё большой: вынести правила размещения (`place`, `walk`, `give`, `take`) в `world/placement.ts`.
+- **Готово, когда:** все прежние тесты мира и агента зелёные без правок ожиданий (тексты ошибок для модели те же); линтер без предупреждений; `tsc`.
+
+### R.5 Связь react_entity → актёр, учёт стоимости в `Game`
+- **Цель:** пакет актёра узнаёт сущность из данных, а не из разбора текста; учёт стоимости в `Game` без копий.
+- **Читать:** ADR 43, 45; `src/core/agent/actor.ts` (`reactionAsked` / `askedOf`), `middleware/packs.ts` (`packOf`), `tools.ts`, `chat-store.ts`; `src/core/game/game.ts` (`metered`, `meteredBackground`).
+- **Сделать:**
+  - Сейчас `react_entity` возвращает строку «Name [id] reacts now.», а `packOf` разбирает её регулярным выражением; имя с `]` или правка текста ломают связь. Перейти на `responseFormat: 'content_and_artifact'`: текст для модели прежний, `{ id, name }` — в `ToolMessage.artifact`. Сначала проверить, что `artifact` переживает `ChatStore` (`mapChatMessagesToStoredMessages`). Если нет — хранить его в `additional_kwargs`, как `qq_actor`. Старые истории (без artifact) читать прежним разбором текста.
+  - `Game`: общая обёртка для `metered` и `meteredBackground` (подписка на поток, `UsageMeter`, сложение). Цепочку `acting` сделать явной, чтобы второе действие не перезаписывало обещание первого.
+- **Готово, когда:** тест — сущность с `]` в имени реагирует; тест — сохранённый ход в старом формате повторяется (`retryTurn`); тесты игры и стоимости зелёные; `tsc` и линтер.
+
+### R.6 Cloud и builder: маршрутизация событий, сервисы, обработчик LLM
+- **Цель:** в облаке зависимости явные и типизированные, адрес события собирается в одном месте, обработчик LLM читается по шагам.
+- **Читать:** [protocol](../architecture/protocol.md), ADR 10, 22, 49–51; `cloud/src/quipquill_cloud/main.py`, `api/ws.py`, `api/embeddings.py`, `api/health.py`, `llm/handler.py`, `llm/usage.py`, `mq/worker.py`, `mq/dispatcher.py`; `builder/src/quipquill_builder/cli.py`.
+- **Сделать:**
+  - Адрес запроса: метод `Command`/`LlmRequest` (например `route()` → `user_id`, `request_id`, `session_id`, `channel`) и `Event.for_request(...)`. Сейчас словарь `common` собирается вручную в `handler.py` и `EchoHandler`, в пути ошибки `CommandWorker`, дважды в `ws.py` и в `dispatcher._snapshot`.
+  - Типизированные `Services` (dataclass: settings, sessionmaker, llm_client, rate_limiter, dispatcher, cancels, broker) в `app.state.services` и зависимость `get_services()`. Сейчас `ws.py` больше десяти раз обращается к нетипизированному `app.state.*` через `conn.websocket.app.state`; `embeddings.py` и `health.py` делают так же. `Connection` получает dispatcher и limiter явно.
+  - Разбить `OpenRouterHandler.run` (~140 строк) на сборку тела, чтение потока и завершение (`tool_call`, учёт, `done`). Объединить `except TimeoutError` и `except openai.APITimeoutError`. Расход — `TypedDict` или dataclass вместо словаря со строковыми ключами; в `EchoHandler` добавить недостающий `cacheWrite`.
+  - builder: `load_graph`/`save_graph` вместо двух копий чтения и записи `graph.json` в `cli.py`.
+- **Готово, когда:** в `api/` нет обращений к `app.state.<сервис>` в обход `get_services()`; адрес события собирается только через `route()` / `for_request`; `make cloud-test` и `make cloud-lint`, `uv run pytest` и `uv run ruff check` в `builder/` зелёные; живой `make cloud-test-live` проходит.
