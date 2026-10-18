@@ -9,7 +9,7 @@ import { tool } from 'langchain';
 import { z } from 'zod';
 
 import { ADDABLE_TYPES, type Entity, isCarrier, lowerTypes, type Outcome, type WorldEvent } from '../world/model';
-import { NameBook } from '../world/names';
+import { NameBook, resolveName, type Resolution } from '../world/names';
 import type { World } from '../world/world';
 import { DEFAULT_LUCK } from '../story/story-meta';
 import { type ActorDeps, reactionAsked } from './actor';
@@ -71,11 +71,8 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
   const inspect = tool(
     guarded('inspect', async ({ target }: { target: string }) => {
       const visible = await world.state.visible();
-      const found = world.state.resolve(target, visible);
-      if (found.kind === 'ambiguous') {
-        const candidates = found.candidates.map((e) => `${e.name} [${e.id}]`).join(', ');
-        return `Error: "${target}" is ambiguous: ${candidates}.`;
-      }
+      const found = resolveName(target, visible);
+      if (found.kind === 'ambiguous') return ambiguous(target, found);
       const entity = found.kind === 'found' ? found.entity : await world.state.entity(target);
       if (!entity) return `Error: there is no "${target}" here or in the inventory.`;
       return describe(world, entity);
@@ -209,11 +206,8 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     guarded('react_entity', async ({ target }: { target: string; situation: string }) => {
       if (!actor) return 'Error: nothing can react right now. Narrate around it.';
       const nearby = (await world.state.visible()).filter((e) => e.type !== 'LOCATION' && e.type !== 'PLAYER');
-      const found = world.state.resolve(target, nearby);
-      if (found.kind === 'ambiguous') {
-        const candidates = found.candidates.map((e) => `${e.name} [${e.id}]`).join(', ');
-        return `Error: "${target}" is ambiguous: ${candidates}.`;
-      }
+      const found = resolveName(target, nearby);
+      if (found.kind === 'ambiguous') return ambiguous(target, found);
       if (found.kind === 'none') return `Error: there is no "${target}" here to react.`;
       return reactionAsked(found.entity);
     }),
@@ -300,6 +294,11 @@ const CREATABLE = lowerTypes(ADDABLE_TYPES);
 type Creatable = (typeof CREATABLE)[number];
 const RELATIONS = ['located_in', 'has_item', 'interacts_with', 'has_attribute'] as const;
 type RelationName = (typeof RELATIONS)[number];
+
+/** The model named something that fits several entities: ask it to choose by id. */
+function ambiguous(target: string, found: Extract<Resolution, { kind: 'ambiguous' }>): string {
+  return `Error: "${target}" is ambiguous: ${found.candidates.map((e) => `${e.name} [${e.id}]`).join(', ')}.`;
+}
 
 async function result(outcome: Outcome, success: (event: WorldEvent) => Promise<string>): Promise<string> {
   return outcome.ok ? success(outcome.value) : `Error: ${outcome.error}`;

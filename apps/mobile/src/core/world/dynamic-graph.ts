@@ -89,6 +89,24 @@ export async function unlocate(db: Db, seq: number, id: string): Promise<void> {
   for (const r of places) await unrelate(db, seq, id, r.dst, 'LOCATED_IN');
 }
 
+/** A person, a creature or the player goes to `place`: the old place goes. */
+export async function moveTo(db: Db, seq: number, id: string, place: string): Promise<void> {
+  await unlocate(db, seq, id);
+  await relate(db, seq, id, place, 'LOCATED_IN');
+}
+
+/** A thing is put in a place or a container: out of wherever it was, hands included. */
+export async function putIn(db: Db, seq: number, itemId: string, where: string): Promise<void> {
+  await unplace(db, seq, itemId);
+  await relate(db, seq, itemId, where, 'LOCATED_IN');
+}
+
+/** A thing goes into someone's hands (`holder HAS_ITEM item`): out of wherever it was. */
+export async function handTo(db: Db, seq: number, itemId: string, holder: string): Promise<void> {
+  await unplace(db, seq, itemId);
+  await relate(db, seq, holder, itemId, 'HAS_ITEM');
+}
+
 type RelationRow = { id: number; description: string };
 
 function dynamic(db: Db, src: string, dst: string, type: string): Promise<RelationRow | undefined> {

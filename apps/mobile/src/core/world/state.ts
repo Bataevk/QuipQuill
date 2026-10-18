@@ -1,6 +1,5 @@
 import type { Db } from '../storage/db';
 import { type Entity, type EntityType, type Exit, isContainerLike, type Props, TIE_TYPES, type TieType } from './model';
-import { normalizeName, similarity } from './names';
 
 type EntityRow = {
   id: string;
@@ -12,7 +11,6 @@ type EntityRow = {
 };
 
 const ENTITY_COLUMNS = 'e.id, e.type, e.subtype, e.name, e.description, e.props';
-const FUZZY_THRESHOLD = 0.8;
 
 /** A tie as one side sees it: the other side, the type, how they stand. */
 export interface TieView {
@@ -20,11 +18,6 @@ export interface TieView {
   type: TieType;
   description: string;
 }
-
-export type Resolution =
-  | { kind: 'found'; entity: Entity }
-  | { kind: 'ambiguous'; candidates: Entity[] }
-  | { kind: 'none' };
 
 /**
  * Read-only queries over the playthrough's world: the `world_*` views, where the dynamic graph
@@ -142,28 +135,6 @@ export class WorldState {
     }
     add(await this.inventory(player.id));
     return [...seen.values()];
-  }
-
-  /**
-   * Finds one entity by id or name among `among`: id → exact name → name contains / is
-   * contained → fuzzy. Several equally good matches are returned as candidates.
-   */
-  resolve(nameOrId: string, among: Entity[]): Resolution {
-    const byId = among.find((e) => e.id === nameOrId);
-    if (byId) return { kind: 'found', entity: byId };
-    const key = normalizeName(nameOrId);
-    if (!key) return { kind: 'none' };
-    const named = among.map((entity) => ({ entity, name: normalizeName(entity.name) }));
-    const stages = [
-      named.filter((n) => n.name === key),
-      named.filter((n) => n.name.includes(key) || key.includes(n.name)),
-      named.filter((n) => similarity(n.name, key) >= FUZZY_THRESHOLD),
-    ];
-    for (const matches of stages) {
-      if (matches.length === 1) return { kind: 'found', entity: matches[0].entity };
-      if (matches.length > 1) return { kind: 'ambiguous', candidates: matches.map((m) => m.entity) };
-    }
-    return { kind: 'none' };
   }
 
   private async one(sql: string, params: string[]): Promise<Entity | undefined> {

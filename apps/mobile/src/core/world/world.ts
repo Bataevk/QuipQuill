@@ -1,7 +1,7 @@
 import type { Db } from '../storage/db';
 import { nowIso } from '../util/ids';
 import type { VectorIndex } from '../vector/vector-index';
-import { forget, putEntity, relate, unlocate, unplace, unrelate } from './dynamic-graph';
+import { forget, handTo, moveTo, putEntity, putIn, relate, unrelate } from './dynamic-graph';
 import { EventLog } from './event-log';
 import { LoreVectors, type Embed } from './lore-vectors';
 import {
@@ -29,8 +29,8 @@ import {
   type TieType,
   type WorldEvent,
 } from './model';
-import { normalizeName, slugify } from './names';
-import { WorldState, type Resolution } from './state';
+import { normalizeName, type Resolution, resolveName, slugify } from './names';
+import { WorldState } from './state';
 
 export interface CharacterSheet {
   id: string | null;
@@ -190,7 +190,7 @@ export class World {
     character: CharacterSheet;
     startLocation: string;
   }): Promise<Outcome> {
-    return this.command('system', async ({ db, state, log }) => {
+    return this.transact(async ({ db, state, log }) => {
       if ((await log.count('session.started')) > 0) reject('The session has already started.');
       const playerId = PLAYER_ID;
       const event = await log.append(this.turn, 'system', 'session.started', {
@@ -219,7 +219,7 @@ export class World {
     adapted: { name?: string; race?: string; age?: number | null; description?: string };
     choice: string;
   }): Promise<Outcome> {
-    return this.command('gm', async ({ db, log }, player) => {
+    return this.command(async ({ db, log }, player) => {
       if ((await log.count('character.adapted')) > 0) reject('The character is already settled.');
       const original = (player.props.original as Props | undefined) ?? {};
       const event = await log.append(this.turn, this.actor, 'character.adapted', {
@@ -254,10 +254,10 @@ export class World {
    */
   setRelation(a: string, type: string, b: string, description = ''): Promise<Outcome> {
     const kind = type.trim().toUpperCase();
-    if (kind === 'LOCATED_IN') return this.command('gm', (tx, player) => this.place(tx, player, a, b));
-    if (kind === 'HAS_ITEM') return this.command('gm', (tx, player) => this.give(tx, player, a, b));
+    if (kind === 'LOCATED_IN') return this.command((tx, player) => this.place(tx, player, a, b));
+    if (kind === 'HAS_ITEM') return this.command((tx, player) => this.give(tx, player, a, b));
     if (isTieType(kind)) {
-      return this.command('gm', (tx, player) => this.tie(tx, player, a, b, kind, description));
+      return this.command((tx, player) => this.tie(tx, player, a, b, kind, description));
     }
     return Promise.resolve(
       fail(
@@ -282,7 +282,7 @@ export class World {
     /** A new entity as a draft (the Guard's expected gap, ADR 48): kept only if the turn uses it. */
     draft?: boolean;
   }): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }, player) => {
+    return this.command(async ({ db, state, log }, player) => {
       const name = input.name?.trim();
       const type = input.type?.trim().toUpperCase();
       const all = await state.allEntities();
@@ -290,7 +290,7 @@ export class World {
         name ? all.find((e) => e.id !== exceptId && normalizeName(e.name) === normalizeName(name)) : undefined;
 
       if (input.id?.trim()) {
-        const entity = await this.find(state, player, input.id, () =>
+        const entity = await this.find(state, input.id, () =>
           `There is no "${input.id}". To create something new, leave out id.`,
         );
         if (type && type !== entity.type) reject(`${entity.name} is a ${entity.type}; its type cannot change.`);
@@ -322,8 +322,7 @@ export class World {
       if (!isAddableType(type)) reject(`Cannot create a ${type}; allowed types: ${ADDABLE_TYPES.join(', ')}.`);
       const other = clash();
       if (other) reject(`Something named "${other.name}" already exists (${other.id}).`);
-      const here = await state.locationOf(player.id);
-      if (!here) reject('The player is nowhere; the session has not placed them.');
+      const here = await hereOf(state, player);
       const ids = new Set(all.map((e) => e.id));
       const base = `${ID_PREFIX[type]}:${slugify(name)}`;
       let id = base;
@@ -346,8 +345,8 @@ export class World {
    * deleted (ADR 42).
    */
   cancelRelation(a: string, b: string, type?: string): Promise<Outcome> {
-    return this.command('gm', async ({ state, log, db }, player) => {
-      const [one, other] = await this.pair(state, player, a, b);
+    return this.command(async ({ state, log, db }, player) => {
+      const [one, other] = await this.pair(state, a, b);
       const ties = (await this.tiesBetween(db, one.id, other.id)).filter((t) => !type || t.type === type);
       if (ties.length === 0) reject(`${one.name} and ${other.name} have no tie${type ? ` of type ${type}` : ''}.`);
       const event = await log.append(this.turn, this.actor, 'relation.cancelled', {
@@ -362,19 +361,12 @@ export class World {
 
   /** `note.added`: a quest, promise or plot thread the master must not forget. */
   addNote(text: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, log }) => {
-      if (!text.trim()) reject('The note is empty.');
-      const row = await db.get<{ id: number }>('SELECT coalesce(max(id), 0) + 1 AS id FROM notes');
-      const id = Number(row?.id ?? 1);
-      const event = await log.append(this.turn, this.actor, 'note.added', { id, text: text.trim() });
-      await db.run('INSERT INTO notes (id, text, created_seq) VALUES (?, ?, ?)', [id, text.trim(), event.seq]);
-      return event;
-    });
+    return this.command((tx) => this.appendNote(tx, text));
   }
 
   /** `note.closed`: the thread is resolved. */
   closeNote(id: number): Promise<Outcome> {
-    return this.command('gm', async ({ db, log }) => {
+    return this.command(async ({ db, log }) => {
       const note = await log.note(id);
       if (!note) reject(`There is no note #${id}.`);
       if (note.closed) reject(`Note #${id} is already closed.`);
@@ -389,7 +381,7 @@ export class World {
    * grab, a noise); the reaction is its line (words and/or deeds), or "[silence]".
    */
   recordReaction(input: { entity: string; situation: string; reaction: string }): Promise<Outcome> {
-    return this.command('gm', async ({ state, log }) => {
+    return this.command(async ({ state, log }) => {
       if (!(await state.entity(input.entity))) reject(`There is no ${input.entity}.`);
       return log.append(this.turn, this.actor, 'entity.reacted', input);
     });
@@ -407,7 +399,7 @@ export class World {
 
   /** `draft.confirmed`: the draft was used; it stays as an ordinary entity. */
   confirmDraft(id: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }) => {
+    return this.command(async ({ db, state, log }) => {
       const entity = await state.entity(id);
       if (!entity || entity.props.draft !== true) reject(`${id} is not a draft.`);
       const event = await log.append(this.turn, this.actor, 'draft.confirmed', { entity: id, name: entity.name });
@@ -419,7 +411,7 @@ export class World {
 
   /** `draft.withdrawn`: nobody used the draft; it is removed from the world whole. */
   withdrawDraft(id: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }) => {
+    return this.command(async ({ db, state, log }) => {
       const entity = await state.entity(id);
       if (!entity || entity.props.draft !== true) reject(`${id} is not a draft.`);
       const event = await log.append(this.turn, this.actor, 'draft.withdrawn', { entity: id, name: entity.name });
@@ -439,7 +431,7 @@ export class World {
 
   /** `luck.rolled`: journal only — the generator records what the master made of it. */
   recordLuck(roll: EventPayloads['luck.rolled']): Promise<Outcome> {
-    return this.command('gm', async ({ log }) => {
+    return this.command(async ({ log }) => {
       if (!roll.attempt.trim()) reject('Say what the player attempts.');
       return log.append(this.turn, this.actor, 'luck.rolled', { ...roll, attempt: roll.attempt.trim() });
     });
@@ -452,19 +444,9 @@ export class World {
 
   /** `note.added` with `entity`: an actor note — what the entity decided, for its next reaction. */
   addActorNote(entity: string, text: string): Promise<Outcome> {
-    return this.command('gm', async ({ db, state, log }) => {
-      if (!(await state.entity(entity))) reject(`There is no ${entity}.`);
-      if (!text.trim()) reject('The note is empty.');
-      const row = await db.get<{ id: number }>('SELECT coalesce(max(id), 0) + 1 AS id FROM notes');
-      const id = Number(row?.id ?? 1);
-      const event = await log.append(this.turn, this.actor, 'note.added', { id, text: text.trim(), entity });
-      await db.run('INSERT INTO notes (id, text, created_seq, entity_id) VALUES (?, ?, ?, ?)', [
-        id,
-        text.trim(),
-        event.seq,
-        entity,
-      ]);
-      return event;
+    return this.command(async (tx) => {
+      if (!(await tx.state.entity(entity))) reject(`There is no ${entity}.`);
+      return this.appendNote(tx, text, entity);
     });
   }
 
@@ -473,9 +455,9 @@ export class World {
   /** `LOCATED_IN`: the player walks, a being goes anywhere, a thing is put down or moved. */
   private async place(tx: Tx, player: Entity, a: string, b: string): Promise<WorldEvent> {
     const { db, state, log } = tx;
-    const thing = await this.find(state, player, a);
+    const thing = await this.find(state, a);
     if (thing.id === player.id) return this.walk(tx, player, b);
-    const where = await this.find(state, player, b);
+    const where = await this.find(state, b);
     if (thing.id === where.id) reject(`${thing.name} cannot be inside itself.`);
     if (isBeing(thing)) {
       if (where.type !== 'LOCATION') reject(`${thing.name} can only go to a location; ${where.name} is not one.`);
@@ -486,8 +468,7 @@ export class World {
         from: from?.id ?? '',
         to: where.id,
       });
-      await unlocate(db, event.seq, thing.id);
-      await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+      await moveTo(db, event.seq, thing.id, where.id);
       return event;
     }
     if (thing.type === 'LOCATION') reject(`${thing.name} is a place; places stay where the story put them.`);
@@ -495,35 +476,31 @@ export class World {
       reject(`To give ${thing.name} to ${where.name}, use HAS_ITEM: ${where.name} has ${thing.name}.`);
     }
     if ((await state.inventory(player.id)).some((e) => e.id === thing.id)) {
-      const here = await state.locationOf(player.id);
-      if (!here) reject('The player is nowhere; the session has not placed them.');
+      const here = await hereOf(state, player);
       const near = [here, ...(await this.reachable(state, player)), ...(await state.inventory(player.id))];
       if (!near.some((e) => e.id === where.id)) {
         reject(`The player can put ${thing.name} down only here (${here.name}) or into something here.`);
       }
       const event = await log.append(this.turn, this.actor, 'item.dropped', { item: thing.id, to: where.id });
-      await unplace(db, event.seq, thing.id);
-      await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+      await putIn(db, event.seq, thing.id, where.id);
       return event;
     }
     const [from = ''] = await state.placesOf(thing.id);
     if (from === where.id) reject(`${thing.name} is already in ${where.name}.`);
     const event = await log.append(this.turn, this.actor, 'item.moved', { item: thing.id, from, to: where.id });
-    await unplace(db, event.seq, thing.id);
-    await relate(db, event.seq, thing.id, where.id, 'LOCATED_IN');
+    await putIn(db, event.seq, thing.id, where.id);
     return event;
   }
 
   /** The player goes only along an exit of the current location (`player.moved`). */
   private async walk({ db, state, log }: Tx, player: Entity, target: string): Promise<WorldEvent> {
-    const here = await state.locationOf(player.id);
-    if (!here) reject('The player is nowhere; the session has not placed them.');
+    const here = await hereOf(state, player);
     if (target === here.id || normalizeName(target) === normalizeName(here.name)) {
       reject(`The player is already in ${here.name}.`);
     }
     const exits = await state.exits(here.id);
     const to = pick(
-      state.resolve(target, exits.map((exit) => exit.to)),
+      resolveName(target, exits.map((exit) => exit.to)),
       target,
       () =>
         `There is no path from ${here.name} to "${target}". Exits: ${
@@ -531,18 +508,17 @@ export class World {
         }.`,
     );
     const event = await log.append(this.turn, this.actor, 'player.moved', { from: here.id, to: to.id });
-    await unlocate(db, event.seq, player.id);
-    await relate(db, event.seq, player.id, to.id, 'LOCATED_IN');
+    await moveTo(db, event.seq, player.id, to.id);
     return event;
   }
 
   /** `HAS_ITEM`: the player takes, someone else gets a thing; into a place it is `LOCATED_IN`. */
   private async give(tx: Tx, player: Entity, a: string, b: string): Promise<WorldEvent> {
     const { db, state, log } = tx;
-    const holder = await this.find(state, player, a);
+    const holder = await this.find(state, a);
     if (holder.id === player.id) return this.take(tx, player, b);
     if (!isBeing(holder)) return this.place(tx, player, b, a); // a place or a container
-    const item = await this.find(state, player, b);
+    const item = await this.find(state, b);
     if (!isPortable(item)) reject(`${item.name} cannot be carried.`);
     if ((await state.inventory(holder.id)).some((e) => e.id === item.id)) {
       reject(`${holder.name} already has ${item.name}.`);
@@ -555,8 +531,7 @@ export class World {
     }
     const [from = ''] = await state.placesOf(item.id);
     const event = await log.append(this.turn, this.actor, 'item.moved', { item: item.id, from, to: holder.id });
-    await unplace(db, event.seq, item.id);
-    await relate(db, event.seq, holder.id, item.id, 'HAS_ITEM');
+    await handTo(db, event.seq, item.id, holder.id);
     return event;
   }
 
@@ -566,12 +541,12 @@ export class World {
    * NPC's `entity.reacted`, and the master decided the attempt worked.
    */
   private async take({ db, state, log }: Tx, player: Entity, target: string): Promise<WorldEvent> {
-    const owned = state.resolve(target, await state.inventory(player.id));
+    const owned = resolveName(target, await state.inventory(player.id));
     if (owned.kind === 'found') reject(`The player already has ${owned.entity.name}.`);
     const reachable = await this.reachable(state, player);
     const held = await this.heldByNpcsHere(state, player);
     const item = pick(
-      state.resolve(target, [...reachable, ...held.map((h) => h.item)]),
+      resolveName(target, [...reachable, ...held.map((h) => h.item)]),
       target,
       () => `There is no "${target}" here to take.`,
     );
@@ -586,8 +561,7 @@ export class World {
     }
     const [from = ''] = await state.placesOf(item.id);
     const event = await log.append(this.turn, this.actor, 'item.taken', { item: item.id, from });
-    await unplace(db, event.seq, item.id);
-    await relate(db, event.seq, player.id, item.id, 'HAS_ITEM');
+    await handTo(db, event.seq, item.id, player.id);
     return event;
   }
 
@@ -605,7 +579,7 @@ export class World {
     description: string,
   ): Promise<WorldEvent> {
     if (!description.trim()) reject('Describe the tie: how one stands with the other now.');
-    const [one, other] = await this.pair(state, player, a, b);
+    const [one, other] = await this.pair(state, a, b);
     const existing = (await this.tiesBetween(db, one.id, other.id)).find((t) => t.type === type);
     const [src, dst] = existing ? [existing.src, existing.dst] : [one.id, other.id];
     const event = await log.append(this.turn, this.actor, 'relation.set', {
@@ -620,23 +594,18 @@ export class World {
   }
 
   /** An entity by exact id, else by name: what the player can see first, then the whole world. */
-  private async find(
-    state: WorldState,
-    player: Entity,
-    target: string,
-    notFound = () => `There is no "${target}".`,
-  ): Promise<Entity> {
+  private async find(state: WorldState, target: string, notFound = () => `There is no "${target}".`): Promise<Entity> {
     const byId = await state.entity(target.trim());
     if (byId) return byId;
-    const near = state.resolve(target, await state.visible()); // the player is among them
+    const near = resolveName(target, await state.visible()); // the player is among them
     if (near.kind !== 'none') return pick(near, target, notFound);
-    return pick(state.resolve(target, await state.allEntities()), target, notFound);
+    return pick(resolveName(target, await state.allEntities()), target, notFound);
   }
 
   /** Two different entities, each by id or name. */
-  private async pair(state: WorldState, player: Entity, a: string, b: string): Promise<[Entity, Entity]> {
-    const one = await this.find(state, player, a);
-    const other = await this.find(state, player, b);
+  private async pair(state: WorldState, a: string, b: string): Promise<[Entity, Entity]> {
+    const one = await this.find(state, a);
+    const other = await this.find(state, b);
     if (one.id === other.id) reject(`A tie needs two different parties; both are ${one.name}.`);
     return [one, other];
   }
@@ -650,6 +619,23 @@ export class World {
         ORDER BY id`,
       [a, b, b, a, ...TIE_TYPES],
     );
+  }
+
+  /** `note.added`: a master's note, or with `entity` an actor note. */
+  private async appendNote({ db, log }: Tx, text: string, entity?: string): Promise<WorldEvent> {
+    const clean = text.trim();
+    if (!clean) reject('The note is empty.');
+    const row = await db.get<{ id: number }>('SELECT coalesce(max(id), 0) + 1 AS id FROM notes');
+    const id = Number(row?.id ?? 1);
+    const payload = entity ? { id, text: clean, entity } : { id, text: clean };
+    const event = await log.append(this.turn, this.actor, 'note.added', payload);
+    await db.run('INSERT INTO notes (id, text, created_seq, entity_id) VALUES (?, ?, ?, ?)', [
+      id,
+      clean,
+      event.seq,
+      entity ?? null,
+    ]);
+    return event;
   }
 
   /** Items the player can reach: here, and one level inside containers that are here. */
@@ -677,18 +663,20 @@ export class World {
     return held.flat();
   }
 
-  private async command(
-    actor: Actor,
-    body: (tx: Tx, player: Entity) => Promise<WorldEvent>,
-  ): Promise<Outcome> {
+  /** A command of a started session: refused before the player exists. */
+  private command(body: (tx: Tx, player: Entity) => Promise<WorldEvent>): Promise<Outcome> {
+    return this.transact(async (tx) => {
+      const player = await tx.state.player();
+      if (!player) reject('The session has not started.');
+      return body(tx, player);
+    });
+  }
+
+  /** One transaction: the event and its change, or nothing if a rule is broken (`reject`). */
+  private async transact(body: (tx: Tx) => Promise<WorldEvent>): Promise<Outcome> {
     let event: WorldEvent;
     try {
-      event = await this.db.transaction(async (db) => {
-        const tx = { db, state: new WorldState(db), log: new EventLog(db) };
-        const player = actor === 'system' ? undefined : await tx.state.player();
-        if (actor !== 'system' && !player) reject('The session has not started.');
-        return body(tx, player as Entity);
-      });
+      event = await this.db.transaction((db) => body({ db, state: new WorldState(db), log: new EventLog(db) }));
     } catch (error) {
       if (error instanceof Rejected) return fail(error.reason);
       throw error;
@@ -714,8 +702,11 @@ function pick(resolution: Resolution, target: string, notFound: () => string): E
   return reject(notFound());
 }
 
-function names(entities: Entity[]): string {
-  return entities.map((e) => e.name).join(', ');
+/** Where the player is; a session that has not placed them breaks the rule. */
+async function hereOf(state: WorldState, player: Entity): Promise<Entity> {
+  const here = await state.locationOf(player.id);
+  if (!here) reject('The player is nowhere; the session has not placed them.');
+  return here;
 }
 
 function describeExit(exit: Exit): string {

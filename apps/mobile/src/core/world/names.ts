@@ -2,7 +2,10 @@
  * Name matching shared by the world queries and tools: the model may say "the brass lantern",
  * "Brass Lantern" or "lantern". Mirrors builder's normalization (builder/…/text.py).
  */
+import type { Entity } from './model';
+
 const ARTICLES = /^(the|a|an)\s+/;
+const FUZZY_THRESHOLD = 0.8;
 
 export function normalizeName(name: string): string {
   return name
@@ -36,6 +39,33 @@ export function similarity(a: string, b: string): number {
     prev = row;
   }
   return 1 - prev[b.length] / Math.max(a.length, b.length);
+}
+
+export type Resolution =
+  | { kind: 'found'; entity: Entity }
+  | { kind: 'ambiguous'; candidates: Entity[] }
+  | { kind: 'none' };
+
+/**
+ * Finds one entity by id or name among `among`: id → exact name → name contains / is
+ * contained → fuzzy. Several equally good matches are returned as candidates.
+ */
+export function resolveName(nameOrId: string, among: Entity[]): Resolution {
+  const byId = among.find((e) => e.id === nameOrId);
+  if (byId) return { kind: 'found', entity: byId };
+  const key = normalizeName(nameOrId);
+  if (!key) return { kind: 'none' };
+  const named = among.map((entity) => ({ entity, name: normalizeName(entity.name) }));
+  const stages = [
+    named.filter((n) => n.name === key),
+    named.filter((n) => n.name.includes(key) || key.includes(n.name)),
+    named.filter((n) => similarity(n.name, key) >= FUZZY_THRESHOLD),
+  ];
+  for (const matches of stages) {
+    if (matches.length === 1) return { kind: 'found', entity: matches[0].entity };
+    if (matches.length > 1) return { kind: 'ambiguous', candidates: matches.map((m) => m.entity) };
+  }
+  return { kind: 'none' };
 }
 
 /**
