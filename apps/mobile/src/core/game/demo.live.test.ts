@@ -193,7 +193,7 @@ it('stages 6.2d, 6.2h: after the player refuses the heist, the world and the peo
   }
 });
 
-it('stages 6.2j, 6.2k: luck and the Guard\'s drafts (ADR 47, 48)', async () => {
+it('stages 6.2j, 6.2k: luck, the Guard\'s recommendations and the generator (ADR 47, 54)', async () => {
   const game = await openNewGame('Luck');
   const steps: Step[] = [];
   const timed = recorder(game, steps);
@@ -206,7 +206,8 @@ it('stages 6.2j, 6.2k: luck and the Guard\'s drafts (ADR 47, 48)', async () => {
     const events = await game.world.log.recent(100);
     const rolls = events.filter((e) => e.kind === 'luck.rolled');
     console.log('\nRolls:', rolls.map((e) => JSON.stringify(e.payload)));
-    console.log('Drafts:', events.filter((e) => e.actor === 'guard').map((e) => `${e.kind} ${JSON.stringify(e.payload).slice(0, 120)}`));
+    console.log('Master added:', events.filter((e) => e.actor === 'gm' && e.kind === 'entity.added').map((e) => JSON.stringify(e.payload)));
+    console.log('Guard wrote (none since ADR 54):', events.filter((e) => e.actor === 'guard').map((e) => `${e.kind} ${JSON.stringify(e.payload).slice(0, 120)}`));
     console.log('Generator added:', events.filter((e) => e.actor === 'generator').map((e) => `${e.kind} ${JSON.stringify(e.payload).slice(0, 200)}`));
     const scene = await game.world.scene();
     console.log('New here:', scene.here.filter((e) => !before.has(e.id)).map((e) => e.name));

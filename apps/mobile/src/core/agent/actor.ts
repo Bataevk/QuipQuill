@@ -49,11 +49,25 @@ export function askedOf(result: ToolMessage): EntityRef | undefined {
   return match ? { name: match[1], id: match[2] } : undefined;
 }
 
-export const ACTOR_RULES = `# How to react
-- Each message tells what just happened, from your point of view. React as you would, in the first person: what you say, in quotes, and/or a short action in *asterisks*. One to three sentences.
-- Know only what you would know: who you are, your ties, your notes, what you see here, and this conversation. Keep your secrets from strangers unless they give you a reason.
-- You may agree, refuse, bargain, lie, threaten, call for help or walk away, but you cannot change the world: no new things, places or events beyond your own words and gestures. The Game Master decides what really happens.
-- If you cannot perceive or care (a stone, a plain object), or nothing here calls for a reaction, answer exactly: ${SILENCE}`;
+/**
+ * How the actor plays (stable, cached with the card): as the character, in the first person; the
+ * length of a line is the character's, not a rule — a chatterbox talks, a taciturn guard grunts
+ * (owner, 2026-10-19).
+ */
+export function actorRules(name: string): string {
+  return `# How to play the part
+Play ${name} down to the smallest detail: the voice, vocabulary and rhythm of speech, temperament and manners, what ${name} wants right now and hides. Everything you say and do is what ${name} would say and do in this moment, given who ${name} is, what ${name} remembers and how ${name} stands with whoever is in front of you. Speak in the language of the conversation.
+
+You are ${name}, not a narrator describing ${name}: speak and act in the first person, always. Each message tells you what just happened to you. Respond as you would: your words in quotes, your actions in *asterisks* in the present tense (*I look away.*). How much to say is your character's choice, not a habit: a talkative braggart may go on at length, a taciturn guard may give two words or only a look. Let the length follow who you are and the moment.
+
+When someone speaks to you, answer in words unless you would truly keep quiet; a silent gesture is a choice your character makes, not a way to avoid speaking.
+
+You know only what ${name} would know: who you are, your ties, what you remember, what you see here, and this conversation. Keep your secrets from those you have no reason to trust. You may agree, refuse, bargain, lie, threaten, flatter, call for help or walk away.
+
+You act only through your own words and gestures. What actually happens next — whether a blow lands, a lock opens, a deal holds, what lies behind a door — is the Game Master's to decide, so never narrate outcomes, never bring new things, places or people into the story, and never speak or act for the player character.
+
+If you cannot perceive or respond (a stone, a plain object), or nothing here would draw a reaction from you, answer exactly: ${SILENCE}`;
+}
 
 /**
  * The actor's system prompt: who it is (description, persona, ties) — stable, with a cache
@@ -66,10 +80,10 @@ export async function actorSystemMessage(world: World, entity: Entity): Promise<
     (t) => `- ${t.other.name}${t.description ? `: ${t.description}` : ''}`,
   );
   const stable = [
-    `You are ${entity.name}, in an interactive story. Stay in character at all times.`,
+    `You are a professional actor playing ${entity.name} in an interactive story. You stay in character for the whole performance: you never step out of the role, never speak as an AI or as the actor, and never comment on the story from outside it.`,
     `# Who you are\n${entity.description.trim() || 'No description.'}${persona ? `\n${persona}` : ''}`,
     ties.length ? `# Your ties\n${ties.join('\n')}` : '',
-    ACTOR_RULES,
+    actorRules(entity.name),
   ];
 
   const notes = await log.actorNotes(entity.id, ACTOR_NOTES);

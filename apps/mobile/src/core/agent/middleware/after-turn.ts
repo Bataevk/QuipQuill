@@ -9,6 +9,7 @@ import type { ChatStore } from '../chat-store';
 import { noteEntities } from '../entity-memory';
 import { generate, type GeneratorResult } from '../generator';
 import { isGuardReply, masterReplies, messagesOf, sourceOf, turnOf, turnStart } from '../messages';
+import type { ExpectedGap } from './guard';
 
 /** The limit of each background call: the next action waits for it at most this long. */
 export const AFTER_TURN_TIMEOUT_MS = 30_000;
@@ -23,6 +24,8 @@ export interface AfterTurnOptions {
   /** Entity memory, `note_entity` (ADR 45); without it there is none. */
   memoryModel?: BaseChatModel;
   timeoutMs?: number;
+  /** The Guard's recommendations for the turn just played (ADR 54), for the generator. */
+  expected?: () => ExpectedGap[];
   /** What the generator did, or why it failed (dev diagnostics). */
   onGenerated?: (result: GeneratorResult | { error: string }) => void;
 }
@@ -39,7 +42,7 @@ export function afterTurnMiddleware(options: AfterTurnOptions) {
     name: 'AfterTurn',
     afterAgent: (state) => {
       const turn = turnToSettle(messagesOf(state));
-      if (turn) startAfterTurn(options, turn);
+      if (turn) startAfterTurn(options, { ...turn, expected: options.expected?.() ?? [] });
       return;
     },
   });
@@ -51,6 +54,8 @@ export interface SettledTurn {
   input: string;
   /** All the master's text of the turn (entities' lines left out). */
   reply: string;
+  /** The Guard's recommendations (none after a restart: they are not saved). */
+  expected?: ExpectedGap[];
 }
 
 /** The last turn of the history if it needs background work: a player's, not rejected by the Guard. */
@@ -70,14 +75,17 @@ export function turnToSettle(messages: BaseMessage[]): SettledTurn | undefined {
  * through (not aborted), the turn is marked done, so a game reopened after the app was killed
  * runs only what it missed (ADR 48).
  */
-export function startAfterTurn(options: AfterTurnOptions, { turn, input, reply }: SettledTurn): void {
+export function startAfterTurn(options: AfterTurnOptions, { turn, input, reply, expected }: SettledTurn): void {
   const { world, meta, chats, work, generatorModel, memoryModel, onGenerated } = options;
   const timeoutMs = options.timeoutMs ?? AFTER_TURN_TIMEOUT_MS;
   if (!generatorModel && !memoryModel) return;
   work.start(world, async (signal) => {
     if (generatorModel) {
       try {
-        const result = await generate({ model: generatorModel, world, meta, signal, timeoutMs }, { turn, input, reply });
+        const result = await generate(
+          { model: generatorModel, world, meta, signal, timeoutMs },
+          { turn, input, reply, expected },
+        );
         for (const r of result.rejected) console.warn(`[generator] turn ${turn}: ${r.change}: ${r.error}`);
         onGenerated?.(result);
       } catch (error) {

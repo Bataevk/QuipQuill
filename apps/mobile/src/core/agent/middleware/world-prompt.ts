@@ -3,6 +3,7 @@ import { createMiddleware } from 'langchain';
 import type { World } from '../../world/world';
 import { withCacheBreakpoints } from '../messages';
 import { gmSystemMessage, renderWorldState, worldStateMessage } from '../prompt';
+import type { GuardHints } from './guard';
 
 /**
  * Before every model call (ADR 46): the fixed system prompt ([GM RULES] + [STORY STYLE]), the
@@ -10,7 +11,7 @@ import { gmSystemMessage, renderWorldState, worldStateMessage } from '../prompt'
  * so the master sees the result of the tools it just ran, and tools + system + history stay a
  * prefix the provider reads from its cache on the next call.
  */
-export function worldPromptMiddleware(world: World, storyStyle: string) {
+export function worldPromptMiddleware(world: World, storyStyle: string, hints?: GuardHints) {
   const system = gmSystemMessage(storyStyle);
   return createMiddleware({
     name: 'WorldPrompt',
@@ -18,7 +19,7 @@ export function worldPromptMiddleware(world: World, storyStyle: string) {
       handler({
         ...request,
         systemMessage: system,
-        messages: [...withCacheBreakpoints(request.messages), worldStateMessage(await renderWorldState(world))],
+        messages: [...withCacheBreakpoints(request.messages), worldStateMessage(await renderWorldState(world, hints?.expected))],
       }),
   });
 }

@@ -83,8 +83,9 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     {
       name: 'inspect',
       description:
-        'Full details of something the player can see or has: a person, a thing, the location, the player. ' +
-        'Shows its whole description, what it holds or contains, and where it is. Changes nothing.',
+        'Full details of something the player can see or carries: a person, a thing, the location, the player. ' +
+        'Shows its whole description (the world state shortens long ones), what it holds or contains, and where ' +
+        'it is. Use it when the short description is not enough to narrate or decide. Changes nothing.',
       schema: z.object({ target: z.string().describe('Id or name') }),
     },
   );
@@ -103,7 +104,8 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
       name: 'search_lore',
       description:
         'Search the story\'s lore by meaning: people, places, things and their history or secrets, ' +
-        'including what is not in the current scene. Use it before inventing facts about this world.',
+        'including what is not in the current scene. Use it before inventing facts about this world\'s past, ' +
+        'its people or its secrets. Changes nothing.',
       schema: z.object({ query: z.string().describe('What you want to know, in a few words') }),
     },
   );
@@ -115,12 +117,14 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     {
       name: 'set_entity',
       description:
-        'Make something real, or change it. With id: change the fields you give of anything — a thing, a person, ' +
-        'a place, or the player (id "player": wounds, clothes, disguise, reputation); a description replaces the ' +
-        'old one whole. Without id: create something new in the current location — name, type and description ' +
-        "are all required; it persists, and set_relation can put it in someone's hands. Use it as soon as the " +
-        'story makes something real: what an honest character said is there, what the player finds or makes. ' +
-        'Nothing powerful or story-breaking, never places.',
+        'Make something real in the world, or change it. With id: change the fields you give of anything — a ' +
+        'thing, a person, a place, or the player (id "player": wounds, clothes, disguise, reputation); a new ' +
+        'description replaces the old one whole, so keep in it everything that is still true; use it when a ' +
+        "person's attitude, knowledge or plans change for good. Without id: create one new thing in the current " +
+        'location — name, type and description are all required; it persists, and set_relation can then put it ' +
+        "in someone's hands. At most one a turn, and only what the moment cannot go on without (someone the " +
+        'player speaks to, what they find or make); the world adds the rest of what the scene implies after your ' +
+        'reply. Nothing powerful or story-breaking, never places.',
       schema: z.object({
         id: z.string().optional().describe('Id or name of what to change; leave it out to create something new'),
         name: z.string().optional().describe('Short unique name, e.g. "bag of tools" (required to create)'),
@@ -142,7 +146,9 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     {
       name: 'set_relation',
       description:
-        'Make a relation true; the world checks its rules and refuses what cannot happen. ' +
+        'Make a relation true; the world checks its rules and refuses what cannot happen. Use it for every move ' +
+        'of the player (when the player chose to go), every take, drop or hand-over, whenever someone leaves, ' +
+        'follows or flees (in sight or not), and whenever how two people stand with each other changes. ' +
         'located_in — a is in b: the player goes to b (only along a listed exit); a person or creature goes to ' +
         'any location, in sight or not; something is put down here or into a container. ' +
         'has_item — a carries b: the player takes something here (from a person here only after react_entity and ' +
@@ -195,7 +201,7 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     {
       name: 'note',
       description:
-        'Your notebook, kept in the world state even when the conversation is summarized away. ' +
+        'Your notebook, kept in the world state even when older conversation is summarized away. ' +
         'Add a note for a quest, promise, clue, debt or plot thread as soon as it appears; ' +
         'close it by id once it is resolved.',
       schema: z.object({
@@ -222,18 +228,19 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
       name: 'react_entity',
       responseFormat: 'content_and_artifact',
       description:
-        'Let something here react, in its own words and/or deeds, to what just happened: a person, a creature, ' +
+        'Let someone or something here react for themselves, in their own words and deeds: a person, a creature, ' +
         'anything that might perceive (a magic mirror, a watchful statue) — here or in the inventory. Use it ' +
-        'whenever someone or something present would respond to the player or the scene: a question, a shove, a ' +
-        'bribe, a grab at their purse — instead of writing their lines yourself. It speaks to the player in its ' +
-        'own voice right after this; a plain object stays silent. Several calls react one after another.',
+        'whenever someone present would respond to the player or the scene (a question, a shove, a bribe, a grab ' +
+        'at their purse) instead of writing their lines yourself. They answer in their own voice right after ' +
+        'this call, and the player sees it; a plain object stays silent. Several calls let several react in turn.',
       schema: z.object({
         target: z.string().describe('Id or name of who or what reacts (here or in the inventory)'),
         situation: z
           .string()
           .describe(
-            'What just happened, told to them in the second person, e.g. "The stranger asks you about the vault" ' +
-              'or "The stranger grabs the brass key from your belt"',
+            'What just happened, told to them in the second person, with the player\'s exact words if the player ' +
+              'spoke to them, e.g. "The stranger says to you: \'Where is the vault?\'" or "The stranger grabs the ' +
+              'brass key from your belt"',
           ),
       }),
     },

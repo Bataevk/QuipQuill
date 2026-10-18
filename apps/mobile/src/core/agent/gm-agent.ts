@@ -11,7 +11,7 @@ import type { World } from '../world/world';
 import { afterTurnMiddleware, type AfterTurnOptions } from './middleware/after-turn';
 import { bugGuardMiddleware } from './middleware/bug-guard';
 import { contextMiddleware, type ContextOptions } from './middleware/context';
-import { guardMiddleware, type GuardOptions } from './middleware/guard';
+import { createGuardHints, guardMiddleware, type GuardOptions } from './middleware/guard';
 import { invalidToolCallsMiddleware } from './middleware/invalid-tool-calls';
 import { packsMiddleware } from './middleware/packs';
 import { toolLimitMiddleware } from './middleware/tool-limit';
@@ -36,6 +36,8 @@ export interface GmAgentOptions {
   context?: Omit<ContextOptions, 'model'>;
   toolLimit?: number;
   onGuardError?: GuardOptions['onError'];
+  /** The Guard writes its gaps as drafts (ADR 48); off by default since ADR 54 (it only recommends). */
+  guardDrafts?: boolean;
   /** Background work after a player's turn: generator and entity memory (stage 6.2i). */
   afterTurn?: Omit<AfterTurnOptions, 'world' | 'meta'>;
 }
@@ -48,6 +50,8 @@ export interface GmAgentOptions {
  */
 export function createGmAgent(options: GmAgentOptions) {
   const { model, world, meta, embed, actor } = options;
+  // The Guard's recommendations for the turn: the master's world state and the generator (ADR 54).
+  const hints = createGuardHints();
   const guard = options.guardModel
     ? [
         guardMiddleware({
@@ -55,10 +59,14 @@ export function createGmAgent(options: GmAgentOptions) {
           world,
           worldConstraints: meta.worldConstraints,
           onError: options.onGuardError,
+          hints,
+          drafts: options.guardDrafts,
         }),
       ]
     : [];
-  const afterTurn = options.afterTurn ? [afterTurnMiddleware({ world, meta, ...options.afterTurn })] : [];
+  const afterTurn = options.afterTurn
+    ? [afterTurnMiddleware({ world, meta, ...options.afterTurn, expected: () => hints.expected })]
+    : [];
   return createAgent({
     model,
     tools: createGmTools({ world, embed, actor, luck: meta.luck, random: options.random }),
@@ -70,7 +78,7 @@ export function createGmAgent(options: GmAgentOptions) {
       invalidToolCallsMiddleware(),
       // Packs outside WorldPrompt: the actor pack is a call of its own, not the master's prompt.
       ...(actor ? [packsMiddleware({ world, ...actor })] : []),
-      worldPromptMiddleware(world, renderStoryStyle(meta)),
+      worldPromptMiddleware(world, renderStoryStyle(meta), hints),
       // Last: a conditional spread at the head breaks createAgent's type inference.
       ...afterTurn,
     ],

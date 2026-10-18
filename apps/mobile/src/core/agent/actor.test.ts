@@ -120,7 +120,7 @@ describe('react_entity and the actor pack (ADR 45)', () => {
     expect(ask.text).toBe('The new recruit asks you about the vault.');
     const [stable, scene] = system.content as { text: string; cache_control?: unknown }[];
     expect(stable.cache_control).toEqual({ type: 'ephemeral' });
-    expect(stable.text).toMatch(/^You are Mags Holloway, in an interactive story\./);
+    expect(stable.text).toMatch(/^You are a professional actor playing Mags Holloway in an interactive story\./);
     expect(stable.text).toContain('a brass hook where her left hand used to be');
     expect(stable.text).toContain('- Silas Ashcombe: revenge on Silas Ashcombe, who seized her airship');
     expect(stable.text).toContain('answer exactly: [silence]');
@@ -315,7 +315,7 @@ describe('react_entity and the actor pack (ADR 45)', () => {
   });
 });
 
-describe('a draft the Guard added can react (ADR 48)', () => {
+describe('a draft the Guard added can react (ADR 48, drafts off since ADR 54)', () => {
   it('the bartender, just noticed, speaks in this turn and stays', async () => {
     says('npc:bartender', '"What\'ll it be?"');
     const guardModel = new ScriptedChatModel([
@@ -329,7 +329,7 @@ describe('a draft the Guard added can react (ADR 48)', () => {
       },
     ]);
     master.push(react('bartender', 'A stranger waves you over for an ale.'), { text: 'He reaches for a mug.' });
-    const agent = createGmAgent({ model: master, world, meta, guardModel, actor: { model: actorModel, chats } });
+    const agent = createGmAgent({ model: master, world, meta, guardModel, guardDrafts: true, actor: { model: actorModel, chats } });
     const result = await runTurn({ agent, world, chats, transcript, input: 'I wave the bartender over.' });
     expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted', 'draft.confirmed']);
     expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'npc:bartender', 'gm']);

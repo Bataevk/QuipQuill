@@ -14,6 +14,7 @@ import {
   isBlocked,
   isGuardReply,
   masterReplies,
+  sourceOf,
   turnOf,
   turnStart,
 } from './messages';
@@ -70,7 +71,7 @@ export class NothingToRetryError extends Error {
  */
 export function runTurn({ input, source = 'player', ...deps }: TurnInput): Promise<TurnResult> {
   return exclusive(deps.world, async () => {
-    const turn = deps.world.beginTurn();
+    const turn = deps.world.beginTurn({ player: source === 'player' });
     const history = await deps.chats.load(GM_CHAT);
     if (source === 'player') await deps.transcript.append('player', input);
     return play(deps, turn, history, [...history, inputMessage(input, source, turn)]);
@@ -87,7 +88,8 @@ export function retryTurn(deps: TurnDeps): Promise<TurnResult> {
     if (!isUnfinished(history)) throw new NothingToRetryError();
     const start = turnStart(history);
     const known = turnOf(history[start]);
-    const turn = known === undefined ? deps.world.beginTurn() : deps.world.continueTurn(known);
+    const player = sourceOf(history[start]) === 'player';
+    const turn = known === undefined ? deps.world.beginTurn({ player }) : deps.world.continueTurn(known, { player });
     return play(deps, turn, history, history);
   });
 }

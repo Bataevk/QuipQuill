@@ -504,7 +504,7 @@ describe('AfterTurn (stage 6.2i)', () => {
   });
 });
 
-describe('Guard drafts (ADR 48)', () => {
+describe('Guard drafts (ADR 48, off since ADR 54: kept behind guardDrafts)', () => {
   const verdict = (expected: { name: string; type: string; description: string; likelihood: string }[] = []) => ({
     text: JSON.stringify({ verdict: 'pass', reason: 'r', reply: '', expected }),
   });
@@ -520,7 +520,7 @@ describe('Guard drafts (ADR 48)', () => {
           return { text: 'The bartender slides a mug your way.' };
         },
       ],
-      { guardModel },
+      { guardModel, guardDrafts: true },
     );
     expect(result.events.map((e) => [e.kind, e.actor])).toEqual([
       ['entity.added', 'guard'],
@@ -540,7 +540,7 @@ describe('Guard drafts (ADR 48)', () => {
         { name: 'cat', type: 'creature', description: 'Asleep.', likelihood: 'certain' },
       ]),
     ]);
-    const result = await play('I look around.', [{ text: 'Smoke and gears.' }], { guardModel });
+    const result = await play('I look around.', [{ text: 'Smoke and gears.' }], { guardModel, guardDrafts: true });
     expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
       ['entity.added', expect.objectContaining({ entity: 'npc:bartender' })],
       ['entity.added', expect.objectContaining({ entity: 'npc:pot-boy' })],
@@ -565,5 +565,73 @@ describe('Guard drafts (ADR 48)', () => {
     expect(result.rejected).toBe(true);
     expect(await world.drafts()).toEqual([]);
     expect(await world.state.entity('npc:bartender')).toBeUndefined();
+  });
+});
+
+describe('Guard recommendations and the master\'s one new thing (ADR 54)', () => {
+  const EMPTY = JSON.stringify({ relations: [], cancelled: [], moves: [], edits: [], additions: [] });
+  const BARTENDER = { name: 'bartender', type: 'npc', description: 'A broad man behind the bar.', likelihood: 'certain' };
+  const passWith = (expected: object[]) => ({
+    text: JSON.stringify({ verdict: 'pass', reason: 'r', reply: '', expected }),
+  });
+  const create = (name: string) => ({ name: 'set_entity', args: { name, type: 'npc', description: `${name}.` } });
+
+  it('the Guard writes nothing; its sure gaps reach the master\'s world state and the generator', async () => {
+    const guardModel = new ScriptedChatModel([
+      passWith([BARTENDER, { name: 'dartboard', type: 'other', description: 'Cork.', likelihood: 'possible' }]),
+    ]);
+    const generatorModel = new ScriptedChatModel([{ text: EMPTY }]);
+    const work = new BackgroundWork();
+    const result = await play(
+      'I ask the bartender for an ale.',
+      [
+        (messages) => {
+          const state = systemText(messages);
+          expect(state).toContain('Likely here, not in the world yet:\n- bartender (npc, certain): A broad man behind the bar.');
+          expect(state).not.toContain('dartboard');
+          return { text: 'The tap hisses somewhere behind the bar.' };
+        },
+      ],
+      { guardModel, afterTurn: { chats, work, generatorModel } },
+    );
+    await work.settle();
+    expect(result.events).toEqual([]);
+    expect(await world.state.entity('npc:bartender')).toBeUndefined();
+    expect(generatorModel.calls[0][1].text).toContain(
+      'Expected here by the input check:\n- bartender (npc, certain): A broad man behind the bar.',
+    );
+  });
+
+  it('the recommendations last one turn', async () => {
+    const guardModel = new ScriptedChatModel([passWith([BARTENDER]), passWith([])]);
+    await play('I ask the bartender for an ale.', [{ text: 'No one answers.' }], { guardModel });
+    await play(
+      'I sit down.',
+      [
+        (messages) => {
+          expect(systemText(messages)).not.toContain('Likely here');
+          return { text: 'You sit.' };
+        },
+      ],
+      { guardModel },
+    );
+  });
+
+  it('the master makes one new thing real in a player\'s turn; the second is refused', async () => {
+    const result = await play(
+      'I wave over whoever runs this place.',
+      [{ toolCalls: [create('innkeeper'), create('pot boy')] }, { text: 'The innkeeper comes over.' }],
+    );
+    expect(result.events.map((e) => [e.kind, e.payload])).toEqual([
+      ['entity.added', expect.objectContaining({ entity: 'npc:innkeeper' })],
+    ]);
+    expect(lastToolText(result.messages)).toMatch(/^Error: You already made something new real this turn\./);
+  });
+
+  it('the opening (a system turn) is not limited: the player\'s possessions', async () => {
+    model.push({ toolCalls: [create('innkeeper'), create('pot boy')] }, { text: 'The story begins.' });
+    const agent = createGmAgent({ model, world, meta });
+    const opening = await runTurn({ agent, world, chats, transcript, input: 'session_start', source: 'system' });
+    expect(opening.events.filter((e) => e.kind === 'entity.added')).toHaveLength(2);
   });
 });

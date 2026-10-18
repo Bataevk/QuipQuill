@@ -65,6 +65,8 @@ const ID_PREFIX: Record<AddableType, string> = {
   OTHER: 'ent',
 };
 export const RECENT_EVENTS = 5;
+/** New entities the master may create in a player's turn (ADR 54); the generator adds the rest. */
+export const MAX_GM_ADDITIONS = 1;
 
 /** A broken rule inside a transaction: rolls it back and becomes a failed Outcome. */
 class Rejected extends Error {
@@ -90,6 +92,8 @@ export class World {
   private readonly db: Db;
   private readonly lore: LoreVectors;
   private turn = 0;
+  /** A player's turn: the master's new entities are limited (MAX_GM_ADDITIONS). */
+  private playerTurn = false;
   /** Who the master's commands are journaled for: 'gm', or 'generator' (actingAs). */
   private actor: Actor = 'gm';
 
@@ -114,9 +118,13 @@ export class World {
     return this.turn;
   }
 
-  /** Starts the next player turn; events written until the next call carry this number. */
-  beginTurn(): number {
+  /**
+   * Starts the next turn; events written until the next call carry this number. A player's turn
+   * (`player`) limits what the master creates; the opening and other system turns do not.
+   */
+  beginTurn(options: { player?: boolean } = {}): number {
     this.turn += 1;
+    this.playerTurn = options.player ?? false;
     return this.turn;
   }
 
@@ -135,8 +143,9 @@ export class World {
   }
 
   /** Goes back to an unfinished turn (a retry): its events keep one number. */
-  continueTurn(turn: number): number {
+  continueTurn(turn: number, options: { player?: boolean } = {}): number {
     this.turn = turn;
+    this.playerTurn = options.player ?? false;
     return turn;
   }
 
@@ -322,6 +331,15 @@ export class World {
       if (!isAddableType(type)) reject(`Cannot create a ${type}; allowed types: ${ADDABLE_TYPES.join(', ')}.`);
       const other = clash();
       if (other) reject(`Something named "${other.name}" already exists (${other.id}).`);
+      if (this.actor === 'gm' && this.playerTurn) {
+        const added = (await log.ofTurn(this.turn)).filter((e) => e.kind === 'entity.added' && e.actor === 'gm');
+        if (added.length >= MAX_GM_ADDITIONS) {
+          reject(
+            'You already made something new real this turn. Narrate the rest as part of the scene: ' +
+              'the world adds what it implies after your reply.',
+          );
+        }
+      }
       const here = await hereOf(state, player);
       const ids = new Set(all.map((e) => e.id));
       const base = `${ID_PREFIX[type]}:${slugify(name)}`;
