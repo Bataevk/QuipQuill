@@ -146,7 +146,7 @@ def test_generator_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRout
     run(app_client, gm_request(purpose="generator"))
     (body,) = fake.requests
     assert body["extra_body"]["reasoning"] == {"effort": "low"}
-    assert body["max_tokens"] == 1200
+    assert body["max_tokens"] == 3000
 
 
 def test_tool_calls_are_assembled(app_client: TestClient, fake: FakeOpenRouter) -> None:

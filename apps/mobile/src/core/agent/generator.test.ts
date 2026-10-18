@@ -7,7 +7,7 @@ import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 
-import { generate, GeneratorAnswerError, generatorMessages, type WorldChangesInput } from './generator';
+import { generate, GeneratorAnswerError, generatorMessages, MAX_EXPECTED, type WorldChangesInput } from './generator';
 import { ScriptedChatModel } from './testing/scripted-model';
 import { TurnInProgressError, exclusive } from './turn-lock';
 
@@ -137,7 +137,7 @@ describe('generator', () => {
     expect((await world.scene()).here.map((e) => e.id)).not.toContain('ent:service-door');
   });
 
-  it('luck (ADR 47): a find the master narrated goes to the player; gaps the place implies only when sure, two a turn', async () => {
+  it('luck (ADR 47): a find the master narrated goes to the player; gaps the place implies only when sure', async () => {
     expectOk(
       await world.recordLuck({
         attempt: 'search under the tables',
@@ -164,13 +164,31 @@ describe('generator', () => {
       }),
     );
     const result = await generate({ model, world, meta }, TURN);
-    expect(result.applied.map((e) => e.kind)).toEqual(['entity.added', 'item.taken', 'entity.added', 'entity.added']);
+    expect(result.applied.map((e) => e.kind)).toEqual([
+      'entity.added',
+      'item.taken',
+      'entity.added',
+      'entity.added',
+      'entity.added',
+    ]);
     expect(result.rejected.map((r) => [r.change, r.error])).toEqual([
       ['add dartboard (expected)', 'only certain or likely gaps are added, not possible'],
-      ['add cat (expected)', 'at most 2 expected additions a turn'],
     ]);
     expect((await world.scene()).inventory.map((e) => e.name)).toContain('tarnished penny');
-    expect((await world.scene()).here.map((e) => e.name)).toEqual(expect.arrayContaining(['bartender', 'pot boy']));
+    expect((await world.scene()).here.map((e) => e.name)).toEqual(expect.arrayContaining(['bartender', 'pot boy', 'cat']));
+  });
+
+  it(`adds at most ${MAX_EXPECTED} gaps the place implies a turn (ADR 55)`, async () => {
+    const gaps = Array.from({ length: MAX_EXPECTED + 1 }, (_, i) => ({
+      name: `patron ${i + 1}`,
+      type: 'npc' as const,
+      description: 'Drinks quietly.',
+      basis: 'expected' as const,
+      likelihood: 'certain' as const,
+    }));
+    const result = await generate({ model: scripted(changes({ additions: gaps })), world, meta }, TURN);
+    expect(result.applied).toHaveLength(MAX_EXPECTED);
+    expect(result.rejected.map((r) => r.error)).toEqual([`at most ${MAX_EXPECTED} expected additions a turn`]);
   });
 
   it('drops the changes the world refuses and keeps the rest', async () => {
