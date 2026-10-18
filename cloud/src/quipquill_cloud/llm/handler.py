@@ -6,6 +6,7 @@ assembled assistant message (text + complete tool calls) and is the agent's sour
 
 import asyncio
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
-from quipquill_cloud.llm.policy import PURPOSES, tier
+from quipquill_cloud.llm.policy import PURPOSES, route
 from quipquill_cloud.mq.schemas import Command, Event, error_event
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,13 @@ class OpenRouterHandler:
 
         yield Event(type="status", status="thinking", meta=request.meta, **common)
 
-        model = tier(command.tier).model
+        chosen = route(request.model)
+        if chosen is None:
+            logger.warning("Unknown route %r in %s", request.model, request.request_id)
+            yield error_event("bad_request", **common)
+            return
+        model = chosen.model
+        providers = self._settings.provider_order or list(chosen.providers)
         params = PURPOSES[request.purpose]
         body: dict[str, Any] = {
             "model": model,
@@ -86,11 +93,8 @@ class OpenRouterHandler:
             "stream_options": {"include_usage": True},
             "extra_body": {
                 "reasoning": {"effort": params.effort},
-                "provider": {
-                    "order": self._settings.provider_order,
-                    "only": self._settings.provider_order,
-                    "allow_fallbacks": False,
-                },
+                # Tried in this order, only these: the next one when one is unavailable.
+                "provider": {"order": providers, "only": providers, "allow_fallbacks": False},
             },
         }
         if request.tools:
@@ -103,6 +107,9 @@ class OpenRouterHandler:
         tool_calls = _ToolCallBuffer()
         finish = "stop"
         reported: Any = None
+        provider: str | None = None
+        started = time.monotonic()
+        first: float | None = None
         try:
             async with asyncio.timeout(self._settings.llm_timeout_seconds):
                 stream = await self._client.chat.completions.create(**body)
@@ -113,10 +120,14 @@ class OpenRouterHandler:
                         break
                     if chunk.usage is not None:
                         reported = chunk.usage
+                    # OpenRouter names the provider that served the call (not in the SDK model).
+                    provider = getattr(chunk, "provider", None) or provider
                     if not chunk.choices:
                         continue
                     choice = chunk.choices[0]
                     delta = choice.delta
+                    if first is None and (delta.content or delta.tool_calls):
+                        first = time.monotonic()
                     if delta.content:
                         text += delta.content
                         yield Event(type="delta", seq=seq, text=delta.content, **common)
@@ -145,6 +156,20 @@ class OpenRouterHandler:
             yield Event(type="tool_call", call=call, **common)
 
         spent = _usage(reported)
+        # Which provider served each purpose and what it cached (ADR 49): cache misses show here.
+        done_at = time.monotonic()
+        logger.info(
+            "llm %s purpose=%s provider=%s ttft=%.2f total=%.2f in=%s cached=%s written=%s cost=%s",
+            request.request_id,
+            request.purpose,
+            provider,
+            (first or done_at) - started,
+            done_at - started,
+            spent["input"],
+            spent["cacheRead"],
+            spent["cacheWrite"],
+            spent["costUsd"],
+        )
         try:
             await usage.record(
                 self._sessionmaker,

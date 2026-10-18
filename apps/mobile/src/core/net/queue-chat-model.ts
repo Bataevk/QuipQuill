@@ -8,7 +8,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 import type { ChatResult } from '@langchain/core/outputs';
 import { convertToOpenAITool } from '@langchain/core/utils/function_calling';
 
-import type { LlmRequest, Purpose, WireTool } from '../protocol/messages';
+import type { LlmRequest, ModelClass, Purpose, WireTool } from '../protocol/messages';
 import { newId } from '../util/ids';
 import type { CloudSocket } from './cloud-socket';
 import { fromDone, toWireMessages } from './wire-format';
@@ -21,6 +21,8 @@ export interface QueueChatModelFields {
   channel: string;
   /** The server picks model, effort and max_tokens by purpose (ADR 10). */
   purpose: Purpose;
+  /** The model class; the server picks the model and providers for it (ADR 50). Default 'basic'. */
+  model?: ModelClass;
   meta?: Record<string, unknown>;
   tools?: WireTool[];
   responseFormat?: Record<string, unknown>;
@@ -57,7 +59,7 @@ export class QueueChatModel extends BaseChatModel {
     options: this['ParsedCallOptions'] & BaseChatModelCallOptions,
     runManager?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
-    const { socket, sessionId, channel, purpose, meta, tools, responseFormat } = this.fields;
+    const { socket, sessionId, channel, purpose, model = 'basic', meta, tools, responseFormat } = this.fields;
     const request: LlmRequest = {
       v: 1,
       type: 'llm.request',
@@ -65,6 +67,7 @@ export class QueueChatModel extends BaseChatModel {
       sessionId,
       channel,
       purpose,
+      model,
       messages: toWireMessages(messages),
       ...(tools?.length ? { tools } : {}),
       ...(responseFormat ? { responseFormat } : {}),

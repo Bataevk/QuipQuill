@@ -146,6 +146,8 @@ describe('react_entity and the actor pack (ADR 45)', () => {
       '"Below the bank."',
       'The recruit asks again.',
     ]);
+    // her chat ends with a cache breakpoint (ADR 49)
+    expect((actorCalls[1].messages[2].content as { cache_control?: unknown }[])[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(promptOf(1)[1].text).toContain('# What you remember\n- I do not trust the recruit yet.');
     expect((await world.scene()).notes).toEqual([]); // her notes are not the master's
   });
@@ -406,6 +408,8 @@ describe('actor stream', () => {
     const actor = requests.filter((r) => r.purpose === 'npc');
     expect(actor).toHaveLength(1);
     expect(actor[0]).toMatchObject({ channel: MAGS, purpose: 'npc', meta: { speaker: 'Mags Holloway' }, sessionId: 'save-1' });
+    // the client names a model class, never a model (ADR 50)
+    expect(requests.every((r) => r.model === 'basic')).toBe(true);
     expect(actor[0].tools).toBeUndefined();
     expect(requests.filter((r) => r.purpose === 'gm')).toHaveLength(2);
     expect(seen.some((e) => e.type === 'delta' && e.channel === MAGS)).toBe(true);

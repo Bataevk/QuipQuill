@@ -9,6 +9,7 @@ import { SystemMessage } from '@langchain/core/messages';
 import type { StoryMeta } from '../story/story-meta';
 import type { Entity, Exit, WorldEvent } from '../world/model';
 import type { Scene, World } from '../world/world';
+import { CACHE_LONG } from './messages';
 
 export const STORY_STYLE = '{{STORY_STYLE}}';
 
@@ -55,7 +56,7 @@ export function renderStoryStyle(meta: Pick<StoryMeta, 'title' | 'style' | 'worl
 /** The system message: the same for every call of the story, cached whole (ADR 20, 46). */
 export function gmSystemMessage(storyStyle: string, template = GM_PROMPT): SystemMessage {
   return new SystemMessage({
-    content: [{ type: 'text', text: template.replace(STORY_STYLE, storyStyle), cache_control: { type: 'ephemeral' } }],
+    content: [{ type: 'text', text: template.replace(STORY_STYLE, storyStyle), cache_control: CACHE_LONG }],
   });
 }
 

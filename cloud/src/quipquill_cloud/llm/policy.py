@@ -1,4 +1,5 @@
-"""What the server sends to the model. The client never chooses model, effort or max_tokens."""
+"""What the server sends to the model. The client names a route ("basic") and a purpose; the
+server chooses model, providers, effort and max_tokens."""
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -26,18 +27,41 @@ PURPOSES: dict[str, CallParams] = {
 
 
 @dataclass(frozen=True)
-class Tier:
+class Route:
+    """A model class the client names (`model: "basic"`): the server picks model and providers."""
+
     model: str
+    # OpenRouter provider slugs, tried in this order and only these (ADR 50).
+    providers: tuple[str, ...]
+
+
+# ADR 50 (owner, 2026-10-18): Vertex in Europe first (latency ~0.4 s instead of ~2.4 s, +10% in
+# price), then Vertex global, then Bedrock. Only providers that do not log prompts (ADR 16).
+ROUTES: dict[str, Route] = {
+    "basic": Route(
+        model=HAIKU,
+        providers=("google-vertex/europe", "google-vertex/global", "amazon-bedrock"),
+    ),
+}
+DEFAULT_ROUTE = "basic"
+
+
+def route(name: str) -> Route | None:
+    return ROUTES.get(name)
+
+
+@dataclass(frozen=True)
+class Tier:
     # Spend cap per UTC day in USD (OpenRouter's reported cost); None = not limited.
     daily_cost_usd: Decimal | None
 
 
-# Prototype: everyone is on "free" (Haiku 5.5, $0.05/day). Models and caps for pro/max are a
-# product decision for later (backlog); until then they behave like free.
+# Prototype: everyone is on "free" ($0.05/day). Caps (and routes) for pro/max are a product
+# decision for later (backlog); until then they behave like free.
 TIERS: dict[str, Tier] = {
-    "free": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
-    "pro": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
-    "max": Tier(model=HAIKU, daily_cost_usd=Decimal("0.05")),
+    "free": Tier(daily_cost_usd=Decimal("0.05")),
+    "pro": Tier(daily_cost_usd=Decimal("0.05")),
+    "max": Tier(daily_cost_usd=Decimal("0.05")),
 }
 
 

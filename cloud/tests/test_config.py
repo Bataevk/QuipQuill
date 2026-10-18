@@ -8,7 +8,7 @@ def test_dev_defaults_load_without_env_file() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.env == "dev"
-    assert settings.provider_order == ["amazon-bedrock", "google-vertex/global"]
+    assert settings.provider_order == []  # each route has its own order (ADR 50)
 
 
 def test_prod_rejects_default_jwt_secret() -> None:

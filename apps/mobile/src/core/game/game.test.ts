@@ -265,8 +265,8 @@ describe('Game', () => {
       await game.whenGenerated();
 
       expect(notified).toBe(1);
-      expect(game.lastUsage?.byChannel.generator).toEqual({ calls: 1, costUsd: 0.001 });
-      expect(game.sessionUsage.byChannel.generator).toEqual({ calls: 1, costUsd: 0.001 });
+      expect(game.lastUsage?.byChannel.generator).toMatchObject({ calls: 1, costUsd: 0.001 });
+      expect(game.sessionUsage.byChannel.generator).toMatchObject({ calls: 1, costUsd: 0.001 });
     });
 
     it('is stopped when the game closes', async () => {

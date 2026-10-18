@@ -6,6 +6,7 @@
  * `make cloud-dev`. Needs `make infra-up` and the cloud's uv environment.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
@@ -41,14 +42,21 @@ export async function startTestCloud(
         INVITE_CODES: JSON.stringify([TEST_INVITE]),
         JWT_SECRET: 'ts-core-test-secret-that-is-long-enough-32b',
         WS_HEARTBEAT_INTERVAL: '0.5',
-        LOG_LEVEL: 'warning',
+        // QQ_CLOUD_LOG=<file>: the cloud's log at info level there (e.g. which provider served
+        // each call, ADR 49); otherwise warnings only, kept for the error message.
+        LOG_LEVEL: process.env.QQ_CLOUD_LOG ? 'info' : 'warning',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
   let output = '';
-  child.stdout?.on('data', (chunk) => (output += String(chunk)));
-  child.stderr?.on('data', (chunk) => (output += String(chunk)));
+  const log = process.env.QQ_CLOUD_LOG;
+  const keep = (chunk: unknown) => {
+    output += String(chunk);
+    if (log) appendFileSync(log, String(chunk));
+  };
+  child.stdout?.on('data', keep);
+  child.stderr?.on('data', keep);
   const httpUrl = `http://127.0.0.1:${port}`;
   try {
     await waitForHealth(`${httpUrl}/health/mq`, child, 30_000);

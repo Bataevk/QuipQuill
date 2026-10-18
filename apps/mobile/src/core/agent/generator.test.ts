@@ -59,7 +59,11 @@ describe('generator', () => {
     const [system, context] = await generatorMessages({ world, meta }, TURN);
 
     const [stable] = system.content as { text: string; cache_control?: unknown }[];
-    expect(stable.cache_control).toEqual({ type: 'ephemeral' });
+    expect(stable.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' }); // stable all session (ADR 49)
+    const [people, rest] = context.content as { text: string; cache_control?: unknown }[];
+    expect(people.text).toMatch(/^# People involved\n/);
+    expect(people.cache_control).toEqual({ type: 'ephemeral' });
+    expect(rest.text).toMatch(/^# World state\n/);
     expect(stable.text).toMatch(/^You keep the world of an interactive story true to what happens in it\./);
     expect(stable.text).toContain(`Title: ${meta.title}`);
     expect(context.text).toContain('# World state\nPlayer: Aria [player].');

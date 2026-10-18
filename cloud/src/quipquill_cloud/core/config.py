@@ -56,9 +56,9 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    # Game calls: only providers that do not log prompts, Bedrock first (its cache works),
-    # Vertex as the fallback (ADR 16, ADR 20).
-    provider_order: list[str] = ["amazon-bedrock", "google-vertex/global"]
+    # Overrides the providers of every route (JSON list in env), e.g. while one is down;
+    # empty = each route's own order (llm/policy.py, ADR 50).
+    provider_order: list[str] = []
     embed_model: str = "openai/text-embedding-3-small"
 
     @model_validator(mode="after")

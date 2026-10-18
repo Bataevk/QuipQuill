@@ -3,7 +3,7 @@ import { AIMessage, type BaseMessage, type ToolMessage } from '@langchain/core/m
 
 import type { DoneEvent, TextPart, WireMessage, WireToolCall } from '../protocol/messages';
 
-type ContentBlock = { type?: string; text?: string; cache_control?: { type: 'ephemeral' } };
+type ContentBlock = { type?: string; text?: string; cache_control?: { type: 'ephemeral'; ttl?: '1h' } };
 
 export function toWireMessages(messages: BaseMessage[]): WireMessage[] {
   return messages.map(toWireMessage);

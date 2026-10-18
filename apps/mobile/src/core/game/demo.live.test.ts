@@ -11,7 +11,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { AuthSession, MemoryTokenStore } from '@/core/net/auth';
 import { CloudSocket } from '@/core/net/cloud-socket';
 import { CloudEmbeddings } from '@/core/net/embeddings';
-import { formatUsage } from '@/core/protocol/usage-meter';
+import { formatChannels, formatUsage } from '@/core/protocol/usage-meter';
 import { newId, nowIso } from '@/core/util/ids';
 import { startTestCloud, TEST_INVITE, type TestCloud } from '@/platform/node/cloud-server';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
@@ -124,6 +124,7 @@ async function playOnce(run: number): Promise<Step[]> {
     expect(await game.nextStep()).toBeUndefined();
     const kinds = new Set(steps.flatMap((s) => s.events));
     console.log(`run ${run}: events ${[...kinds].join(', ')}; total ${formatUsage(game.sessionUsage)}`);
+    console.log(`run ${run} by channel:\n  ${formatChannels(game.sessionUsage).join('\n  ')}`);
     return steps;
   } finally {
     await game.close();
@@ -186,6 +187,7 @@ it('stages 6.2d, 6.2h: after the player refuses the heist, the world and the peo
     const turns = steps.filter((s) => !s.step.startsWith('adaptation') && !s.step.startsWith('choice'));
     const average = turns.reduce((sum, s) => sum + s.cost, 0) / turns.length;
     console.log(`\nAverage cost of a player turn with the generator: $${average.toFixed(4)}; total ${formatUsage(game.sessionUsage)}`);
+    console.log(`Refusal by channel:\n  ${formatChannels(game.sessionUsage).join('\n  ')}`);
   } finally {
     await game.close();
   }

@@ -11,8 +11,8 @@ export type Purpose = 'gm' | 'guard' | 'npc' | 'summary' | 'character' | 'genera
 export interface TextPart {
   type: 'text';
   text: string;
-  /** Prompt cache breakpoint at the end of the stable prefix (ADR 20). */
-  cache_control?: { type: 'ephemeral' };
+  /** Prompt cache breakpoint (ADR 20, 46); `ttl: '1h'` for prefixes stable all session (ADR 49). */
+  cache_control?: { type: 'ephemeral'; ttl?: '1h' };
 }
 
 export interface WireToolCall {
@@ -40,6 +40,9 @@ export interface AuthMessage {
   token: string;
 }
 
+/** Model classes the client may ask for; which model and providers serve one is the server's choice. */
+export type ModelClass = 'basic';
+
 export interface LlmRequest {
   v: 1;
   type: 'llm.request';
@@ -48,6 +51,8 @@ export interface LlmRequest {
   /** Where the UI draws the stream: 'gm' | 'npc:<id>' | 'guard' | 'system'. */
   channel: string;
   purpose: Purpose;
+  /** The model class (ADR 50): the server maps it to a model and providers; default 'basic'. */
+  model?: ModelClass;
   messages: WireMessage[];
   tools?: WireTool[];
   responseFormat?: Record<string, unknown>;

@@ -16,6 +16,7 @@ import { conversation, lastToolText, systemText } from '../testing/demo-scenario
 import { ScriptedChatModel, type Step } from '../testing/scripted-model';
 import { TranscriptStore } from '../transcript';
 import { repairDanglingToolCalls } from './bug-guard';
+import { guardConversation } from './guard';
 import { compactHistory, SUMMARY_PREFIX, TRIMMED_NOTE } from './context';
 import { TOOL_LIMIT_TEXT } from './tool-limit';
 
@@ -142,12 +143,43 @@ describe('Guard', () => {
     ]);
   });
 
-  it('passes an attempt to the master, with the last GM words as context', async () => {
+  it('passes an attempt to the master, with the recent conversation as cached context (ADR 49)', async () => {
     const guardModel = new ScriptedChatModel([verdict('pass'), verdict('pass')]);
     await play('Hello.', [{ text: 'Mags nods.' }], { guardModel });
-    const result = await play('I ask Mags about the plan.', [{ text: 'She taps the map.' }], { guardModel });
+    const result = await play('I ask her about the plan.', [{ text: 'She taps the map.' }], { guardModel });
     expect(result).toMatchObject({ rejected: false, reply: 'She taps the map.' });
-    expect(guardModel.calls[1][1].text).toContain("# The Game Master's last words\nMags nods.");
+    const [system, user] = guardModel.calls[1];
+    expect((system.content as { cache_control?: unknown }[])[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    const blocks = user.content as { text: string; cache_control?: unknown }[];
+    expect(blocks.map((b) => [b.text.trim().slice(0, 30), b.cache_control])).toEqual([
+      ['# Recent conversation (oldest ', undefined],
+      ['Player: Hello.', undefined],
+      ['Game Master: Mags nods.', { type: 'ephemeral' }],
+      ['# Current state\nPlayer: Aria (', undefined],
+    ]);
+    expect(blocks.at(-1)!.text).toMatch(/# Player input\nI ask her about the plan\.$/);
+  });
+
+  it('reads a window of the conversation that moves in steps, so its prefix stays cached', () => {
+    const turns = (n: number) =>
+      Array.from({ length: n }, (_, i) => [inputMessage(`q${i}`, 'player', i + 1), new AIMessage(`a${i}`)]).flat();
+    // 8 entries: all of them
+    expect(guardConversation(turns(4))).toHaveLength(8);
+    // 24 entries: from the 10th on (14); 28: still from the 10th (18) — the same prefix
+    expect(guardConversation(turns(12))[0]).toBe('Player: q5');
+    expect(guardConversation(turns(14))[0]).toBe('Player: q5');
+    // 30 entries: the window steps on, to the 20th (10)
+    expect(guardConversation(turns(15))).toHaveLength(10);
+    expect(guardConversation(turns(15))[0]).toBe('Player: q10');
+    // tool calls and results, system commands are left out; entities speak under their names
+    const actorLine = new AIMessage({ content: '"No."', additional_kwargs: { qq_actor: { id: 'npc:mags', name: 'Mags' } } });
+    const mixed = [
+      inputMessage('session_start', 'system', 1),
+      new AIMessage({ content: '', tool_calls: [{ id: 'c', name: 'inspect', args: {} }] }),
+      new ToolMessage({ content: 'result', tool_call_id: 'c' }),
+      actorLine,
+    ];
+    expect(guardConversation(mixed)).toEqual(['Mags: "No."']);
   });
 
   it('does not screen system commands', async () => {

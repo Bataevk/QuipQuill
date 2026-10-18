@@ -15,6 +15,7 @@ import type { StoryMeta } from '../story/story-meta';
 import { fail, PLAYER_ID, type Entity, type EntityType, type Outcome, type WorldEvent } from '../world/model';
 import type { World } from '../world/world';
 import { LIKELIHOODS, type Likelihood } from './luck';
+import { CACHE, CACHE_LONG } from './messages';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
 import { exclusive } from './turn-lock';
 
@@ -189,9 +190,11 @@ export async function generatorMessages(
     .map((e) => `- ${eventText(e, names)}`);
   const people = await Promise.all((await involved(world, events)).map((npc) => personText(world, npc)));
 
+  // The people first, with a breakpoint: they change less often than the world state and the
+  // turn (ADR 49).
+  const peopleText = `# People involved\n${people.join('\n') || '- nobody'}\n\n`;
   const context = [
     `# World state\n${await renderWorldState(world)}`,
-    people.length ? `# People involved\n${people.join('\n')}` : '',
     [
       `# This turn (${turn.turn})`,
       `Player: ${turn.input.trim()}`,
@@ -205,8 +208,13 @@ export async function generatorMessages(
   ];
   const system = GENERATOR_PROMPT.replace('{{STORY_STYLE}}', renderStoryStyle(deps.meta));
   return [
-    new SystemMessage({ content: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] }),
-    new HumanMessage(context.filter(Boolean).join('\n\n')),
+    new SystemMessage({ content: [{ type: 'text', text: system, cache_control: CACHE_LONG }] }),
+    new HumanMessage({
+      content: [
+        { type: 'text', text: peopleText, cache_control: CACHE },
+        { type: 'text', text: context.filter(Boolean).join('\n\n') },
+      ],
+    }),
   ];
 }
 

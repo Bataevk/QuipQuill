@@ -4,7 +4,7 @@ import { createMiddleware } from 'langchain';
 import type { Entity } from '../../world/model';
 import type { World } from '../../world/world';
 import { type ActorDeps, actorChannel, actorSystemMessage, askedOf, isSilence, SILENCE } from '../actor';
-import { estimateTokens, turnStart } from '../messages';
+import { estimateTokens, turnStart, withCacheBreakpoints } from '../messages';
 
 /** `additional_kwargs` key of an entity's own line written in the actor pack: `{ id, name }`. */
 const ACTOR_LINE = 'qq_actor';
@@ -90,7 +90,9 @@ export function packsMiddleware({ world, chats, model }: PacksOptions) {
     let history = saved;
     while (history.length > 2 && estimateTokens(history) > ENTITY_CHAT_CAP_TOKENS) history = history.slice(2);
     const ask = new HumanMessage(situation);
-    const answer = await model(entity).invoke([await actorSystemMessage(world, entity), ...history, ask], { signal });
+    // A breakpoint at the end of its chat: its next line reads the chat from the cache (ADR 49).
+    const sent = [await actorSystemMessage(world, entity), ...withCacheBreakpoints(history), ask];
+    const answer = await model(entity).invoke(sent, { signal });
     const raw = answer.text.trim();
     const silent = !raw || isSilence(raw);
     // The journal first: a reaction the player sees must count for the world's rules (ADR 34).

@@ -61,3 +61,23 @@ describe('UsageMeter', () => {
     expect(total.costUsd).toBeCloseTo(0.002, 6);
   });
 });
+
+describe('cache writes per channel (ADR 49)', () => {
+  it('counts what each channel read from and wrote to the cache', async () => {
+    const { formatChannels } = await import('./usage-meter');
+    const meter = new UsageMeter();
+    const routed = (requestId: string, channel: string) => ({ v: 1 as const, requestId, sessionId: 's', channel });
+    meter.apply({ ...routed('g1', 'gm'), type: 'status', status: 'thinking' });
+    meter.apply({
+      ...routed('g1', 'gm'),
+      type: 'done',
+      message: { role: 'assistant', content: 'x' },
+      finishReason: 'stop',
+      usage: { input: 30_000, output: 100, cacheRead: 20_000, cacheWrite: 9_000, costUsd: 0.002 },
+    });
+    expect(meter.total).toMatchObject({ cacheRead: 20_000, cacheWrite: 9_000 });
+    expect(meter.total.byChannel.gm).toEqual({ calls: 1, costUsd: 0.002, input: 30_000, cacheRead: 20_000, cacheWrite: 9_000 });
+    expect(formatUsage(meter.total)).toBe('$0.0020 · 1 call (gm 1) · 30.0K in (20.0K cached, 9.0K written) · 100 out');
+    expect(formatChannels(meter.total)).toEqual(['gm 1: 30.0K in (20.0K cached, 9.0K written) $0.0020']);
+  });
+});

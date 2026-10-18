@@ -27,6 +27,8 @@ class LlmRequest(_Message):
     session_id: Id = Field(alias="sessionId")
     channel: Id
     purpose: Purpose
+    # The model class the client wants (ADR 50); the server maps it to a model and providers.
+    model: str = "basic"
     messages: list[dict[str, Any]] = Field(min_length=1)
     tools: list[dict[str, Any]] | None = None
     response_format: dict[str, Any] | None = Field(default=None, alias="responseFormat")

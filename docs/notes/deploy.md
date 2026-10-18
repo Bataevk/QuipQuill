@@ -54,6 +54,8 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 
 Сменить секрет: отредактировать `cloud.env`, затем `docker compose up -d cloud` в `/opt/quipquill`.
 
+Провайдер лежит: временно задать порядок для всех маршрутов — `PROVIDER_ORDER=["amazon-bedrock"]` в `cloud.env` и `docker compose up -d cloud` (ADR 50; без переменной — порядок маршрута: Vertex Europe → Vertex global → Bedrock). Какой провайдер обслужил вызов и задержка — в логе `cloud`: строки `llm … provider= ttft= total=`.
+
 ## Приложение против сервера
 
 ```bash

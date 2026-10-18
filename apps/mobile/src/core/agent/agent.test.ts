@@ -114,7 +114,7 @@ describe('system prompt', () => {
     const [first, second] = model.calls;
     const parts = first[0].content as { type: string; text: string; cache_control?: unknown }[];
     expect(parts).toHaveLength(1);
-    expect(parts[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(parts[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' }); // an hour: stable all session (ADR 49)
     expect(parts[0].text).toMatch(/# Story style\nTitle: The Brass Vault[\s\S]*steampunk/);
     expect(parts[0].text).not.toContain('{{');
     expect(parts[0].text).not.toContain('Location:');

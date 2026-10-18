@@ -5,7 +5,14 @@
  */
 import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-const CACHE = { type: 'ephemeral' } as const;
+/** A cache breakpoint for what changes call to call (5 minutes, the provider's default). */
+export const CACHE = { type: 'ephemeral' } as const;
+/**
+ * For a prefix stable the whole session (system prompts): an hour, so a long pause of the player
+ * does not make it written again (ADR 49). Costs 2× to write instead of 1.25×; must come before
+ * any 5-minute breakpoint of the same request.
+ */
+export const CACHE_LONG = { type: 'ephemeral', ttl: '1h' } as const;
 
 export type InputSource = 'player' | 'system' | 'summary';
 

@@ -115,13 +115,24 @@ def test_server_chooses_model_params_and_providers(
     assert body["stream_options"] == {"include_usage": True}
     assert body["tools"] == TOOLS
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}  # gm thinks at medium
+    # Route "basic" (the default): Vertex Europe, then Vertex global, then Bedrock (ADR 50).
+    providers = ["google-vertex/europe", "google-vertex/global", "amazon-bedrock"]
     assert body["extra_body"]["provider"] == {
-        "order": ["amazon-bedrock", "google-vertex/global"],
-        "only": ["amazon-bedrock", "google-vertex/global"],
+        "order": providers,
+        "only": providers,
         "allow_fallbacks": False,
     }
     # The client's cache breakpoint is passed through untouched.
     assert body["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_route_is_named_by_the_client_and_chosen_by_the_server(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    events = run(app_client, {**gm_request(), "model": "anthropic/claude-opus"})
+    assert events[-1]["type"] == "error"
+    assert events[-1]["code"] == "bad_request"
+    assert fake.requests == []  # an unknown route never reaches the provider
 
 
 def test_npc_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
