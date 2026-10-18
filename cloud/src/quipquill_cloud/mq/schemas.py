@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -33,6 +33,15 @@ class LlmRequest(_Message):
     tools: list[dict[str, Any]] | None = None
     response_format: dict[str, Any] | None = Field(default=None, alias="responseFormat")
     meta: dict[str, Any] | None = None
+
+    def address(self, user_id: str | None = None) -> "Address":
+        """Where the events of this request go (the routing fields of `Event`)."""
+        return {
+            "user_id": user_id,
+            "request_id": self.request_id,
+            "session_id": self.session_id,
+            "channel": self.channel,
+        }
 
 
 class Auth(_Message):
@@ -71,6 +80,9 @@ class Command(BaseModel):
     tier: str
     request: LlmRequest
 
+    def address(self) -> "Address":
+        return self.request.address(self.user_id)
+
 
 # --- server → client (also the payload of qq.events) -----------------------------------------
 
@@ -98,6 +110,15 @@ class Event(BaseModel):
     retryable: bool | None = None
     meta: dict[str, Any] | None = None
 
+    def address(self) -> "Address":
+        """The routing fields of this event, for the events that follow it (replay)."""
+        return {
+            "user_id": self.user_id,
+            "request_id": self.request_id,
+            "session_id": self.session_id,
+            "channel": self.channel,
+        }
+
     def wire(self) -> dict[str, Any]:
         """JSON for the client: camelCase, no internal routing fields, no empty fields."""
         return self.model_dump(by_alias=True, exclude_none=True, mode="json")
@@ -113,6 +134,28 @@ class Event(BaseModel):
         data = _loads(body)
         user_id = data.pop("userId", None)
         return cls.model_validate({**data, "user_id": user_id})
+
+
+class Usage(TypedDict):
+    """`done.usage` (protocol.md): tokens and OpenRouter's cost of one generation."""
+
+    input: int
+    output: int
+    cacheRead: int
+    cacheWrite: int
+    costUsd: float
+
+
+NO_USAGE: Usage = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "costUsd": 0}
+
+
+class Address(TypedDict):
+    """Who an event is for and which generation it belongs to: `Event(**address)`."""
+
+    user_id: str | None
+    request_id: str | None
+    session_id: str | None
+    channel: str | None
 
 
 def error_event(

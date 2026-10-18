@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from quipquill_cloud.core import logs
-from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.core.security import InvalidToken, decode_access_token
 from quipquill_cloud.db.models import User
 from quipquill_cloud.mq.dispatcher import SessionKey
@@ -27,6 +26,7 @@ from quipquill_cloud.mq.schemas import (
     client_message,
     error_event,
 )
+from quipquill_cloud.services import Services, get_services
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,8 +39,9 @@ MAX_MESSAGE_BYTES = 1_000_000
 class Connection:
     """One client socket: serialized sends, the sessions it follows, last activity."""
 
-    def __init__(self, websocket: WebSocket, user: User) -> None:
+    def __init__(self, websocket: WebSocket, user: User, services: Services) -> None:
         self.websocket = websocket
+        self.services = services
         self.user_id = str(user.id)
         self.tier = user.tier
         self.sessions: set[SessionKey] = set()
@@ -53,34 +54,33 @@ class Connection:
             self.last_send = time.monotonic()
 
 
-async def _authenticate(websocket: WebSocket, settings: Settings) -> User | None:
+async def _authenticate(websocket: WebSocket, services: Services) -> User | None:
     """The first message must be `auth` with a valid access token (ADR 22), within the timeout.
 
     The token is never read from the URL: query strings end up in access logs (uvicorn, Caddy).
     """
     try:
-        async with asyncio.timeout(settings.ws_auth_timeout):
+        async with asyncio.timeout(services.settings.ws_auth_timeout):
             raw = await websocket.receive_text()
         message = Auth.model_validate_json(raw)
-        user_id = uuid.UUID(decode_access_token(message.token, settings)["sub"])
+        user_id = uuid.UUID(decode_access_token(message.token, services.settings)["sub"])
     except (TimeoutError, ValidationError, InvalidToken, ValueError):
         return None
-    async with websocket.app.state.sessionmaker() as session:
+    async with services.sessionmaker() as session:
         return await session.get(User, user_id)
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    settings: Annotated[Settings, Depends(get_settings)],
+    services: Annotated[Services, Depends(get_services)],
 ) -> None:
     await websocket.accept()
-    state = websocket.app.state
-    if getattr(state, "broker", None) is None:
+    if services.broker is None:
         await websocket.close(code=CLOSE_TRY_AGAIN_LATER, reason="queue_unavailable")
         return
     try:
-        user = await _authenticate(websocket, settings)
+        user = await _authenticate(websocket, services)
     except WebSocketDisconnect:
         return
     if user is None:
@@ -88,9 +88,9 @@ async def websocket_endpoint(
         return
 
     logs.user_id.set(str(user.id))
-    conn = Connection(websocket, user)
+    conn = Connection(websocket, user, services)
     await conn.send(Event(type="ready"))
-    heartbeat = asyncio.create_task(_heartbeat(conn, settings.ws_heartbeat_interval))
+    heartbeat = asyncio.create_task(_heartbeat(conn, services.settings.ws_heartbeat_interval))
     try:
         while True:
             raw = await websocket.receive_text()
@@ -101,11 +101,11 @@ async def websocket_endpoint(
         heartbeat.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await heartbeat
-        state.dispatcher.unsubscribe(conn)
+        services.dispatcher.unsubscribe(conn)
 
 
 async def _handle_client_message(conn: Connection, raw: str) -> None:
-    state = conn.websocket.app.state
+    services = conn.services
     if len(raw.encode()) > MAX_MESSAGE_BYTES:
         await conn.send(error_event("message_too_large"))
         return
@@ -120,63 +120,54 @@ async def _handle_client_message(conn: Connection, raw: str) -> None:
         case LlmRequest():
             logs.request_id.set(message.request_id)
             logs.session_id.set(message.session_id)
-            refusal = _refuse(conn, message, state.settings)
+            refusal = _refuse(conn, message)
             if refusal is not None:
                 await conn.send(
-                    error_event(
-                        refusal,
-                        request_id=message.request_id,
-                        session_id=message.session_id,
-                        channel=message.channel,
-                        retryable=refusal == "rate_limited",
-                    )
+                    error_event(refusal, retryable=refusal == "rate_limited", **message.address())
                 )
                 return
             key = (conn.user_id, message.session_id)
             if key not in conn.sessions:
-                await state.dispatcher.subscribe(key, conn, replay=False)
+                await services.dispatcher.subscribe(key, conn, replay=False)
                 conn.sessions.add(key)
             try:
-                await state.broker.publish_command(
+                if services.broker is None:
+                    raise RuntimeError("the queue is not connected")
+                await services.broker.publish_command(
                     Command(user_id=conn.user_id, tier=conn.tier, request=message)
                 )
             except Exception:
                 logger.exception("Could not enqueue request %s", message.request_id)
                 # No preceding `status`: the generation never started.
                 await conn.send(
-                    error_event(
-                        "queue_unavailable",
-                        request_id=message.request_id,
-                        session_id=message.session_id,
-                        channel=message.channel,
-                        retryable=True,
-                    )
+                    error_event("queue_unavailable", retryable=True, **message.address())
                 )
         case Resume():
             key = (conn.user_id, message.session_id)
-            await state.dispatcher.subscribe(key, conn, replay=True)
+            await services.dispatcher.subscribe(key, conn, replay=True)
             conn.sessions.add(key)
         case Cancel():
-            state.cancels.cancel(conn.user_id, message.request_id)
+            services.cancels.cancel(conn.user_id, message.request_id)
         case Ping():
             await conn.send(Event(type="heartbeat"))
 
 
-def _refuse(conn: Connection, message: LlmRequest, settings: Settings) -> str | None:
+def _refuse(conn: Connection, message: LlmRequest) -> str | None:
     """A reason to reject the request before it reaches the queue, or None."""
+    settings = conn.services.settings
     if len(message.tools or []) > settings.max_tools:
         return "too_many_tools"
     approx_tokens = len(json.dumps(message.messages, ensure_ascii=False)) // 4
     if approx_tokens > settings.max_request_tokens:
         return "request_too_large"
-    if not conn.websocket.app.state.rate_limiter.allow(conn.user_id):
+    if not conn.services.rate_limiter.allow(conn.user_id):
         return "rate_limited"
     return None
 
 
 async def _heartbeat(conn: Connection, interval: float) -> None:
     """While a generation is running, never stay silent longer than `interval` seconds."""
-    dispatcher = conn.websocket.app.state.dispatcher
+    dispatcher = conn.services.dispatcher
     while True:
         await asyncio.sleep(interval)
         busy = any(dispatcher.has_active(key) for key in conn.sessions)

@@ -9,6 +9,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 import openai
@@ -17,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
-from quipquill_cloud.llm.policy import PURPOSES, route
-from quipquill_cloud.mq.schemas import Command, Event, error_event
+from quipquill_cloud.llm.policy import PURPOSES, Route, route
+from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usage, error_event
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +64,11 @@ class OpenRouterHandler:
 
     async def run(self, command: Command, is_cancelled: Callable[[], bool]) -> AsyncIterator[Event]:
         request = command.request
-        user_id = uuid.UUID(command.user_id)
-        common: dict[str, Any] = {
-            "user_id": command.user_id,
-            "request_id": request.request_id,
-            "session_id": request.session_id,
-            "channel": request.channel,
-        }
+        common = command.address()
         cap = self._settings.daily_cost_limit_usd
-        if await usage.over_limit(self._sessionmaker, user_id, command.tier, cap):
+        if await usage.over_limit(
+            self._sessionmaker, uuid.UUID(command.user_id), command.tier, cap
+        ):
             yield error_event("limit_exceeded", **common)
             return
 
@@ -82,11 +79,33 @@ class OpenRouterHandler:
             logger.warning("Unknown route %r in %s", request.model, request.request_id)
             yield error_event("bad_request", **common)
             return
-        model = chosen.model
+
+        answer = _Answer()
+        try:
+            async with asyncio.timeout(self._settings.llm_timeout_seconds):
+                async for event in self._stream(self._body(request, chosen), answer, is_cancelled):
+                    yield Event(**event, **common)
+        except (TimeoutError, openai.APITimeoutError):
+            yield error_event("timeout", retryable=True, **common)
+            return
+        except openai.BadRequestError as error:
+            logger.warning("Provider rejected request %s: %s", request.request_id, error)
+            yield error_event("bad_request", **common)
+            return
+        except openai.APIError as error:
+            logger.warning("Provider error for %s: %s", request.request_id, error)
+            yield error_event("provider_error", retryable=True, **common)
+            return
+
+        async for event in self._finish(command, chosen.model, answer):
+            yield event
+
+    def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:
+        """The OpenRouter call: the route's model and providers, the purpose's effort and limit."""
         providers = self._settings.provider_order or list(chosen.providers)
         params = PURPOSES[request.purpose]
         body: dict[str, Any] = {
-            "model": model,
+            "model": chosen.model,
             "messages": request.messages,
             "max_tokens": params.max_tokens,
             "stream": True,
@@ -101,70 +120,58 @@ class OpenRouterHandler:
             body["tools"] = request.tools
         if request.response_format:
             body["response_format"] = request.response_format
+        return body
 
-        text = ""
+    async def _stream(
+        self, body: dict[str, Any], answer: "_Answer", is_cancelled: Callable[[], bool]
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Reads the stream into `answer`; yields the fields of each `delta` event."""
+        stream = await self._client.chat.completions.create(**body)
         seq = 0
-        tool_calls = _ToolCallBuffer()
-        finish = "stop"
-        reported: Any = None
-        provider: str | None = None
-        started = time.monotonic()
-        first: float | None = None
-        try:
-            async with asyncio.timeout(self._settings.llm_timeout_seconds):
-                stream = await self._client.chat.completions.create(**body)
-                async for chunk in stream:
-                    if is_cancelled():
-                        finish = "cancelled"
-                        await stream.close()
-                        break
-                    if chunk.usage is not None:
-                        reported = chunk.usage
-                    # OpenRouter names the provider that served the call (not in the SDK model).
-                    provider = getattr(chunk, "provider", None) or provider
-                    if not chunk.choices:
-                        continue
-                    choice = chunk.choices[0]
-                    delta = choice.delta
-                    if first is None and (delta.content or delta.tool_calls):
-                        first = time.monotonic()
-                    if delta.content:
-                        text += delta.content
-                        yield Event(type="delta", seq=seq, text=delta.content, **common)
-                        seq += 1
-                    if delta.tool_calls:
-                        tool_calls.add(delta.tool_calls)
-                    if choice.finish_reason:
-                        finish = choice.finish_reason
-        except TimeoutError:
-            yield error_event("timeout", retryable=True, **common)
-            return
-        except openai.APITimeoutError:
-            yield error_event("timeout", retryable=True, **common)
-            return
-        except openai.BadRequestError as error:
-            logger.warning("Provider rejected request %s: %s", request.request_id, error)
-            yield error_event("bad_request", **common)
-            return
-        except openai.APIError as error:
-            logger.warning("Provider error for %s: %s", request.request_id, error)
-            yield error_event("provider_error", retryable=True, **common)
-            return
+        async for chunk in stream:
+            if is_cancelled():
+                answer.finish = "cancelled"
+                await stream.close()
+                break
+            if chunk.usage is not None:
+                answer.reported = chunk.usage
+            # OpenRouter names the provider that served the call (not in the SDK model).
+            answer.provider = getattr(chunk, "provider", None) or answer.provider
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            delta = choice.delta
+            if answer.first is None and (delta.content or delta.tool_calls):
+                answer.first = time.monotonic()
+            if delta.content:
+                answer.text += delta.content
+                yield {"type": "delta", "seq": seq, "text": delta.content}
+                seq += 1
+            if delta.tool_calls:
+                answer.tool_calls.add(delta.tool_calls)
+            if choice.finish_reason:
+                answer.finish = choice.finish_reason
 
-        calls = tool_calls.complete() if finish != "cancelled" else []
+    async def _finish(
+        self, command: Command, model: str, answer: "_Answer"
+    ) -> AsyncIterator[Event]:
+        """Complete tool calls, the usage row and `done` with the assembled message."""
+        request = command.request
+        common = command.address()
+        calls = answer.tool_calls.complete() if answer.finish != "cancelled" else []
         for call in calls:
             yield Event(type="tool_call", call=call, **common)
 
-        spent = _usage(reported)
+        spent = _usage(answer.reported)
         # Which provider served each purpose and what it cached (ADR 49): cache misses show here.
         done_at = time.monotonic()
         logger.info(
             "llm %s purpose=%s provider=%s ttft=%.2f total=%.2f in=%s cached=%s written=%s cost=%s",
             request.request_id,
             request.purpose,
-            provider,
-            (first or done_at) - started,
-            done_at - started,
+            answer.provider,
+            (answer.first or done_at) - answer.started,
+            done_at - answer.started,
             spent["input"],
             spent["cacheRead"],
             spent["cacheWrite"],
@@ -173,7 +180,7 @@ class OpenRouterHandler:
         try:
             await usage.record(
                 self._sessionmaker,
-                user_id=user_id,
+                user_id=uuid.UUID(command.user_id),
                 request_id=request.request_id,
                 session_id=request.session_id,
                 purpose=request.purpose,
@@ -187,23 +194,37 @@ class OpenRouterHandler:
             # The answer is already generated and paid for: losing the accounting row is
             # cheaper than leaving the client without `done` after deltas and tool calls.
             logger.exception("Could not record usage for %s: %s", request.request_id, spent)
-        message: dict[str, Any] = {"role": "assistant", "content": text or None}
+        message: dict[str, Any] = {"role": "assistant", "content": answer.text or None}
         if calls:
             message["tool_calls"] = calls
         yield Event(
             type="done",
             message=message,
-            finish_reason=finish,
-            usage=spent,
+            finish_reason=answer.finish,
+            usage=dict(spent),
             meta=request.meta,
             **common,
         )
 
 
-def _usage(reported: Any) -> dict[str, Any]:
+@dataclass
+class _Answer:
+    """What the stream has said so far."""
+
+    text: str = ""
+    tool_calls: _ToolCallBuffer = field(default_factory=_ToolCallBuffer)
+    finish: str = "stop"
+    reported: Any = None
+    provider: str | None = None
+    started: float = field(default_factory=time.monotonic)
+    # When the first text or tool call arrived (time to first token).
+    first: float | None = None
+
+
+def _usage(reported: Any) -> Usage:
     """Protocol usage from OpenRouter's final chunk (zeros if the stream was cut short)."""
     if reported is None:
-        return {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "costUsd": 0}
+        return NO_USAGE.copy()
     data = reported.model_dump()
     details = data.get("prompt_tokens_details") or {}
     return {

@@ -18,6 +18,7 @@ from quipquill_cloud.llm.handler import OpenRouterHandler
 from quipquill_cloud.mq.broker import Broker
 from quipquill_cloud.mq.dispatcher import EventDispatcher
 from quipquill_cloud.mq.worker import CancelRegistry, CommandWorker, EchoHandler, Handler
+from quipquill_cloud.services import Services
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +27,16 @@ logger = logging.getLogger(__name__)
 MQ_RETRY_MAX_SECONDS = 30.0
 
 
-async def _start_queue(app: FastAPI, settings: Settings) -> None:
+async def _start_queue(services: Services) -> None:
     """Connect to RabbitMQ; on failure degrade (REST keeps working, /ws answers 1013) and keep
     trying in the background: after a reboot Docker starts the containers in no particular order,
     so the cloud may come up before the broker."""
-    app.state.dispatcher = EventDispatcher(settings.generation_ttl_seconds)
-    app.state.cancels = CancelRegistry(settings.generation_ttl_seconds)
-    app.state.broker = None
-    app.state.mq_task = None
-    if not await _connect_queue(app, settings):
-        app.state.mq_task = asyncio.create_task(_keep_connecting(app, settings))
+    if not await _connect_queue(services):
+        services.mq_task = asyncio.create_task(_keep_connecting(services))
 
 
-async def _connect_queue(app: FastAPI, settings: Settings) -> bool:
+async def _connect_queue(services: Services) -> bool:
+    settings = services.settings
     try:
         broker = await Broker.connect(
             settings.rabbitmq_url, settings.queue_prefix, settings.mq_connect_timeout
@@ -46,28 +44,29 @@ async def _connect_queue(app: FastAPI, settings: Settings) -> bool:
     except Exception as error:
         logger.warning("RabbitMQ unavailable (%s); WebSocket chat is disabled", error)
         return False
-    await broker.start_dispatcher(app.state.dispatcher)
+    await broker.start_dispatcher(services.dispatcher)
     if settings.run_workers:
-        worker = CommandWorker(_handler(app, settings), broker.publish_event, app.state.cancels)
+        worker = CommandWorker(_handler(services), broker.publish_event, services.cancels)
         await broker.start_workers(worker, settings.worker_concurrency)
-    app.state.broker = broker
+    services.broker = broker
     return True
 
 
-async def _keep_connecting(app: FastAPI, settings: Settings) -> None:
-    delay = settings.mq_retry_seconds
+async def _keep_connecting(services: Services) -> None:
+    delay = services.settings.mq_retry_seconds
     while True:
         await asyncio.sleep(delay)
-        if await _connect_queue(app, settings):
+        if await _connect_queue(services):
             logger.info("RabbitMQ connected; WebSocket chat is enabled")
             return
         delay = min(delay * 2, MQ_RETRY_MAX_SECONDS)
 
 
-def _handler(app: FastAPI, settings: Settings) -> Handler:
+def _handler(services: Services) -> Handler:
+    settings = services.settings
     if settings.llm_handler == "echo":
         return EchoHandler(settings.echo_delay_seconds)
-    return OpenRouterHandler(app.state.llm_client, app.state.sessionmaker, settings)
+    return OpenRouterHandler(services.llm_client, services.sessionmaker, settings)
 
 
 def _llm_client(settings: Settings) -> AsyncOpenAI:
@@ -88,26 +87,29 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logs.configure(settings.log_level, settings.log_format)
-        app.state.rate_limiter = RateLimiter(
-            settings.rate_limit_per_minute, settings.rate_limit_burst
-        )
         engine = make_engine(settings.database_url)
-        app.state.sessionmaker = make_sessionmaker(engine)
-        app.state.llm_client = llm_client or _llm_client(settings)
+        services = Services(
+            settings=settings,
+            sessionmaker=make_sessionmaker(engine),
+            llm_client=llm_client or _llm_client(settings),
+            rate_limiter=RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst),
+            dispatcher=EventDispatcher(settings.generation_ttl_seconds),
+            cancels=CancelRegistry(settings.generation_ttl_seconds),
+        )
+        app.state.services = services
         if settings.llm_handler == "openrouter" and settings.openrouter_api_key is None:
             logger.warning("OPENROUTER_API_KEY is not set: LLM calls will fail")
-        await _start_queue(app, settings)
+        await _start_queue(services)
         yield
-        if app.state.mq_task is not None:
-            app.state.mq_task.cancel()
-        if app.state.broker is not None:
-            await app.state.broker.close()
-        await app.state.llm_client.close()
+        if services.mq_task is not None:
+            services.mq_task.cancel()
+        if services.broker is not None:
+            await services.broker.close()
+        await services.llm_client.close()
         await engine.dispose()
 
     app = FastAPI(title="QuipQuill Cloud", version=__version__, lifespan=lifespan)
     app.dependency_overrides[get_settings] = lambda: settings
-    app.state.settings = settings
 
     @app.middleware("http")
     async def request_context(

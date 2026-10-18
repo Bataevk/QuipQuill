@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from quipquill_cloud.mq.schemas import Event
+from quipquill_cloud.mq.schemas import Address, Event
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class Subscriber(Protocol):
 
 @dataclass
 class _Generation:
-    channel: str | None
+    address: Address
     meta: dict | None
     text: str = ""
     updated: float = field(default_factory=time.monotonic)
@@ -93,7 +93,7 @@ class EventDispatcher:
         """Start delivering a session's events; with `replay`, first send what is in flight."""
         async with self._locked(key) as session:
             if replay:
-                for event in self._snapshot(key, session):
+                for event in self._snapshot(session):
                     await subscriber.send(event)
             session.subscribers.add(subscriber)
 
@@ -151,7 +151,7 @@ class EventDispatcher:
         now = self._clock()
         if event.type in ("status", "delta", "tool_call"):
             generation = session.active.setdefault(
-                request_id, _Generation(event.channel, event.meta)
+                request_id, _Generation(event.address(), event.meta)
             )
             if event.type == "delta" and event.text:
                 generation.text += event.text
@@ -163,17 +163,10 @@ class EventDispatcher:
             session.finished[request_id] = _Finished(event, now)
 
     @staticmethod
-    def _snapshot(key: SessionKey, session: _Session) -> list[Event]:
-        user_id, session_id = key
+    def _snapshot(session: _Session) -> list[Event]:
         events = []
-        for request_id, generation in session.active.items():
-            common = {
-                "user_id": user_id,
-                "request_id": request_id,
-                "session_id": session_id,
-                "channel": generation.channel,
-                "meta": generation.meta,
-            }
+        for generation in session.active.values():
+            common = {**generation.address, "meta": generation.meta}
             if generation.text:
                 events.append(Event(type="replay", text=generation.text, **common))
             else:

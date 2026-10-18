@@ -15,7 +15,7 @@ from aio_pika.abc import AbstractIncomingMessage
 from pydantic import ValidationError
 
 from quipquill_cloud.core import logs as log_context
-from quipquill_cloud.mq.schemas import Command, Event, error_event
+from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, error_event
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +65,7 @@ class EchoHandler:
 
     async def run(self, command: Command, is_cancelled: Callable[[], bool]) -> AsyncIterator[Event]:
         request = command.request
-        common: dict[str, Any] = {
-            "user_id": command.user_id,
-            "request_id": request.request_id,
-            "session_id": request.session_id,
-            "channel": request.channel,
-        }
+        common = command.address()
         yield Event(type="status", status="thinking", meta=request.meta, **common)
         text = _last_user_text(request.messages)
         if text.strip() == self.FAIL_TRIGGER:
@@ -89,7 +84,7 @@ class EchoHandler:
             type="done",
             message={"role": "assistant", "content": sent},
             finish_reason=finish,
-            usage={"input": 0, "output": 0, "cacheRead": 0, "costUsd": 0},
+            usage=dict(NO_USAGE),
             meta=request.meta,
             **common,
         )
@@ -128,16 +123,7 @@ class CommandWorker:
             await self.handle(command)
         except Exception:
             logger.exception("Command %s failed", request.request_id)
-            await self._publish(
-                error_event(
-                    "provider_error",
-                    user_id=command.user_id,
-                    request_id=request.request_id,
-                    session_id=request.session_id,
-                    channel=request.channel,
-                    retryable=True,
-                )
-            )
+            await self._publish(error_event("provider_error", retryable=True, **command.address()))
         finally:
             self._cancels.forget(command.user_id, request.request_id)
             await message.ack()

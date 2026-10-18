@@ -96,6 +96,17 @@ def build_parser(settings: Settings) -> argparse.ArgumentParser:
     return parser
 
 
+def load_graph(path: Path) -> Graph:
+    return Graph.from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def save_graph(graph: Graph, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(graph.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def print_issues(issues: list[Issue]) -> None:
     for issue in issues:
         print(issue)
@@ -139,10 +150,7 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
         logging.error("%s", error)
         return 1
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(graph.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    save_graph(graph, args.output)
     print(
         f"{len(graph.entities)} entities, {len(graph.relationships)} relationships "
         f"({graph.meta['failed_chunks']}/{graph.meta['chunks']} chunks failed) → {args.output}"
@@ -151,11 +159,9 @@ def run_extract(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def run_curate(args: argparse.Namespace) -> int:
-    graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
+    graph = load_graph(args.graph)
     curated = curation.apply(graph, curation.load(args.rules))
-    args.output.write_text(
-        json.dumps(curated.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    save_graph(curated, args.output)
     print(
         f"{len(graph.entities)} → {len(curated.entities)} entities, "
         f"{len(graph.relationships)} → {len(curated.relationships)} relationships → {args.output}"
@@ -164,7 +170,7 @@ def run_curate(args: argparse.Namespace) -> int:
 
 
 def run_export(args: argparse.Namespace, settings: Settings) -> int:
-    graph = Graph.from_dict(json.loads(args.graph.read_text(encoding="utf-8")))
+    graph = load_graph(args.graph)
     embedder_type = OpenRouterEmbedder if args.sync else OpenRouterBatchEmbedder
     embedder = embedder_type(settings, args.embed_model)
     title = args.title or args.output.stem.replace("-", " ").replace("_", " ").title()
