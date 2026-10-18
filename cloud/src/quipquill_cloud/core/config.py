@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://quipquill:quipquill@localhost:5672/"
     queue_prefix: str = "qq.dev"
     mq_connect_timeout: float = 10.0
+    # First pause before connecting again when RabbitMQ is down at startup (then doubling to 30 s).
+    mq_retry_seconds: float = 2.0
     # Workers run inside the API process (ADR 18); False leaves only the API and dispatcher.
     run_workers: bool = True
     worker_concurrency: int = 4

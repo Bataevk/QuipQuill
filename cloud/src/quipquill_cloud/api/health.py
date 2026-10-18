@@ -61,7 +61,8 @@ async def health_db(request: Request, response: Response) -> Check:
 async def health_mq(request: Request, response: Response) -> Check:
     broker = getattr(request.app.state, "broker", None)
     if broker is None:
-        return _answer(response, Check(status="down", detail="not_connected_at_startup"))
+        # Not up yet: the cloud keeps connecting in the background (main._keep_connecting).
+        return _answer(response, Check(status="down", detail="connecting"))
     if not await broker.ping(CHECK_TIMEOUT_SECONDS / 2):
         return _answer(response, Check(status="down", detail="broker_unreachable"))
     return Check(status="ok")

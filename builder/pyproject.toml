@@ -8,14 +8,18 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "httpx2>=2.13.1",
-    "openai>=3.29.0",
-    "pydantic-settings>=2.15.0",
-    "rapidfuzz>=3.14.6",
+    "httpx2==2.13.1",
+    "openai==3.29.0",
+    "pydantic-settings==2.15.0",
+    "rapidfuzz==3.14.6",
 ]
 
 [project.scripts]
 builder = "quipquill_builder.cli:main"
+
+# The uv the lock and the image are made with (Dockerfile, CI): another version warns or refuses.
+[tool.uv]
+required-version = ">=0.11.17,<0.12"
 
 [build-system]
 requires = ["uv_build>=0.11.17,<0.12.0"]
@@ -23,8 +27,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.1",
-    "ruff>=0.17.0",
+    "pytest==9.1.1",
+    "ruff==0.17.0",
 ]
 
 [tool.pytest.ini_options]

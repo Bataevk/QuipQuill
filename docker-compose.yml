@@ -5,7 +5,7 @@ name: quipquill
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17.11
     environment:
       POSTGRES_USER: quipquill
       POSTGRES_PASSWORD: quipquill
@@ -21,7 +21,7 @@ services:
       retries: 10
 
   rabbitmq:
-    image: rabbitmq:4-management
+    image: rabbitmq:4.3.6-management
     environment:
       RABBITMQ_DEFAULT_USER: quipquill
       RABBITMQ_DEFAULT_PASS: quipquill

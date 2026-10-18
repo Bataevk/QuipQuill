@@ -1,7 +1,7 @@
 # QuipQuill cloud: FastAPI + in-process workers (ADR 18). Build context: cloud/.
 
 # --- build: resolve and install everything into /app/.venv ---------------------------------------
-FROM python:3.13-slim-bookworm AS build
+FROM python:3.13.16-slim-bookworm AS build
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -18,7 +18,7 @@ COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable
 
 # --- runtime: just the virtualenv and the migrations ---------------------------------------------
-FROM python:3.13-slim-bookworm
+FROM python:3.13.16-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

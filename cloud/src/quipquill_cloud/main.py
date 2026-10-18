@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -21,23 +22,46 @@ from quipquill_cloud.mq.worker import CancelRegistry, CommandWorker, EchoHandler
 logger = logging.getLogger(__name__)
 
 
+# Retry pauses while RabbitMQ is not up yet: doubling up to this.
+MQ_RETRY_MAX_SECONDS = 30.0
+
+
 async def _start_queue(app: FastAPI, settings: Settings) -> None:
-    """Connect to RabbitMQ; on failure degrade (REST keeps working, /ws answers 1013)."""
+    """Connect to RabbitMQ; on failure degrade (REST keeps working, /ws answers 1013) and keep
+    trying in the background: after a reboot Docker starts the containers in no particular order,
+    so the cloud may come up before the broker."""
     app.state.dispatcher = EventDispatcher(settings.generation_ttl_seconds)
     app.state.cancels = CancelRegistry(settings.generation_ttl_seconds)
     app.state.broker = None
+    app.state.mq_task = None
+    if not await _connect_queue(app, settings):
+        app.state.mq_task = asyncio.create_task(_keep_connecting(app, settings))
+
+
+async def _connect_queue(app: FastAPI, settings: Settings) -> bool:
     try:
         broker = await Broker.connect(
             settings.rabbitmq_url, settings.queue_prefix, settings.mq_connect_timeout
         )
     except Exception as error:
         logger.warning("RabbitMQ unavailable (%s); WebSocket chat is disabled", error)
-        return
+        return False
     await broker.start_dispatcher(app.state.dispatcher)
     if settings.run_workers:
         worker = CommandWorker(_handler(app, settings), broker.publish_event, app.state.cancels)
         await broker.start_workers(worker, settings.worker_concurrency)
     app.state.broker = broker
+    return True
+
+
+async def _keep_connecting(app: FastAPI, settings: Settings) -> None:
+    delay = settings.mq_retry_seconds
+    while True:
+        await asyncio.sleep(delay)
+        if await _connect_queue(app, settings):
+            logger.info("RabbitMQ connected; WebSocket chat is enabled")
+            return
+        delay = min(delay * 2, MQ_RETRY_MAX_SECONDS)
 
 
 def _handler(app: FastAPI, settings: Settings) -> Handler:
@@ -74,6 +98,8 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
             logger.warning("OPENROUTER_API_KEY is not set: LLM calls will fail")
         await _start_queue(app, settings)
         yield
+        if app.state.mq_task is not None:
+            app.state.mq_task.cancel()
         if app.state.broker is not None:
             await app.state.broker.close()
         await app.state.llm_client.close()

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from collections.abc import Iterator
 
 import pytest
@@ -9,6 +10,7 @@ from conftest import INVITE, ws_connect
 from fake_openrouter import FakeOpenRouter
 from fastapi.testclient import TestClient
 
+from quipquill_cloud import main
 from quipquill_cloud.core import logs
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.core.ratelimit import RateLimiter
@@ -163,7 +165,28 @@ def test_queue_down(settings: Settings) -> None:
     with make_client(settings, rabbitmq_url=broken, mq_connect_timeout=1) as client:
         response = client.get("/health/mq")
     assert response.status_code == 503
-    assert response.json()["detail"] == "not_connected_at_startup"
+    assert response.json()["detail"] == "connecting"
+
+
+def test_queue_comes_up_after_the_cloud(settings: Settings, monkeypatch) -> None:
+    """After a reboot the cloud may start before RabbitMQ: it keeps connecting in the background."""
+    real = main.Broker.connect
+    failures = iter([OSError("connection refused"), OSError("connection refused")])
+
+    async def flaky(cls, *args):
+        error = next(failures, None)
+        if error is not None:
+            raise error
+        return await real(*args)
+
+    monkeypatch.setattr(main.Broker, "connect", classmethod(flaky))
+    with make_client(settings, mq_retry_seconds=0.05) as client:
+        assert client.get("/health/mq").json()["detail"] == "connecting"
+        deadline = time.monotonic() + 10
+        while client.get("/health/mq").status_code != 200:
+            assert time.monotonic() < deadline, "the cloud never connected to RabbitMQ"
+            time.sleep(0.1)
+        assert client.get("/health/mq").json()["status"] == "ok"
 
 
 # --- logs ----------------------------------------------------------------------------------------

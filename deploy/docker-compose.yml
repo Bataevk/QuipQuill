@@ -7,7 +7,7 @@ name: quipquill
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine
     environment:
       POSTGRES_USER: quipquill
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   rabbitmq:
-    image: rabbitmq:4-alpine
+    image: rabbitmq:4.3.6-alpine
     # The node name (and its data directory) follows the hostname; keep it fixed across recreates.
     hostname: rabbitmq
     environment:
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     environment:
       DOMAIN: ${DOMAIN:?}
     ports:

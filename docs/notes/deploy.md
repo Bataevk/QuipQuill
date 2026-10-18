@@ -65,6 +65,14 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start
 ```
 
+## Перезапуск сервера
+
+Docker и containerd включены в автозагрузку, у `postgres`, `rabbitmq`, `cloud`, `caddy` — `restart: unless-stopped`; `migrate` одноразовый и при перезапуске не нужен. Docker поднимает контейнеры без учёта `depends_on`, поэтому облако может стартовать раньше RabbitMQ: тогда оно подключается к очереди в фоне (2 → 30 с) и `/health/mq` до этого отвечает `down: connecting` (ADR 52). Проверка после перезагрузки:
+
+```bash
+for p in health health/db health/mq; do curl -s https://146-103-120-112.sslip.io/$p; echo; done
+```
+
 ## Ограничения
 
 - 1 GB RAM — впритык (Postgres, RabbitMQ и API вместе ~600–700 MB). При OOM — тариф 2 GB.

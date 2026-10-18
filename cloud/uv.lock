@@ -1709,22 +1709,22 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aio-pika", specifier = ">=10.1.1" },
-    { name = "alembic", specifier = ">=1.20.0" },
-    { name = "asyncpg", specifier = ">=0.32.0" },
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.143.0" },
-    { name = "openai", specifier = ">=3.29.0" },
-    { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.1" },
-    { name = "pydantic-settings", specifier = ">=2.15.0" },
-    { name = "pyjwt", specifier = ">=2.15.1" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.4" },
+    { name = "aio-pika", specifier = "==10.1.1" },
+    { name = "alembic", specifier = "==1.20.0" },
+    { name = "asyncpg", specifier = "==0.32.0" },
+    { name = "fastapi", extras = ["standard"], specifier = "==0.143.0" },
+    { name = "openai", specifier = "==3.29.0" },
+    { name = "pwdlib", extras = ["argon2"], specifier = "==0.3.1" },
+    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pyjwt", specifier = "==2.15.1" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.4" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx2", specifier = ">=2.13.1" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.17.0" },
+    { name = "httpx2", specifier = "==2.13.1" },
+    { name = "pytest", specifier = "==9.1.1" },
+    { name = "ruff", specifier = "==0.17.0" },
 ]
 
 [[package]]
