@@ -11,6 +11,7 @@ import { REMOVE_ALL_MESSAGES } from '@langchain/langgraph';
 import { createMiddleware } from 'langchain';
 
 import { estimateTokens, inputMessage, sourceOf, turnStart } from '../messages';
+import { invokeWithin } from '../structured';
 
 export const SUMMARY_PROMPT = `You keep the Game Master's memory of an interactive story. Below is the older part of the conversation between the player and the Game Master, possibly starting with an earlier summary. Rewrite all of it as one summary that replaces it.
 
@@ -96,10 +97,10 @@ async function summarize(
   if (!o.model) return undefined;
   const transcript = older.map(line).filter(Boolean).join('\n');
   for (let attempt = 1; attempt <= o.retries; attempt++) {
-    const timeout = AbortSignal.timeout(o.timeoutMs);
     try {
-      const answer = await o.model.invoke([new SystemMessage(SUMMARY_PROMPT), new HumanMessage(transcript)], {
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      const answer = await invokeWithin(o.model, [new SystemMessage(SUMMARY_PROMPT), new HumanMessage(transcript)], {
+        timeoutMs: o.timeoutMs,
+        signal,
       });
       const text = answer.text.trim();
       if (text) return text;

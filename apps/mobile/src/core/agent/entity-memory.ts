@@ -14,6 +14,7 @@ import { actorChannel } from './actor';
 import { ChatSync, type ChatStore } from './chat-store';
 import { estimateTokens } from './messages';
 import { brief } from './prompt';
+import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
 import { exclusive } from './turn-lock';
 
 /** An entity's chat window: past it, the oldest exchanges are folded into notes. */
@@ -29,31 +30,14 @@ Write what they must keep from it, as one to three short notes in the first pers
 Refer to each character by the id in square brackets. Answer with JSON only, in the given shape.`;
 
 /** OpenAI-style `response_format` for the notes call. */
-export const NOTE_ENTITY_RESPONSE_FORMAT = {
-  type: 'json_schema',
-  json_schema: {
-    name: 'note_entity',
-    strict: true,
-    schema: {
-      type: 'object',
-      properties: {
-        notes: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { entity: { type: 'string' }, text: { type: 'string' } },
-            required: ['entity', 'text'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['notes'],
-      additionalProperties: false,
-    },
-  },
-} as const;
+export const NOTE_ENTITY_RESPONSE_FORMAT = jsonSchemaFormat(
+  'note_entity',
+  strictObject({
+    notes: { type: 'array', items: strictObject({ entity: { type: 'string' }, text: { type: 'string' } }) },
+  }),
+);
 
-const Notes = z.object({
+export const Notes = z.object({
   notes: z.array(z.object({ entity: z.string().trim().min(1), text: z.string().trim().min(1) })).default([]),
 });
 
@@ -94,11 +78,11 @@ export function noteEntities(deps: EntityMemoryDeps, turn: number): Promise<Enti
     const overflows = await overflowing(deps, turn);
     if (!overflows.length) return result;
 
-    const timeout = AbortSignal.timeout(deps.timeoutMs ?? 30_000);
-    const answer = await deps.model.invoke(await notesMessages(deps.world, overflows), {
-      signal: deps.signal ? AbortSignal.any([deps.signal, timeout]) : timeout,
+    const answer = await invokeWithin(deps.model, await notesMessages(deps.world, overflows), {
+      timeoutMs: deps.timeoutMs ?? 30_000,
+      signal: deps.signal,
     });
-    const { notes } = Notes.parse(JSON.parse(answer.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')));
+    const { notes } = parseJsonAnswer(Notes, answer.text);
 
     await deps.world.actingAs('system', async () => {
       for (const note of notes) {

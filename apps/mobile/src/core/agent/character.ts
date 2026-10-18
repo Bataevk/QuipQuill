@@ -12,6 +12,7 @@ import { z } from 'zod';
 import type { StoryMeta } from '../story/story-meta';
 import type { CharacterSheet } from '../world/world';
 import type { ChatStore } from './chat-store';
+import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
 
 export const CHARACTER_CHAT = 'character';
 /** Proposals per adaptation: the third one can only be chosen from (owner, stage 4.4). */
@@ -34,36 +35,22 @@ The player sends their character sheet. Answer with propose_character, as JSON o
 Each character has "name", "race" (a people that exists in this world), "age" (years, plausible for that people; null if the sheet gives none and nothing suggests one) and "description": two to four sentences — looks, background, skills, and a few modest possessions fitting the era.
 When the player asks for changes, propose again with their wishes in mind, still within the world rules.`;
 
-const OPTION_SCHEMA = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    race: { type: 'string' },
-    age: { type: ['integer', 'null'] },
-    description: { type: 'string' },
-  },
-  required: ['name', 'race', 'age', 'description'],
-  additionalProperties: false,
-} as const;
+const OPTION_SCHEMA = strictObject({
+  name: { type: 'string' },
+  race: { type: 'string' },
+  age: { type: ['integer', 'null'] },
+  description: { type: 'string' },
+});
 
 /** OpenAI-style `response_format` for the character model (passed to the provider as is). */
-export const CHARACTER_RESPONSE_FORMAT = {
-  type: 'json_schema',
-  json_schema: {
-    name: 'propose_character',
-    strict: true,
-    schema: {
-      type: 'object',
-      properties: {
-        adapted: OPTION_SCHEMA,
-        alternatives: { type: 'array', items: OPTION_SCHEMA },
-        rationale: { type: 'string' },
-      },
-      required: ['adapted', 'alternatives', 'rationale'],
-      additionalProperties: false,
-    },
-  },
-} as const;
+export const CHARACTER_RESPONSE_FORMAT = jsonSchemaFormat(
+  'propose_character',
+  strictObject({
+    adapted: OPTION_SCHEMA,
+    alternatives: { type: 'array', items: OPTION_SCHEMA },
+    rationale: { type: 'string' },
+  }),
+);
 
 const Option = z.object({
   name: z.string().min(1),
@@ -71,7 +58,7 @@ const Option = z.object({
   age: z.number().int().positive().nullable().default(null),
   description: z.string().min(1),
 });
-const Proposal = z.object({
+export const Proposal = z.object({
   adapted: Option,
   alternatives: z.array(Option).default([]),
   rationale: z.string().default(''),
@@ -141,11 +128,8 @@ export async function proposeCharacter(
   const round = history.filter((m) => AIMessage.isInstance(m)).length + 1;
   if (round > MAX_PROPOSALS) throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
   const ask = new HumanMessage(playerMessage);
-  const timeout = AbortSignal.timeout(deps.timeoutMs ?? 60_000);
-  const answer = await deps.model.invoke(
-    [new SystemMessage(characterSystemPrompt(deps.meta)), ...history, ask],
-    { signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
-  );
+  const system = new SystemMessage(characterSystemPrompt(deps.meta));
+  const answer = await invokeWithin(deps.model, [system, ...history, ask], { timeoutMs: deps.timeoutMs ?? 60_000, signal });
   const proposal = parseProposal(answer.text, round);
   await deps.chats.append(CHARACTER_CHAT, [ask, new AIMessage(answer.text)]);
   return proposal;
@@ -160,7 +144,7 @@ export async function lastProposal(chats: ChatStore): Promise<CharacterProposal 
 export function parseProposal(text: string, round: number): CharacterProposal {
   let data: z.infer<typeof Proposal>;
   try {
-    data = Proposal.parse(JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')));
+    data = parseJsonAnswer(Proposal, text);
   } catch (error) {
     throw new CharacterProposalError('The character proposal could not be read.', { cause: error });
   }

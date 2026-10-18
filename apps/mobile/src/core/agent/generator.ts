@@ -17,6 +17,7 @@ import type { World } from '../world/world';
 import { LIKELIHOODS, type Likelihood } from './luck';
 import { CACHE, CACHE_LONG } from './messages';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
+import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
 import { exclusive } from './turn-lock';
 
 export const GENERATOR_PROMPT = `You keep the world of an interactive story true to what happens in it. You do not narrate. After each turn you read what the player did, what the Game Master narrated and how people reacted, and you record the lasting consequences in the world, so that people act on what really happened rather than on what the story originally planned.
@@ -45,49 +46,36 @@ Finds and strokes of luck are never yours to invent: they come only from the Gam
 {{STORY_STYLE}}`;
 
 /** OpenAI-style `response_format` for the generator model (passed to the provider as is). */
-export const GENERATOR_RESPONSE_FORMAT = {
-  type: 'json_schema',
-  json_schema: {
-    name: 'world_changes',
-    strict: true,
-    schema: {
-      type: 'object',
-      properties: {
-        relations: {
-          type: 'array',
-          items: obj({ a: { type: 'string' }, b: { type: 'string' }, description: { type: 'string' } }),
-        },
-        cancelled: { type: 'array', items: obj({ a: { type: 'string' }, b: { type: 'string' } }) },
-        moves: { type: 'array', items: obj({ who: { type: 'string' }, to: { type: 'string' } }) },
-        edits: { type: 'array', items: obj({ target: { type: 'string' }, description: { type: 'string' } }) },
-        additions: {
-          type: 'array',
-          items: obj({
-            name: { type: 'string' },
-            type: { type: 'string', enum: ['item', 'document', 'npc', 'creature', 'other'] }, // ADDABLE
-            description: { type: 'string' },
-            where: { type: 'string' },
-            basis: { type: 'string', enum: ['narrated', 'expected'] },
-            likelihood: { type: 'string', enum: [...LIKELIHOODS] },
-          }),
-        },
-      },
-      required: ['relations', 'cancelled', 'moves', 'edits', 'additions'],
-      additionalProperties: false,
+export const GENERATOR_RESPONSE_FORMAT = jsonSchemaFormat(
+  'world_changes',
+  strictObject({
+    relations: {
+      type: 'array',
+      items: strictObject({ a: { type: 'string' }, b: { type: 'string' }, description: { type: 'string' } }),
     },
-  },
-} as const;
-
-function obj<P extends Record<string, unknown>>(properties: P) {
-  return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } as const;
-}
+    cancelled: { type: 'array', items: strictObject({ a: { type: 'string' }, b: { type: 'string' } }) },
+    moves: { type: 'array', items: strictObject({ who: { type: 'string' }, to: { type: 'string' } }) },
+    edits: { type: 'array', items: strictObject({ target: { type: 'string' }, description: { type: 'string' } }) },
+    additions: {
+      type: 'array',
+      items: strictObject({
+        name: { type: 'string' },
+        type: { type: 'string', enum: ['item', 'document', 'npc', 'creature', 'other'] }, // ADDABLE
+        description: { type: 'string' },
+        where: { type: 'string' },
+        basis: { type: 'string', enum: ['narrated', 'expected'] },
+        likelihood: { type: 'string', enum: [...LIKELIHOODS] },
+      }),
+    },
+  }),
+);
 
 const text = z.string().trim().min(1);
 const ADDABLE = ['item', 'document', 'npc', 'creature', 'other'] as const;
 /** Gaps the place implies that are added (ADR 47); and how many a turn. */
 const SURE: readonly Likelihood[] = ['certain', 'likely'];
 const MAX_EXPECTED = 2;
-const Changes = z.object({
+export const Changes = z.object({
   relations: z.array(z.object({ a: text, b: text, description: text })).default([]),
   cancelled: z.array(z.object({ a: text, b: text })).default([]),
   moves: z.array(z.object({ who: text, to: text })).default([]),
@@ -155,9 +143,9 @@ export class GeneratorAnswerError extends Error {
  */
 export function generate(deps: GeneratorDeps, turn: GeneratorTurn): Promise<GeneratorResult> {
   return exclusive(deps.world, async () => {
-    const timeout = AbortSignal.timeout(deps.timeoutMs ?? 30_000);
-    const answer = await deps.model.invoke(await generatorMessages(deps, turn), {
-      signal: deps.signal ? AbortSignal.any([deps.signal, timeout]) : timeout,
+    const answer = await invokeWithin(deps.model, await generatorMessages(deps, turn), {
+      timeoutMs: deps.timeoutMs ?? 30_000,
+      signal: deps.signal,
     });
     return applyChanges(deps.world, parseChanges(answer.text));
   });
@@ -220,7 +208,7 @@ export async function generatorMessages(
 
 export function parseChanges(answer: string): WorldChanges {
   try {
-    return Changes.parse(JSON.parse(answer.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')));
+    return parseJsonAnswer(Changes, answer);
   } catch (error) {
     throw new GeneratorAnswerError('The world changes could not be read.', { cause: error });
   }

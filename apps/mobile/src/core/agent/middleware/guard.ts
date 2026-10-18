@@ -8,6 +8,7 @@ import { type Likelihood, LIKELIHOODS } from '../luck';
 import { CACHE, CACHE_LONG, sourceOf, turnStart } from '../messages';
 import { actorOf } from './packs';
 import { renderWorldState } from '../prompt';
+import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from '../structured';
 
 /** What the Guard may add before the master: people and fixtures of the place, never items (ADR 48). */
 const EXPECTED_TYPES = ['npc', 'creature', 'other'] as const;
@@ -31,39 +32,25 @@ Expected: when the input turns to someone or something this place naturally has 
 Answer with JSON only: {"verdict": "pass" | "reject", "reason": short note for the log, "reply": for reject, one or two sentences to the player — in the story's world and style, gently humorous, never mentioning rules, AI or the Game Master; for pass, "", "expected": [{"name", "type": "npc" | "creature" | "other", "description": one or two sentences, "likelihood"}]}.`;
 
 /** OpenAI-style `response_format` the cloud passes to the provider as is (protocol.md). */
-export const GUARD_RESPONSE_FORMAT = {
-  type: 'json_schema',
-  json_schema: {
-    name: 'guard_verdict',
-    strict: true,
-    schema: {
-      type: 'object',
-      properties: {
-        verdict: { type: 'string', enum: ['pass', 'reject'] },
-        reason: { type: 'string' },
-        reply: { type: 'string' },
-        expected: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              type: { type: 'string', enum: [...EXPECTED_TYPES] },
-              description: { type: 'string' },
-              likelihood: { type: 'string', enum: [...LIKELIHOODS] },
-            },
-            required: ['name', 'type', 'description', 'likelihood'],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ['verdict', 'reason', 'reply', 'expected'],
-      additionalProperties: false,
+export const GUARD_RESPONSE_FORMAT = jsonSchemaFormat(
+  'guard_verdict',
+  strictObject({
+    verdict: { type: 'string', enum: ['pass', 'reject'] },
+    reason: { type: 'string' },
+    reply: { type: 'string' },
+    expected: {
+      type: 'array',
+      items: strictObject({
+        name: { type: 'string' },
+        type: { type: 'string', enum: [...EXPECTED_TYPES] },
+        description: { type: 'string' },
+        likelihood: { type: 'string', enum: [...LIKELIHOODS] },
+      }),
     },
-  },
-} as const;
+  }),
+);
 
-const Verdict = z.object({
+export const Verdict = z.object({
   verdict: z.enum(['pass', 'reject']),
   reason: z.string().default(''),
   reply: z.string().default(''),
@@ -215,9 +202,9 @@ async function checkInput(
       ]
     : [];
   const now = `\n# Current state\n${await renderWorldState(world)}\n\n# Player input\n${input.text}`;
-  const timeout = AbortSignal.timeout(timeoutMs);
   try {
-    const answer = await model.invoke(
+    const answer = await invokeWithin(
+      model,
       [
         new SystemMessage({
           content: [
@@ -230,16 +217,12 @@ async function checkInput(
         }),
         new HumanMessage({ content: [...conversation, { type: 'text', text: now }] }),
       ],
-      { signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
+      { timeoutMs, signal },
     );
-    return Verdict.parse(JSON.parse(stripFence(answer.text)));
+    return parseJsonAnswer(Verdict, answer.text);
   } catch (error) {
     if (signal?.aborted) throw error; // the turn itself was cancelled
     onError?.(error);
     return undefined;
   }
-}
-
-function stripFence(text: string): string {
-  return text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 }
