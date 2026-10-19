@@ -14,7 +14,7 @@
     "android": {
       "package": "app.quipquill.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#3C3A40",
+        "backgroundColor": "#2E2A30",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -30,11 +30,11 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#EBE4D5",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "dark": {
-            "backgroundColor": "#000000",
+            "backgroundColor": "#221F23",
             "image": "./assets/images/splash-icon.png"
           }
         }
