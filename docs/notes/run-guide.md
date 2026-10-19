@@ -158,7 +158,7 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start --clear
 | «Check the email address…» при регистрации | Домен email зарезервирован (`.test`, `.example`) или пароль слишком короткий |
 | «This invite code is not valid» | Код не из `INVITE_CODES` в `cloud/.env` (после правки `.env` перезапустить `make cloud-dev`) |
 | Ошибка `limit_exceeded` | Дневной лимит исчерпан — `DAILY_COST_LIMIT_USD` в `cloud/.env` (см. раздел 4) |
-| Android: «QuipQuill isn't responding» | Эмулятору не хватает памяти (часто после долгого простоя) — перезапустить эмулятор с холодного старта (Device Manager → ⋮ → Cold Boot Now) |
+| Android: «foolore isn't responding» | Эмулятору не хватает памяти (часто после долгого простоя) — перезапустить эмулятор с холодного старта (Device Manager → ⋮ → Cold Boot Now) |
 | Под последним сообщением кнопка «The story paused — continue» | Прошлый ход оборвался (закрыли приложение, сеть) — кнопка доигрывает его |
 | Красный экран `Cannot find native module …` | Dev-клиент собран без нового нативного модуля: `LANG=en_US.UTF-8 npx expo run:ios` |
 | Android: `A restricted method in java.lang.System has been called` при сборке | Сборка идёт на JDK 25 — проверить `JAVA_HOME` (нужен JDK 17, раздел 2а) и остановить старый демон: `cd android && ./gradlew --stop` |
@@ -197,7 +197,7 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io ./gradlew assembleRelease
 Готовый файл — `android/app/build/outputs/apk/release/app-release.apk` (~107 МБ, все четыре ABI). Скопировать с понятным именем и отправить партнёру (мессенджер, почта, Google Drive):
 
 ```bash
-mkdir -p dist && cp android/app/build/outputs/apk/release/app-release.apk dist/QuipQuill-1.0.0-preview.apk
+mkdir -p dist && cp android/app/build/outputs/apk/release/app-release.apk dist/foolore-1.0.0-preview.apk
 ```
 
 APK подписан debug-ключом из шаблона Expo — для раздачи «своим» этого достаточно. Ставится поверх dev-сборки на эмуляторе (`adb install -r …`), данные сохраняются. Установка на телефоне — [demo-script](demo-script.md#установка-на-телефон).
@@ -217,7 +217,7 @@ APK подписан debug-ключом из шаблона Expo — для ра
 LANG=en_US.UTF-8 EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo run:ios --configuration Release --device
 ```
 
-Выбрать телефон в списке; при первом запуске CLI попросит выбрать команду подписи — Personal Team. После установки на телефоне: **Settings → General → VPN & Device Management** → профиль разработчика → **Trust**. Через 7 дней приложение перестанет открываться — повторить команду.
+Выбрать телефон в списке. Команда подписи задана в `app.json` (`ios.appleTeamId`, Personal Team владельца, ADR 58) и переживает `prebuild --clean`; на другом Mac с другим Apple ID — заменить её своей (Team ID — поле `OU` сертификата: `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject`). После установки на телефоне: **Settings → General → VPN & Device Management** → профиль разработчика → **Trust**. Через 7 дней приложение перестанет открываться — повторить команду.
 
 То же на симуляторе (проверить release-сборку без телефона): `--device "iPhone 17"` вместо `--device`.
 

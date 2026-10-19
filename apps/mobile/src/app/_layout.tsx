@@ -56,7 +56,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
-        <Stack.Screen name="index" options={{ title: 'QuipQuill' }} />
+        <Stack.Screen name="index" options={{ title: 'foolore' }} />
         <Stack.Screen name="login" options={{ title: 'Sign in', headerBackVisible: false }} />
         <Stack.Screen name="stories" options={{ title: 'Stories' }} />
         <Stack.Screen name="characters/index" options={{ title: 'Characters' }} />

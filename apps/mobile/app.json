@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "QuipQuill",
+    "name": "foolore",
     "slug": "quipquill",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,7 +8,8 @@
     "scheme": "quipquill",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "app.quipquill.mobile"
+      "bundleIdentifier": "app.quipquill.mobile",
+      "appleTeamId": "N7M7838735"
     },
     "android": {
       "package": "app.quipquill.mobile",

@@ -41,7 +41,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen title="QuipQuill">
+    <Screen title="foolore">
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" />
       <Field label="Invite code (new account only)" value={invite} onChangeText={setInvite} autoCapitalize="none" />
