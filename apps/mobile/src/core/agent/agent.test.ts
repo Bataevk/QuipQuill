@@ -365,9 +365,9 @@ describe('invalid tool call arguments', () => {
   });
 });
 
-describe('roll_luck (ADR 47)', () => {
+describe('try_luck (ADR 47)', () => {
   const roll = (likelihood: string, stakes: string) => ({
-    toolCalls: [{ name: 'roll_luck', args: { attempt: 'search under the tables', likelihood, stakes } }],
+    toolCalls: [{ name: 'try_luck', args: { attempt: 'search under the tables', likelihood, stakes } }],
   });
   const play = async (luck: number, draws: number[], ...steps: Step[]) => {
     model.push(...steps);
@@ -394,7 +394,7 @@ describe('roll_luck (ADR 47)', () => {
 
   it('fails plainly in a fair world, and turns into a mishap in a very unlucky one', async () => {
     await play(0.5, [0.99, 0], roll('possible', 'useful'), (messages) => {
-      expect(lastToolText(messages)).toBe('Luck: it does not work out. Nothing is found or gained; narrate that plainly.');
+      expect(lastToolText(messages)).toMatch(/^Luck: it does not work out\. .*without a word about luck or chance\.$/);
       return { text: 'Only dust.' };
     });
     await play(0.05, [0.99, 0.1], roll('possible', 'useful'), (messages) => {

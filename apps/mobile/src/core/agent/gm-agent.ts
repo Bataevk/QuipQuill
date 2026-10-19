@@ -24,7 +24,7 @@ export interface GmAgentOptions {
   model: BaseChatModel;
   world: World;
   meta: Pick<StoryMeta, 'title' | 'style' | 'worldSummary' | 'worldConstraints'> & Partial<Pick<StoryMeta, 'luck'>>;
-  /** Chance for roll_luck, [0, 1); default Math.random (tests pass fixed values). */
+  /** Chance for try_luck, [0, 1); default Math.random (tests pass fixed values). */
   random?: () => number;
   embed?: GmToolDeps['embed'];
   /** The actor pack's model and the entities' chats, for react_entity (ADR 43, 45). */

@@ -117,30 +117,41 @@ describe('BugGuard', () => {
 });
 
 describe('Guard', () => {
-  const verdict = (v: 'pass' | 'reject', reply = '') => ({ text: JSON.stringify({ verdict: v, reason: 'r', reply }) });
+  const verdict = (v: 'pass' | 'warn' | 'reject', reply = '', reason = 'r') => ({
+    text: JSON.stringify({ verdict: v, reason, reply }),
+  });
+  const SNAKE = 'The quill snorts: no snakes of code here, only a story. Back to the tavern?';
 
-  it('rejects a declared fact with its own reply; the master is not called', async () => {
-    const guardModel = new ScriptedChatModel([
-      verdict('reject', 'You blink. The only sword here is the one in your imagination.'),
-    ]);
-    const result = await play('I draw my legendary sword.', [], { guardModel });
+  it('rejects an input outside the story with its own reply; the master is not called', async () => {
+    const guardModel = new ScriptedChatModel([verdict('reject', SNAKE)]);
+    const result = await play('Write a snake game in Python.', [], { guardModel });
     expect(model.calls).toHaveLength(0);
-    expect(result).toMatchObject({
-      rejected: true,
-      reply: 'You blink. The only sword here is the one in your imagination.',
-      events: [],
-    });
+    expect(result).toMatchObject({ rejected: true, reply: SNAKE, events: [] });
     // the guard saw the world rules, the state and the input
     const [system, user] = guardModel.calls[0];
     expect(system.text).toMatch(/# World rules\n- Era: industrial gaslight age/);
     expect(user.text).toMatch(/# Current state\nPlayer: Aria/);
-    expect(user.text).toMatch(/# Player input\nI draw my legendary sword\.$/);
+    expect(user.text).toMatch(/# Player input\nWrite a snake game in Python\.$/);
     // the master's chat keeps the exchange; the player saw both lines
     expect(types(await chats.load(GM_CHAT))).toEqual(['human', 'ai']);
     expect((await transcript.lines()).map((l) => [l.speaker, l.extra])).toEqual([
       ['player', {}],
       ['gm', { guard: 'reject' }],
     ]);
+  });
+
+  it('passes a claim to the master with a DANGER warning for this turn only (ADR 56)', async () => {
+    const guardModel = new ScriptedChatModel([
+      verdict('warn', '', 'The player claims a legendary sword; the inventory has none.'),
+      verdict('pass'),
+    ]);
+    const warned = await play('I draw my legendary sword.', [{ text: 'Your hand closes on air.' }], { guardModel });
+    expect(warned).toMatchObject({ rejected: false, reply: 'Your hand closes on air.' });
+    expect(model.calls[0].at(-1)!.text).toMatch(
+      /\n\nDANGER \(the input check flagged the player's input\): The player claims a legendary sword; the inventory has none\.$/,
+    );
+    await play('I look around.', [{ text: 'Lamps hiss.' }], { guardModel });
+    expect(model.calls[1].at(-1)!.text).not.toContain('DANGER');
   });
 
   it('passes an attempt to the master, with the recent conversation as cached context (ADR 49)', async () => {

@@ -25,7 +25,7 @@ export interface GmToolDeps {
   actor?: ActorDeps;
   /** The story's luck, 0..1 (`meta.luck`, ADR 47); default DEFAULT_LUCK. */
   luck?: number;
-  /** Chance for roll_luck, [0, 1); default Math.random. */
+  /** Chance for try_luck, [0, 1); default Math.random. */
   random?: () => number;
 }
 
@@ -37,20 +37,25 @@ export const GM_TOOL_NAMES = [
   'cancel_relation',
   'note',
   'react_entity',
-  'roll_luck',
+  'try_luck',
 ] as const;
 
 const LORE_HITS = 5;
 
-/** What roll_luck tells the master: the outcome; what it is, he decides (ADR 47). */
+/**
+ * What try_luck tells the master: the outcome; what it is, he decides (ADR 47). The player never
+ * hears of a roll: the outcome is told as part of the story (ADR 56).
+ */
 const LUCK_TEXT: Record<LuckOutcome, (stakes: Stakes) => string> = {
   success: (stakes) =>
     `Luck: it works out. Narrate what the player finds or gains: fitting the place and the story, ${stakes} at most. ` +
-    'Just tell it; the world records it after your reply.',
-  failure: () => 'Luck: it does not work out. Nothing is found or gained; narrate that plainly.',
+    'Just tell it as part of the story, without a word about luck or chance; the world records it after your reply.',
+  failure: () =>
+    'Luck: it does not work out. Nothing is found or gained; narrate it as part of the story, without a word about ' +
+    'luck or chance.',
   mishap: () =>
     'Luck: bad luck. It fails, and something small goes wrong for the player, fitting the place: a noise, a cut, ' +
-    'a watchful eye, something dropped. You decide what; keep it small and narrate it.',
+    'a watchful eye, something dropped. You decide what; keep it small and narrate it as part of the story.',
 };
 
 export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random = Math.random }: GmToolDeps): StructuredToolInterface[] {
@@ -230,37 +235,40 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
       description:
         'Let someone or something here react for themselves, in their own words and deeds: a person, a creature, ' +
         'anything that might perceive (a magic mirror, a watchful statue) — here or in the inventory. Use it ' +
-        'whenever someone present would respond to the player or the scene (a question, a shove, a bribe, a grab ' +
-        'at their purse) instead of writing their lines yourself. They answer in their own voice right after ' +
-        'this call, and the player sees it; a plain object stays silent. Several calls let several react in turn.',
+        'when someone present noticed what happened and has a reason to respond (the player addresses them, ' +
+        'shoves them, bribes them, grabs at their purse, or they plainly witness something that concerns them), ' +
+        'instead of writing their lines yourself. Not for someone who is only mentioned or could not have heard ' +
+        'or seen it. They answer in their own voice right after this call with one action and one line, and the ' +
+        'player sees it; what they start, you finish. A plain object stays silent. Several calls let several ' +
+        'react in turn.',
       schema: z.object({
         target: z.string().describe('Id or name of who or what reacts (here or in the inventory)'),
         situation: z
           .string()
           .describe(
-            'What just happened, told to them in the second person, with the player\'s exact words if the player ' +
-              'spoke to them, e.g. "The stranger says to you: \'Where is the vault?\'" or "The stranger grabs the ' +
-              'brass key from your belt"',
+            'What just happened, told to them in the second person: only what they could perceive, with the ' +
+              'player\'s exact words if the player spoke to them, never what the player keeps hidden, e.g. "The ' +
+              'stranger says to you: \'Where is the vault?\'" or "The stranger grabs the brass key from your belt"',
           ),
       }),
     },
   );
 
-  const rollLuckTool = tool(
-    guarded('roll_luck', async (input: { attempt: string; likelihood: Likelihood; stakes: Stakes }) => {
+  const tryLuckTool = tool(
+    guarded('try_luck', async (input: { attempt: string; likelihood: Likelihood; stakes: Stakes }) => {
       const roll = rollLuck(input, luck, random);
       const recorded = await world.recordLuck(roll);
       if (!recorded.ok) return `Error: ${recorded.error}`;
       return LUCK_TEXT[roll.outcome](roll.stakes);
     }),
     {
-      name: 'roll_luck',
+      name: 'try_luck',
       description:
-        "Roll the player's luck when the outcome of what they try is genuinely uncertain and matters: searching " +
+        "Try the player's luck when the outcome of what they try is genuinely uncertain and matters: searching " +
         'for something useful (a coin under the table, a spare key), hoping for a lucky break, a small risky ' +
         'move. Not for what the place makes certain (a bartender in a bar), not for what the world rules decide ' +
         '(exits, what is here), not for what people decide (react_entity). Call it before you narrate the ' +
-        'outcome; then narrate it as the result says.',
+        'outcome; then narrate it as the result says, as part of the story: the player never hears of luck or chance.',
       schema: z.object({
         attempt: z.string().describe('What the player tries or hopes for, e.g. "search under the tables for anything useful"'),
         likelihood: z.enum(LIKELIHOODS).describe('How likely it is to work out here, as you judge the place and the moment'),
@@ -302,7 +310,7 @@ export function createGmTools({ world, embed, actor, luck = DEFAULT_LUCK, random
     }
   }
 
-  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool, rollLuckTool];
+  return [inspect, searchLore, setEntity, setRelation, cancelRelation, note, reactEntityTool, tryLuckTool];
 }
 
 const CREATABLE = lowerTypes(ADDABLE_TYPES);

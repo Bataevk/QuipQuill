@@ -19,7 +19,7 @@ export function worldPromptMiddleware(world: World, storyStyle: string, hints?: 
       handler({
         ...request,
         systemMessage: system,
-        messages: [...withCacheBreakpoints(request.messages), worldStateMessage(await renderWorldState(world, hints?.expected))],
+        messages: [...withCacheBreakpoints(request.messages), worldStateMessage(await renderWorldState(world, hints))],
       }),
   });
 }
