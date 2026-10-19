@@ -6,6 +6,7 @@ import type { Db } from '@/core/storage/db';
 import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedParts, renderedText } from '@/platform/node/prompts';
 
 import { generate, GeneratorAnswerError, generatorMessages, MAX_EXPECTED, type WorldChangesInput } from './generator';
 import { ScriptedChatModel } from './testing/scripted-model';
@@ -58,7 +59,7 @@ describe('generator', () => {
     expectOk(await world.addActorNote(MAGS, 'The stranger turned me down; I plan alone now.'));
     const [system, context] = await generatorMessages({ world, meta }, TURN);
 
-    const [stable] = system.content as { text: string; cache_control?: unknown }[];
+    const [stable] = renderedParts(system);
     expect(stable.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' }); // stable all session (ADR 49)
     const [people, rest] = context.content as { text: string; cache_control?: unknown }[];
     expect(people.text).toMatch(/^# People involved\n/);
@@ -117,8 +118,8 @@ describe('generator', () => {
       }),
     );
     const [system, context] = await generatorMessages({ world, meta }, TURN);
-    expect(system.text).toContain('basis:\n  - narrated: the turn made it real');
-    expect(system.text).toContain('Finds and strokes of luck are never yours to invent');
+    expect(renderedText(system)).toContain('basis:\n  - narrated: the turn made it real');
+    expect(renderedText(system)).toContain('Finds and strokes of luck are never yours to invent');
     expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Lamplight Row. Service door');
 
     const model = scripted(

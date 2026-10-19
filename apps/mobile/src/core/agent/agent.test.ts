@@ -7,6 +7,7 @@ import { openVectorIndex } from '@/core/vector/open-index';
 import { toVector } from '@/core/vector/vector-index';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedParts } from '@/platform/node/prompts';
 
 import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent, type GmAgent } from './gm-agent';
@@ -112,7 +113,7 @@ describe('system prompt', () => {
       { text: 'Up you go.' },
     );
     const [first, second] = model.calls;
-    const parts = first[0].content as { type: string; text: string; cache_control?: unknown }[];
+    const parts = renderedParts(first[0])
     expect(parts).toHaveLength(1);
     expect(parts[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' }); // an hour: stable all session (ADR 49)
     expect(parts[0].text).toMatch(/# Story style\nTitle: The Brass Vault[\s\S]*steampunk/);

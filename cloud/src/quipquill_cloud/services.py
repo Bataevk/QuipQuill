@@ -10,6 +10,7 @@ from starlette.requests import HTTPConnection
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.core.ratelimit import RateLimiter
+from quipquill_cloud.llm.prompts import PromptStore
 from quipquill_cloud.mq.broker import Broker
 from quipquill_cloud.mq.dispatcher import EventDispatcher
 from quipquill_cloud.mq.worker import CancelRegistry
@@ -23,6 +24,7 @@ class Services:
     rate_limiter: RateLimiter
     dispatcher: EventDispatcher
     cancels: CancelRegistry
+    prompts: PromptStore
     # None until RabbitMQ is connected: REST works, /ws answers 1013 (main._start_queue).
     broker: Broker | None = None
     # The background reconnection while the broker is not up yet.

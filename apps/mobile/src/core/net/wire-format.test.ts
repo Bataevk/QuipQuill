@@ -1,6 +1,7 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { describe, expect, it } from 'vitest';
 
+import { promptMessage, promptPart } from '@/core/agent/cloud-prompt';
 import { fromDone, toWireMessages } from '@/core/net/wire-format';
 import type { DoneEvent } from '@/core/protocol/messages';
 import { StreamText } from '@/core/protocol/stream-text';
@@ -27,6 +28,12 @@ describe('wire format', () => {
       },
       { role: 'tool', content: 'Moved to hall.', tool_call_id: 'c1' },
     ]);
+  });
+
+  it('sends a prompt template part as it is: the cloud fills it in (ADR 57)', () => {
+    const part = promptPart('gm', { STORY_STYLE: 'Noir.' }, { type: 'ephemeral', ttl: '1h' });
+    const wire = toWireMessages([promptMessage(part, { type: 'text', text: 'Scene.' })]);
+    expect(wire).toEqual([{ role: 'system', content: [part, { type: 'text', text: 'Scene.' }] }]);
   });
 
   it('keeps a breakpoint on an assistant text or a tool result as parts (ADR 46)', () => {

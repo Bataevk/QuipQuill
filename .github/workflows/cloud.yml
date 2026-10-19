@@ -4,9 +4,9 @@ name: cloud
 
 on:
   push:
-    paths: ["cloud/**", "deploy/**", ".github/workflows/cloud.yml"]
+    paths: ["cloud/**", "deploy/**", "prompts/**", ".github/workflows/cloud.yml"]
   pull_request:
-    paths: ["cloud/**", "deploy/**", ".github/workflows/cloud.yml"]
+    paths: ["cloud/**", "deploy/**", "prompts/**", ".github/workflows/cloud.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -125,6 +125,24 @@ jobs:
             echo "::warning::CLOUD_SECRET_ENV is not set: keeping the server's cloud.secret.env"
             ssh "$HOST" 'cd /opt/quipquill && { [ -f cloud.secret.env ] || cp -p cloud.env cloud.secret.env; }'
           fi
+      - name: Prompts
+        env:
+          HOST: deploy@${{ vars.DEPLOY_HOST }}
+          VARS: ${{ toJSON(vars) }}
+        run: |
+          # Every variable PROMPT_<NAME> of the environment becomes prompts/<name>.md on the server
+          # (ADR 57): the prompts enter neither the image nor the app. The originals are prompts/ in
+          # the repository; deploy/push-prompts.sh copies them here. Unset ones keep the server's
+          # file. Written to a temporary file and moved, so the cloud never reads half a prompt.
+          ssh "$HOST" 'install -d -m 755 /opt/quipquill/prompts'
+          keys=$(jq -r 'keys[] | select(startswith("PROMPT_"))' <<<"$VARS")
+          [ -n "$keys" ] || echo "::warning::No PROMPT_* variables: keeping the server's prompts"
+          for key in $keys; do
+            name=$(tr '[:upper:]' '[:lower:]' <<<"${key#PROMPT_}")
+            # shellcheck disable=SC2029 # the file name is meant to expand here, on the runner
+            jq -r --arg k "$key" '.[$k]' <<<"$VARS" \
+              | ssh "$HOST" "cd /opt/quipquill/prompts && umask 022 && cat > .$name.tmp && mv .$name.tmp $name.md"
+          done
       - name: Roll out
         # The job token pulls the image (the GHCR package may be private); logout right after.
         env:
@@ -136,6 +154,6 @@ jobs:
              && /opt/quipquill/deploy.sh $IMAGE:${{ github.sha }}; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"
       - name: Smoke test
         run: |
-          for path in health health/db health/mq; do
+          for path in health health/db health/mq health/prompts; do
             curl -fsS --retry 10 --retry-delay 3 --retry-all-errors "https://${{ vars.DEPLOY_DOMAIN }}/$path"; echo
           done

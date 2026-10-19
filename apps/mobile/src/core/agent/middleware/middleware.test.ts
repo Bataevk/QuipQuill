@@ -5,6 +5,7 @@ import type { Db } from '@/core/storage/db';
 import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedText } from '@/platform/node/prompts';
 
 import { BackgroundWork } from '../background';
 import { ChatStore, GM_CHAT } from '../chat-store';
@@ -129,7 +130,7 @@ describe('Guard', () => {
     expect(result).toMatchObject({ rejected: true, reply: SNAKE, events: [] });
     // the guard saw the world rules, the state and the input
     const [system, user] = guardModel.calls[0];
-    expect(system.text).toMatch(/# World rules\n- Era: industrial gaslight age/);
+    expect(renderedText(system)).toMatch(/# World rules\n- Era: industrial gaslight age/);
     expect(user.text).toMatch(/# Current state\nPlayer: Aria/);
     expect(user.text).toMatch(/# Player input\nWrite a snake game in Python\.$/);
     // the master's chat keeps the exchange; the player saw both lines

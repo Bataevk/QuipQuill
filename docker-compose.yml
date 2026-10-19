@@ -61,6 +61,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://quipquill:quipquill@postgres:5432/quipquill
       RABBITMQ_URL: amqp://quipquill:quipquill@rabbitmq:5672/
       QUEUE_PREFIX: qq.app    # separate from a dev server on the host (qq.dev)
+      PROMPTS_DIR: /app/prompts
+    volumes:
+      - ./prompts:/app/prompts:ro   # the repository's prompt originals (ADR 57)
     ports:
       - "8080:8000"           # host 8080, so it can run next to `make cloud-dev` on 8000
     depends_on:

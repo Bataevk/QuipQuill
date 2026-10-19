@@ -15,6 +15,7 @@ from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.core.ratelimit import RateLimiter
 from quipquill_cloud.db.session import make_engine, make_sessionmaker
 from quipquill_cloud.llm.handler import OpenRouterHandler
+from quipquill_cloud.llm.prompts import PromptStore
 from quipquill_cloud.mq.broker import Broker
 from quipquill_cloud.mq.dispatcher import EventDispatcher
 from quipquill_cloud.mq.worker import CancelRegistry, CommandWorker, EchoHandler, Handler
@@ -66,7 +67,7 @@ def _handler(services: Services) -> Handler:
     settings = services.settings
     if settings.llm_handler == "echo":
         return EchoHandler(settings.echo_delay_seconds)
-    return OpenRouterHandler(services.llm_client, services.sessionmaker, settings)
+    return OpenRouterHandler(services.llm_client, services.sessionmaker, settings, services.prompts)
 
 
 def _llm_client(settings: Settings) -> AsyncOpenAI:
@@ -95,10 +96,13 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
             rate_limiter=RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst),
             dispatcher=EventDispatcher(settings.generation_ttl_seconds),
             cancels=CancelRegistry(settings.generation_ttl_seconds),
+            prompts=PromptStore(settings.prompts_dir),
         )
         app.state.services = services
         if settings.llm_handler == "openrouter" and settings.openrouter_api_key is None:
             logger.warning("OPENROUTER_API_KEY is not set: LLM calls will fail")
+        if missing := services.prompts.missing():
+            logger.warning("Prompts missing in %s: %s", settings.prompts_dir, ", ".join(missing))
         await _start_queue(services)
         yield
         if services.mq_task is not None:

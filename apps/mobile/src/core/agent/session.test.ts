@@ -4,6 +4,7 @@ import type { Db } from '@/core/storage/db';
 import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedText } from '@/platform/node/prompts';
 
 import { CHARACTER_CHAT, CharacterProposalError, MAX_PROPOSALS } from './character';
 import { ChatStore, GM_CHAT } from './chat-store';
@@ -88,9 +89,9 @@ describe('session start: an elf in a world without elves', () => {
     });
     // a chat of its own: the world rules and the player's sheet, not the master's prompt
     const [system, sheet] = characterModel.calls[0];
-    expect(system.text).toMatch(/^You prepare the player's character/);
-    expect(system.text).toContain('Do not add non-human peoples');
-    expect(system.text).toContain('# The world\nThe Brass Vault is set in Vellmoor');
+    expect(renderedText(system)).toMatch(/^You prepare the player's character/);
+    expect(renderedText(system)).toContain('Do not add non-human peoples');
+    expect(renderedText(system)).toContain('# The world\nThe Brass Vault is set in Vellmoor');
     expect(sheet.text).toBe(
       'My character:\nName: Elaria Moonwhisper\nSex: female\nAge: 212\nRace: elf\n' +
         'Description: A high elf archer who speaks with trees and casts moonlight spells.',

@@ -1,9 +1,13 @@
 from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The repository's prompts/ (development); production sets PROMPTS_DIR (ADR 57).
+REPO_PROMPTS_DIR = Path(__file__).resolve().parents[4] / "prompts"
 
 # HS256 needs a key of at least 32 bytes (RFC 7518 §3.2).
 MIN_JWT_SECRET_BYTES = 32
@@ -62,6 +66,8 @@ class Settings(BaseSettings):
     # empty = each route's own order (llm/policy.py, ADR 50).
     provider_order: list[str] = []
     embed_model: str = "openai/text-embedding-3-small"
+    # The LLM prompt templates `<name>.md` (llm/prompts.py, ADR 57).
+    prompts_dir: Path = REPO_PROMPTS_DIR
 
     @model_validator(mode="after")
     def _require_real_secrets_in_prod(self) -> "Settings":

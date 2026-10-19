@@ -72,6 +72,7 @@ graph LR
 | `GET /health` | процесс жив | — |
 | `GET /health/db` | `SELECT 1` прошёл | БД недоступна |
 | `GET /health/mq` | брокер ответил (пассивное объявление очереди) | брокер не подключён или не отвечает |
+| `GET /health/prompts` | все шаблоны промптов есть в `PROMPTS_DIR` (ADR 57) | не хватает шаблонов (их имена — в `detail`) |
 | `GET /health/llm` | OpenRouter и ключ работают (`GET /api/v1/key`, бесплатно); `degraded`, если кредита < $0.50 | OpenRouter недоступен или ключ невалиден |
 
 - **Логи** — одна строка JSON на событие (`LOG_FORMAT=json`), к каждой строке добавляются `requestId`, `sessionId`, `userId` из контекста; `X-Request-ID` принимается и возвращается в ответе.

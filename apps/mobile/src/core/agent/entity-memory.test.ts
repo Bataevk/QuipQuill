@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '@/core/storage/db';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedText } from '@/platform/node/prompts';
 
 import { ChatStore } from './chat-store';
 import { ENTITY_CHAT_WINDOW_TOKENS, noteEntities } from './entity-memory';
@@ -82,7 +83,7 @@ describe('noteEntities (note_entity)', () => {
     // one request for both, with what each remembers and what each is about to forget
     expect(model.calls).toHaveLength(1);
     const [system, batch] = model.calls[0] as BaseMessage[];
-    expect(system.text).toMatch(/^You keep the memories of characters/);
+    expect(renderedText(system)).toMatch(/^You keep the memories of characters/);
     expect(batch.text).toContain('## Mags Holloway [npc:mags-holloway]');
     expect(batch.text).toContain('Notes: I want the Clockheart.');
     expect(batch.text).toContain('## Pip Quillon [npc:pip-quillon]');

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
 from quipquill_cloud.llm.policy import PURPOSES, Route, route
+from quipquill_cloud.llm.prompts import PromptError, PromptStore
 from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usage, error_event
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,12 @@ class OpenRouterHandler:
         client: AsyncOpenAI,
         sessionmaker: async_sessionmaker[AsyncSession],
         settings: Settings,
+        prompts: PromptStore,
     ) -> None:
         self._client = client
         self._sessionmaker = sessionmaker
         self._settings = settings
+        self._prompts = prompts
 
     async def run(self, command: Command, is_cancelled: Callable[[], bool]) -> AsyncIterator[Event]:
         request = command.request
@@ -80,10 +83,17 @@ class OpenRouterHandler:
             yield error_event("bad_request", **common)
             return
 
+        try:
+            body = self._body(request, chosen)
+        except PromptError as error:
+            logger.warning("Bad prompt in %s: %s", request.request_id, error)
+            yield error_event("bad_request", **common)
+            return
+
         answer = _Answer()
         try:
             async with asyncio.timeout(self._settings.llm_timeout_seconds):
-                async for event in self._stream(self._body(request, chosen), answer, is_cancelled):
+                async for event in self._stream(body, answer, is_cancelled):
                     yield Event(**event, **common)
         except (TimeoutError, openai.APITimeoutError):
             yield error_event("timeout", retryable=True, **common)
@@ -101,12 +111,13 @@ class OpenRouterHandler:
             yield event
 
     def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:
-        """The OpenRouter call: the route's model and providers, the purpose's effort and limit."""
+        """The OpenRouter call: the route's model and providers, the purpose's effort and limit;
+        the prompts the messages name, filled in (ADR 57)."""
         providers = self._settings.provider_order or list(chosen.providers)
         params = PURPOSES[request.purpose]
         body: dict[str, Any] = {
             "model": chosen.model,
-            "messages": request.messages,
+            "messages": self._prompts.expand(request.messages),
             "max_tokens": params.max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},

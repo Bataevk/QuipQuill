@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import httpx2
 import openai
@@ -307,3 +308,44 @@ def test_daily_limit_can_be_raised_for_everyone(settings: Settings) -> None:
 def test_me_reports_limits(app_client: TestClient) -> None:
     headers = {"Authorization": f"Bearer {token_for(app_client)}"}
     assert app_client.get("/me", headers=headers).json()["limits"] == {"daily_cost_usd": "0.05"}
+
+
+# --- prompts filled in by the cloud (ADR 57) ---
+
+
+def test_the_worker_sends_the_filled_in_prompt(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    request = gm_request()
+    request["messages"][0]["content"] = [
+        {
+            "type": "prompt",
+            "name": "summary",
+            "vars": {},
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+    run(app_client, request)
+    (body,) = fake.requests
+    (part,) = body["messages"][0]["content"]
+    assert part["text"].startswith("You keep the Game Master's memory of an interactive story.")
+    assert part["cache_control"] == {"type": "ephemeral"}
+
+
+def test_a_bad_prompt_is_a_bad_request(app_client: TestClient, fake: FakeOpenRouter) -> None:
+    request = gm_request()
+    request["messages"][0]["content"] = [{"type": "prompt", "name": "gm", "vars": {}}]
+    events = run(app_client, request)
+    assert [e["type"] for e in events] == ["status", "error"]
+    assert events[-1]["code"] == "bad_request"
+    assert fake.requests == []
+
+
+def test_health_reports_missing_prompts(settings: Settings, tmp_path: Path) -> None:
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/health/prompts").json()["status"] == "ok"
+    (tmp_path / "gm.md").write_text("Rules.")
+    with TestClient(create_app(settings.model_copy(update={"prompts_dir": tmp_path}))) as client:
+        response = client.get("/health/prompts")
+    assert response.status_code == 503
+    assert response.json()["detail"].startswith("missing: actor, guard")

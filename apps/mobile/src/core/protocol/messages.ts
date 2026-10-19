@@ -15,6 +15,22 @@ export interface TextPart {
   cache_control?: { type: 'ephemeral'; ttl?: '1h' };
 }
 
+/**
+ * A prompt template the cloud fills in (ADR 57): the app names it and gives its variables, the
+ * worker puts the text there (`{{VAR}}` → value) and keeps `cache_control`. The app never ships
+ * the prompts' text; templates: `prompts/` at the repository root, in production CI variables.
+ */
+export interface PromptPart {
+  type: 'prompt';
+  name: PromptName;
+  vars: Record<string, string>;
+  cache_control?: TextPart['cache_control'];
+}
+
+export type PromptName = 'gm' | 'actor' | 'guard' | 'generator' | 'character' | 'summary' | 'note_entity';
+
+export type ContentPart = TextPart | PromptPart;
+
 export interface WireToolCall {
   id: string;
   type: 'function';
@@ -22,8 +38,8 @@ export interface WireToolCall {
 }
 
 export type WireMessage =
-  | { role: 'system'; content: string | TextPart[] }
-  | { role: 'user'; content: string | TextPart[] }
+  | { role: 'system'; content: string | ContentPart[] }
+  | { role: 'user'; content: string | ContentPart[] }
   | { role: 'assistant'; content: string | TextPart[] | null; tool_calls?: WireToolCall[] }
   | { role: 'tool'; content: string | TextPart[]; tool_call_id: string };
 

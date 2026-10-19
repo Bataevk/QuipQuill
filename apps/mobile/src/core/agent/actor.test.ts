@@ -9,6 +9,7 @@ import { readStoryMeta, type StoryMeta } from '@/core/story/story-meta';
 import type { Entity } from '@/core/world/model';
 import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
+import { renderedParts } from '@/platform/node/prompts';
 
 import { actorSystemMessage, SILENCE } from './actor';
 import { ChatStore, GM_CHAT } from './chat-store';
@@ -86,7 +87,7 @@ function play(input: string, ...steps: Step[]) {
 
 const react = (target: string, situation: string) => ({ toolCalls: [{ name: 'react_entity', args: { target, situation } }] });
 const call = (name: string, args: Record<string, unknown>) => ({ name, args });
-const promptOf = (i: number) => actorCalls[i].messages[0].content as { text: string; cache_control?: unknown }[];
+const promptOf = (i: number) => renderedParts(actorCalls[i].messages[0]);
 
 describe('react_entity and the actor pack (ADR 45)', () => {
   it('Mags speaks for herself from her card, the scene and her own chat; the master answers after', async () => {
@@ -118,7 +119,7 @@ describe('react_entity and the actor pack (ADR 45)', () => {
     const [system, ask] = actorCalls[0].messages;
     expect(actorCalls[0].messages).toHaveLength(2);
     expect(ask.text).toBe('The new recruit asks you about the vault.');
-    const [stable, scene] = system.content as { text: string; cache_control?: unknown }[];
+    const [stable, scene] = renderedParts(system);
     expect(stable.cache_control).toEqual({ type: 'ephemeral' });
     expect(stable.text).toMatch(/^You are a professional actor playing Mags Holloway in an interactive story\./);
     expect(stable.text).toContain('a brass hook where her left hand used to be');
@@ -512,7 +513,7 @@ describe('a world that follows the player (ADR 42)', () => {
 
   it('after the player refuses the heist, Mags acts on the new tie, not on the planned one', async () => {
     const before = await actorSystemMessage(world, (await world.state.entity(MAGS))!);
-    expect((before.content as { text: string }[])[0].text).toContain('- Pip Quillon: leader of the crew');
+    expect(renderedParts(before)[0].text).toContain('- Pip Quillon: leader of the crew');
 
     const result = await play(
       "I won't join your heist, and Pip is coming with me.",

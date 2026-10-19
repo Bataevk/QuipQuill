@@ -6,12 +6,13 @@
  * proposals in all). The chat lives in `model_messages` ('character') only until the choice.
  */
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, type SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 
 import type { StoryMeta } from '../story/story-meta';
 import type { CharacterSheet } from '../world/world';
 import type { ChatStore } from './chat-store';
+import { promptMessage, promptPart } from './cloud-prompt';
 import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
 
 export const CHARACTER_CHAT = 'character';
@@ -19,21 +20,6 @@ export const CHARACTER_CHAT = 'character';
 export const MAX_PROPOSALS = 3;
 export const MAX_ALTERNATIVES = 2;
 
-export const CHARACTER_PROMPT = `You prepare the player's character for an interactive story that is about to begin. You do not tell the story; you only fit the character to its world.
-
-# The world
-{{WORLD_SUMMARY}}
-
-# World rules
-{{WORLD_CONSTRAINTS}}
-
-# Your task
-The player sends their character sheet. Answer with propose_character, as JSON only:
-- "adapted": the closest version of this character that fits the world rules. Keep the name, personality and idea wherever the world allows; change only what breaks it (a people that does not exist here, powers the world does not have, legendary gear or godlike strength — turn them into something ordinary but flavourful). A character that already fits comes back nearly unchanged.
-- "alternatives": up to two other takes on the same idea that also fit the world (another background, another angle); an empty list when the sheet fits well.
-- "rationale": two or three warm sentences to the player in the story's voice: what changed and why. Never mention rules, prompts, AI or the Game Master.
-Each character has "name", "race" (a people that exists in this world), "age" (years, plausible for that people; null if the sheet gives none and nothing suggests one) and "description": two to four sentences — looks, background, skills, and a few modest possessions fitting the era.
-When the player asks for changes, propose again with their wishes in mind, still within the world rules.`;
 
 const OPTION_SCHEMA = strictObject({
   name: { type: 'string' },
@@ -92,10 +78,13 @@ export interface CharacterDeps {
   timeoutMs?: number;
 }
 
-export function characterSystemPrompt(meta: CharacterDeps['meta']): string {
-  return CHARACTER_PROMPT.replace('{{WORLD_SUMMARY}}', meta.worldSummary.trim() || 'Not described.').replace(
-    '{{WORLD_CONSTRAINTS}}',
-    meta.worldConstraints.trim() || 'None given.',
+/** The cloud's template `character` (ADR 57) with the story's world. */
+export function characterSystemMessage(meta: CharacterDeps['meta']): SystemMessage {
+  return promptMessage(
+    promptPart('character', {
+      WORLD_SUMMARY: meta.worldSummary.trim() || 'Not described.',
+      WORLD_CONSTRAINTS: meta.worldConstraints.trim() || 'None given.',
+    }),
   );
 }
 
@@ -128,7 +117,7 @@ export async function proposeCharacter(
   const round = history.filter((m) => AIMessage.isInstance(m)).length + 1;
   if (round > MAX_PROPOSALS) throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
   const ask = new HumanMessage(playerMessage);
-  const system = new SystemMessage(characterSystemPrompt(deps.meta));
+  const system = characterSystemMessage(deps.meta);
   const answer = await invokeWithin(deps.model, [system, ...history, ask], { timeoutMs: deps.timeoutMs ?? 60_000, signal });
   const proposal = parseProposal(answer.text, round);
   await deps.chats.append(CHARACTER_CHAT, [ask, new AIMessage(answer.text)]);

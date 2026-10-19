@@ -119,16 +119,15 @@ export async function startStory(deps: SessionDeps & { agent: GmAgent }): Promis
   });
 }
 
-/** The system command that opens the story (English, like all prompts). */
+/**
+ * The system command that opens the story: only the facts; what the master does with it is in his
+ * prompt in the cloud (ADR 57, "# Opening").
+ */
 export function sessionStartCommand(character: CharacterOption, meta: Pick<StoryMeta, 'title'>): string {
   const race = [character.race, character.age ? `${character.age} years old` : ''].filter(Boolean).join(', ');
   return [
     `[session_start] "${meta.title}" begins now.`,
     `The player's character: ${character.name}${race ? `, ${race}` : ''}. ${character.description}`,
-    'First give the player the few possessions their description mentions: create each with set_entity, then ' +
-      'put it in their hands with set_relation (player has_item it). ' +
-      "Then open the story with a vivid scene at the player's location from the world state: where they are, " +
-      'who is there and what is at stake, ending where the player can act.',
   ].join('\n');
 }
 

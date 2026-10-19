@@ -1,7 +1,7 @@
 /** LangChain messages ↔ the OpenAI-format messages the cloud passes to the provider. */
 import { AIMessage, type BaseMessage, type ToolMessage } from '@langchain/core/messages';
 
-import type { DoneEvent, TextPart, WireMessage, WireToolCall } from '../protocol/messages';
+import type { ContentPart, DoneEvent, PromptPart, TextPart, WireMessage, WireToolCall } from '../protocol/messages';
 
 type ContentBlock = { type?: string; text?: string; cache_control?: { type: 'ephemeral'; ttl?: '1h' } };
 
@@ -22,14 +22,14 @@ function toWireMessage(message: BaseMessage): WireMessage {
         type: 'function',
         function: { name: call.name, arguments: JSON.stringify(call.args ?? {}) },
       }));
-      const text = cached(ai.content) ? toParts(ai.content) : plainText(ai.content);
+      const text = cached(ai.content) ? textParts(ai.content) : plainText(ai.content);
       return toolCalls.length > 0
         ? { role: 'assistant', content: text || null, tool_calls: toolCalls }
         : { role: 'assistant', content: text };
     }
     case 'tool': {
       const tool = message as ToolMessage;
-      const content = cached(tool.content) ? toParts(tool.content) : plainText(tool.content);
+      const content = cached(tool.content) ? textParts(tool.content) : plainText(tool.content);
       return { role: 'tool', content, tool_call_id: tool.tool_call_id };
     }
     default:
@@ -37,16 +37,33 @@ function toWireMessage(message: BaseMessage): WireMessage {
   }
 }
 
-/** Keeps text blocks (and their cache_control breakpoints); plain strings stay strings. */
-function toParts(content: BaseMessage['content']): string | TextPart[] {
+/**
+ * Keeps text blocks (and their cache_control breakpoints) and prompt parts the cloud fills in
+ * (ADR 57); plain strings stay strings.
+ */
+function toParts(content: BaseMessage['content']): string | ContentPart[] {
   if (typeof content === 'string') return content;
-  return (content as ContentBlock[])
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
-    .map((block) => ({
-      type: 'text' as const,
-      text: block.text as string,
-      ...(block.cache_control ? { cache_control: block.cache_control } : {}),
-    }));
+  return (content as ContentBlock[]).flatMap((block): ContentPart[] =>
+    block.type === 'prompt' ? [block as unknown as PromptPart] : isText(block) ? [textPart(block)] : [],
+  );
+}
+
+/** Text blocks only (assistant and tool messages). */
+function textParts(content: BaseMessage['content']): string | TextPart[] {
+  if (typeof content === 'string') return content;
+  return (content as ContentBlock[]).filter(isText).map(textPart);
+}
+
+function isText(block: ContentBlock): boolean {
+  return block.type === 'text' && typeof block.text === 'string';
+}
+
+function textPart(block: ContentBlock): TextPart {
+  return {
+    type: 'text',
+    text: block.text as string,
+    ...(block.cache_control ? { cache_control: block.cache_control } : {}),
+  };
 }
 
 /** Whether the content carries a cache breakpoint (then its text blocks are kept as parts). */

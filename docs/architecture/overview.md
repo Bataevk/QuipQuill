@@ -83,6 +83,7 @@ QuipQuill/
 │                            #   node/ — node:sqlite и node:fs для тестов и будущего десктопа
 ├── cloud/                   # FastAPI, uv
 ├── builder/                 # экстрактор + экспорт, uv
+├── prompts/                 # оригиналы промптов LLM; в прод — переменными CI, в приложение не идут (ADR 57)
 ├── schema/
 │   └── story.sql            # единая схема .qqstory
 ├── stories/                 # демо-истории

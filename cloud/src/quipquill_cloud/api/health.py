@@ -1,4 +1,5 @@
-"""Liveness (/health) and dependency checks (/health/db, /health/mq, /health/llm).
+"""Liveness (/health) and dependency checks (/health/db, /health/mq, /health/llm,
+/health/prompts).
 
 A dependency check answers 200 when the dependency works and 503 when it does not, so a
 deployment probe or a human can tell which part is down.
@@ -70,6 +71,17 @@ async def health_mq(
         return _answer(response, Check(status="down", detail="connecting"))
     if not await broker.ping(CHECK_TIMEOUT_SECONDS / 2):
         return _answer(response, Check(status="down", detail="broker_unreachable"))
+    return Check(status="ok")
+
+
+@router.get("/health/prompts")
+def health_prompts(
+    services: Annotated[Services, Depends(get_services)], response: Response
+) -> Check:
+    """Every prompt template the app asks for is in PROMPTS_DIR (ADR 57)."""
+    missing = services.prompts.missing()
+    if missing:
+        return _answer(response, Check(status="down", detail="missing: " + ", ".join(missing)))
     return Check(status="ok")
 
 

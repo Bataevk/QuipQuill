@@ -4,20 +4,15 @@ import {
   type BaseMessage,
   HumanMessage,
   RemoveMessage,
-  SystemMessage,
   ToolMessage,
 } from '@langchain/core/messages';
 import { REMOVE_ALL_MESSAGES } from '@langchain/langgraph';
 import { createMiddleware } from 'langchain';
 
+import { promptMessage, promptPart } from '../cloud-prompt';
 import { estimateTokens, inputMessage, sourceOf, turnStart } from '../messages';
 import { invokeWithin } from '../structured';
 
-export const SUMMARY_PROMPT = `You keep the Game Master's memory of an interactive story. Below is the older part of the conversation between the player and the Game Master, possibly starting with an earlier summary. Rewrite all of it as one summary that replaces it.
-
-Keep what the Game Master needs to continue consistently: what happened and where, in order; what the player did, said, promised or learned; what people said and how they feel about the player; clues, secrets revealed, debts, deals and unresolved threads. Keep names exactly as written. Skip tool mechanics and ids; the world state (places, items, notes) is kept separately.
-
-Write in the past tense, plain prose, at most 400 words. Answer with the summary only.`;
 
 export const SUMMARY_PREFIX = 'Summary of the story so far:';
 export const TRIMMED_NOTE =
@@ -98,7 +93,7 @@ async function summarize(
   const transcript = older.map(line).filter(Boolean).join('\n');
   for (let attempt = 1; attempt <= o.retries; attempt++) {
     try {
-      const answer = await invokeWithin(o.model, [new SystemMessage(SUMMARY_PROMPT), new HumanMessage(transcript)], {
+      const answer = await invokeWithin(o.model, [promptMessage(promptPart('summary')), new HumanMessage(transcript)], {
         timeoutMs: o.timeoutMs,
         signal,
       });

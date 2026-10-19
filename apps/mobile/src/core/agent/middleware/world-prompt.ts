@@ -10,6 +10,10 @@ import type { GuardHints } from './guard';
  * history with a cache breakpoint at its end, then the world state, rebuilt from the database —
  * so the master sees the result of the tools it just ran, and tools + system + history stay a
  * prefix the provider reads from its cache on the next call.
+ *
+ * The system prompt goes first among the messages, not as the agent's `systemMessage`: it is a
+ * template the cloud fills in (ADR 57) and has no text here, and the agent drops a system
+ * message without text.
  */
 export function worldPromptMiddleware(world: World, storyStyle: string, hints?: GuardHints) {
   const system = gmSystemMessage(storyStyle);
@@ -18,8 +22,11 @@ export function worldPromptMiddleware(world: World, storyStyle: string, hints?: 
     wrapModelCall: async (request, handler) =>
       handler({
         ...request,
-        systemMessage: system,
-        messages: [...withCacheBreakpoints(request.messages), worldStateMessage(await renderWorldState(world, hints))],
+        messages: [
+          system,
+          ...withCacheBreakpoints(request.messages),
+          worldStateMessage(await renderWorldState(world, hints)),
+        ],
       }),
   });
 }
