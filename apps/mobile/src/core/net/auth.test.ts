@@ -52,6 +52,18 @@ describe('AuthSession', () => {
     await expect(auth.accessToken()).rejects.toThrow('Network request failed');
     expect((await store.load())?.refreshToken).toBe('refresh-0');
   });
+
+  it('asks the cloud who is signed in, with the access token', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => json(200, { id: 'u1', email: 'a@b.co', tier: 'free' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const store = new MemoryTokenStore();
+    await store.save({ accessToken: 'live', refreshToken: 'r', accessExpiresAt: Date.now() + 600_000 });
+
+    expect(await new AuthSession('http://cloud', store).me()).toEqual({ email: 'a@b.co', tier: 'free' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://cloud/me');
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer live');
+  });
 });
 
 describe('CloudEmbeddings', () => {

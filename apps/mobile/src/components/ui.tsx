@@ -167,7 +167,7 @@ export function Chip({ label, selected, onPress }: { label: string; selected?: b
           borderColor: selected ? theme.accent : theme.line,
         },
       ]}>
-      <ThemedText type="caption" themeColor={selected ? 'accent' : 'ink'} style={selected && styles.chipSelected}>
+      <ThemedText type="caption" themeColor={selected ? 'accent' : 'ink'}>
         {label}
       </ThemedText>
     </Pressable>
@@ -300,7 +300,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
   },
-  chipSelected: { fontWeight: 600 },
   dots: { flexDirection: 'row', gap: Spacing.two - Spacing.half },
   dot: { borderRadius: Radius.pill, height: 6, width: 6 },
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },

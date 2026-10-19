@@ -36,11 +36,24 @@ const STEPS = [
      updated_at   TEXT NOT NULL
    ) STRICT;
    CREATE INDEX saves_story ON saves (story_id);`,
+  // Stage D.7: the player's preferences (theme; onboarding and terms come with D.5–D.6).
+  `CREATE TABLE settings (
+     key   TEXT PRIMARY KEY,
+     value TEXT NOT NULL
+   ) STRICT;`,
 ];
 
 export async function migrateAppDb(db: Db): Promise<void> {
   await db.exec('PRAGMA foreign_keys = ON');
   await migrate(db, STEPS);
+}
+
+/** A hero who still has playthroughs cannot be deleted; `message` is safe to show to the player. */
+export class CharacterInUseError extends Error {
+  constructor(readonly saves: number) {
+    super(`This hero has ${saves === 1 ? 'a game' : `${saves} games`}. Delete ${saves === 1 ? 'it' : 'them'} first.`);
+    this.name = 'CharacterInUseError';
+  }
 }
 
 export interface Character {
@@ -127,15 +140,46 @@ export class AppRepository {
 
   async listCharacters(): Promise<Character[]> {
     const rows = await this.db.all<CharacterRow>('SELECT * FROM characters ORDER BY created_at');
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      sex: row.sex,
-      age: row.age === null ? null : Number(row.age),
-      race: row.race,
-      description: row.description,
-      createdAt: row.created_at,
-    }));
+    return rows.map(toCharacter);
+  }
+
+  async getCharacter(id: string): Promise<Character | undefined> {
+    const row = await this.db.get<CharacterRow>('SELECT * FROM characters WHERE id = ?', [id]);
+    return row && toCharacter(row);
+  }
+
+  /** Rewrites the sheet; games already started keep the hero they adapted (ADR 37). */
+  async updateCharacter(character: Omit<Character, 'createdAt'>): Promise<void> {
+    await this.db.run('UPDATE characters SET name = ?, sex = ?, age = ?, race = ?, description = ? WHERE id = ?', [
+      character.name,
+      character.sex,
+      character.age,
+      character.race,
+      character.description,
+      character.id,
+    ]);
+  }
+
+  /** Throws CharacterInUseError while any save still plays this hero. */
+  async deleteCharacter(id: string): Promise<void> {
+    const used = await this.db.get<{ n: number }>('SELECT count(*) AS n FROM saves WHERE character_id = ?', [id]);
+    const saves = Number(used?.n ?? 0);
+    if (saves > 0) throw new CharacterInUseError(saves);
+    await this.db.run('DELETE FROM characters WHERE id = ?', [id]);
+  }
+
+  // --- settings
+
+  async getSetting(key: string): Promise<string | undefined> {
+    const row = await this.db.get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
+    return row?.value;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    await this.db.run(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+      [key, value],
+    );
   }
 
   // --- stories
@@ -197,6 +241,18 @@ export class AppRepository {
   async deleteSave(id: string): Promise<void> {
     await this.db.run('DELETE FROM saves WHERE id = ?', [id]);
   }
+}
+
+function toCharacter(row: CharacterRow): Character {
+  return {
+    id: row.id,
+    name: row.name,
+    sex: row.sex,
+    age: row.age === null ? null : Number(row.age),
+    race: row.race,
+    description: row.description,
+    createdAt: row.created_at,
+  };
 }
 
 function toStory(row: StoryRow): StoryRecord {

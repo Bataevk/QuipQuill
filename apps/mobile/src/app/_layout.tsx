@@ -8,6 +8,10 @@ import { AppState } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
 import { getCloud } from '@/platform/services';
+import { restoreThemePreference } from '@/platform/theme-preference';
+
+// The player's theme (Profile) before the first screen settles.
+void restoreThemePreference().catch(() => {});
 
 /** Signed out → the login screen; signed in → the socket runs (stage 5.1). */
 function useAuthGate() {
@@ -76,13 +80,12 @@ export default function RootLayout() {
           headerShadowVisible: false,
           headerTitleStyle: { fontFamily: Fonts.display, fontSize: 22 },
         }}>
-        <Stack.Screen name="index" options={{ title: 'foolore' }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'foolore' }} />
         <Stack.Screen name="login" options={{ title: 'Sign in', headerBackVisible: false }} />
-        <Stack.Screen name="stories" options={{ title: 'Stories' }} />
-        <Stack.Screen name="characters/index" options={{ title: 'Characters' }} />
-        <Stack.Screen name="characters/new" options={{ title: 'New character' }} />
-        <Stack.Screen name="new-game" options={{ title: 'New game' }} />
-        <Stack.Screen name="game/[id]" options={{ title: 'Game' }} />
+        <Stack.Screen name="story/[id]" options={{ title: '' }} />
+        <Stack.Screen name="heroes/new" options={{ title: 'New hero' }} />
+        <Stack.Screen name="heroes/[id]" options={{ title: 'Hero' }} />
+        <Stack.Screen name="game/[id]" options={{ title: '' }} />
       </Stack>
     </ThemeProvider>
   );

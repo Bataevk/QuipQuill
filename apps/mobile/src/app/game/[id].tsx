@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { PROPOSAL_CARD } from '@/core/agent/session';
 import { isActorChannel } from '@/core/protocol/channels';
 import { useGame } from '@/hooks/use-game';
 import { useTheme } from '@/hooks/use-theme';
+import { getLibrary } from '@/platform/services';
 
 /** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
 type FeedItem =
@@ -19,7 +20,10 @@ type FeedItem =
   | { key: string; kind: 'cost'; text: string }
   | { key: string; kind: 'footer' };
 
-/** The game (stage 5.2): bubbles of the master, NPCs and the player, live streaming, cards. */
+/**
+ * The game (stage 5.2, restyled in D.7): the master's narration as plain text in the story's font,
+ * the characters' lines in bubbles under their names, the player's on the right; live streaming, cards.
+ */
 export default function GameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const game = useGame(id);
@@ -27,6 +31,7 @@ export default function GameScreen() {
   const [inputKey, setInputKey] = useState(0); // a new key clears the (uncontrolled) field
   const list = useRef<FlatList<FeedItem>>(null);
   const theme = useTheme();
+  const title = useSaveTitle(id);
 
   const adapting = game.phase === 'adapting';
   const canType = game.ready && !game.busy && (game.phase === 'playing' || (adapting && !!game.proposal?.canClarify));
@@ -85,6 +90,7 @@ export default function GameScreen() {
 
   return (
     <ThemedView style={styles.screen}>
+      <Stack.Screen options={{ title }} />
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <KeyboardAvoidingView
           style={styles.screen}
@@ -113,7 +119,7 @@ export default function GameScreen() {
             }
           />
           {game.phase === 'playing' || adapting ? (
-            <View style={styles.inputRow}>
+            <View style={[styles.inputRow, { borderTopColor: theme.line }]}>
               <View style={styles.input}>
                 <Field
                   key={inputKey}
@@ -137,6 +143,13 @@ function Bubble({ speaker, name, text }: { speaker: string; name?: string; text:
   const theme = useTheme();
   const player = speaker === 'player';
   const npc = isActorChannel(speaker);
+  if (!player && !npc) {
+    return (
+      <ThemedText type="story" style={styles.narration}>
+        {text}
+      </ThemedText>
+    );
+  }
   return (
     <View
       style={[
@@ -186,15 +199,39 @@ function Cards({
   );
 }
 
+/** The header names the game ("The Brass Vault — Wren"). */
+function useSaveTitle(saveId: string): string {
+  const [title, setTitle] = useState('');
+  useEffect(() => {
+    let active = true;
+    void getLibrary()
+      .then((library) => library.repository.getSave(saveId))
+      .then((save) => active && setTitle(save?.title.split(' — ')[0] ?? ''))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [saveId]);
+  return title;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  feed: { gap: Spacing.two, padding: Spacing.three },
+  feed: { gap: Spacing.three, padding: Spacing.three },
+  narration: { paddingHorizontal: Spacing.one },
   footer: { gap: Spacing.two },
   bubble: { borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth * 2, gap: Spacing.one, maxWidth: '88%', padding: Spacing.three },
   player: { alignSelf: 'flex-end' },
   other: { alignSelf: 'flex-start' },
   spinner: { alignSelf: 'flex-start', padding: Spacing.two },
   cards: { gap: Spacing.two, marginTop: Spacing.two },
-  inputRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, padding: Spacing.two },
+  inputRow: {
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
   input: { flex: 1 },
 });

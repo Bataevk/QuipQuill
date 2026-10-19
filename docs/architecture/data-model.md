@@ -186,12 +186,16 @@ CREATE TABLE saves (
   character_id TEXT REFERENCES characters(id), title TEXT NOT NULL, path TEXT NOT NULL,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 ) STRICT;
+CREATE TABLE settings (               -- шаг 2 (D.7): настройки игрока
+  key TEXT PRIMARY KEY, value TEXT NOT NULL   -- 'theme' = system | light | dark
+) STRICT;
 ```
 
 - Схема — в коде: [`src/core/library/app-db.ts`](../../apps/mobile/src/core/library/app-db.ts); версии — `PRAGMA user_version`, шаги миграций только дописываются.
 - Файлы лежат в каталоге данных приложения (`Documents` на iOS): `app.db`, `stories/<story_id>.qqstory`, `saves/<save_id>.db`. **Пути в таблицах — относительные**: на iOS путь контейнера приложения меняется между установками и обновлениями.
 - Партия «с начала» (`SaveManager.restart`, 5.3): свежая копия текущей версии истории готовится рядом (`saves/<id>.db.restart`) и заменяет файл партии; id, название и персонаж сохраняются.
 - Сохранение схемы v1 (`state_*`), в котором партия уже началась, не открывается: `SaveOutdatedError` с текстом для игрока «начать заново или удалить» (6.2a). Не начатое — переходит на v2 без потерь.
+- Герой правится (`updateCharacter`; начатые партии остаются с тем героем, которого адаптировали) и удаляется, только пока у него нет партий (`CharacterInUseError`, D.7).
 - Импорт: проверка `schema_version` и обязательных ключей meta → копия в `stories/` (оригинал не меняется) → `vec_entities` в копии → запись в `stories`. Повторный импорт той же истории заменяет файл; сохранения не страдают — у каждого своя копия.
 
 ## PostgreSQL (cloud)

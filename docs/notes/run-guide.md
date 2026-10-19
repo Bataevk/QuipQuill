@@ -103,7 +103,7 @@ npx expo run:android
 adb push stories/brass-vault/brass-vault.qqstory /sdcard/Download/
 ```
 
-и в приложении **Stories** → **Import story** → `brass-vault.qqstory`.
+и в приложении **Profile** → **Import a story file** → `brass-vault.qqstory`.
 
 Особенности эмулятора: при первом вводе текста клавиатура Gboard может показать обучающий экран «Try out your stylus» — нажать **Cancel**. Кнопка «назад» на главном экране закрывает приложение — открыть его снова иконкой.
 
@@ -120,15 +120,15 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start --clear
 ## 3. В приложении
 
 1. **Вход.** Email, пароль и инвайт-код из `INVITE_CODES` → **Create account**. В следующие разы — только email и пароль → **Sign in**. Email с доменами `.test`, `.example` облако отклоняет — возьмите любой обычный, письма не отправляются.
-2. **Импорт истории.** На Android — см. раздел 2а. На iOS **Stories** → **Import story** открывает системный выбор файла, но в «Файлы» симулятора `.qqstory` просто так не положить. Проще одной командой из корня репозитория (приложение должно быть открыто):
+2. **Импорт истории.** На Android — см. раздел 2а. На iOS **Profile** → **Import a story file** открывает системный выбор файла, но в «Файлы» симулятора `.qqstory` просто так не положить. Проще одной командой из корня репозитория (приложение должно быть открыто):
 
    ```bash
-   DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp stories/brass-vault/brass-vault.qqstory "$DATA/tmp/"; xcrun simctl openurl booted "quipquill://stories?importPath=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$DATA/tmp/brass-vault.qqstory")"
+   DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp stories/brass-vault/brass-vault.qqstory "$DATA/tmp/"; xcrun simctl openurl booted "quipquill://profile?importPath=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$DATA/tmp/brass-vault.qqstory")"
    ```
 
    На экране появится «Imported “The Brass Vault” (sqlite-vec)».
-3. **Персонаж.** **Characters** → **New character**: имя, пол, возраст, раса, описание. Можно нарочно сделать того, кого в мире нет (эльф, маг) — посмотреть адаптацию.
-4. **Новая игра.** **New game** → выбрать историю и персонажа → **Start**.
+3. **Новая игра.** **Stories** → обложка истории → **New game** → в панели «Play as» выбрать героя или **Create a new hero** (после **Create and play** игра начнётся сама). Можно нарочно сделать того, кого в мире нет (эльф, маг) — посмотреть адаптацию.
+4. **Герои** — вкладка **Heroes**: создать, изменить, удалить (героя с партиями удалить нельзя, пока партии есть).
    - Сначала адаптация: объяснение и карточки — адаптированный персонаж и до двух альтернатив. Выбрать карточку или написать пожелание внизу (всего до трёх предложений, третье — только выбор).
    - После выбора мастер открывает сцену. Дальше пишите, что делаете: «I ask Mags about the vault», «I take the lantern», «I go up to Lamplight Row».
    - Реплики NPC идут отдельными пузырями с именем. Ход с реакцией NPC занимает 15–20 секунд.

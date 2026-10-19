@@ -21,22 +21,22 @@
 
 ### 2. Библиотека (30 с)
 
-**Stories** → в списке **The Brass Vault**.
+**Stories** → обложка **The Brass Vault** (вкладка снизу).
 
 > Историю собирает наш конвейер из обычного текста лора: 11 мест, 9 персонажей, ~70 предметов и связей. Файл истории живёт на телефоне — мир и сохранения локальные, облако только думает.
 
 ### 3. Персонаж и адаптация (2 мин) — первый «вау»
 
-**Characters** → **New character**:
+**New game** → **Create a new hero**:
 
 | Поле | Значение |
 |---|---|
 | Name | Lirael |
-| Gender / Age | female / 140 |
-| Race | Elf |
-| Description | A wandering elven archivist who reads the stars |
+| Who are you / Age | Woman / 140 |
+| Where you are from | Elf |
+| A few lines about you | A wandering elven archivist who reads the stars |
 
-**New game** → The Brass Vault + Lirael → **Start**.
+**Create and play** — игра начинается сама.
 
 > В этом мире эльфов нет — это стимпанк-Англия. Обычная игра бы отказала или сломала мир. Мастер вместо этого предлагает адаптацию и пару альтернатив.
 
@@ -96,4 +96,4 @@ APK собирается локально, см. [run-guide, раздел 7](run
 
 ### История на телефон
 
-Файл [stories/brass-vault/brass-vault.qqstory](../../stories/brass-vault/brass-vault.qqstory) прислать себе (мессенджер, почта, AirDrop) и сохранить в «Файлы» / Downloads. В приложении **Stories** → **Import story** → выбрать файл.
+Файл [stories/brass-vault/brass-vault.qqstory](../../stories/brass-vault/brass-vault.qqstory) прислать себе (мессенджер, почта, AirDrop) и сохранить в «Файлы» / Downloads. В приложении **Profile** → **Import a story file** → выбрать файл.

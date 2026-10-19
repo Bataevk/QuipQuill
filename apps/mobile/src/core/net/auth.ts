@@ -42,6 +42,12 @@ export class MemoryTokenStore implements TokenStore {
 }
 
 /** The player must log in again (no tokens, or the refresh token was rejected). */
+/** The signed-in account as the profile shows it; `email` is empty for a guest (ADR 60). */
+export interface Account {
+  email: string | null;
+  tier: string;
+}
+
 export class AuthRequiredError extends Error {
   constructor(message = 'Sign in required') {
     super(message);
@@ -82,6 +88,14 @@ export class AuthSession {
         body: { email, password, invite_code: inviteCode },
       }),
     );
+  }
+
+  /** Who is signed in (`GET /me`): the profile shows it. */
+  async me(): Promise<Account> {
+    const me = await requestJson<{ email: string | null; tier: string }>(`${this.baseUrl}/me`, {
+      token: await this.accessToken(),
+    });
+    return { email: me.email, tier: me.tier };
   }
 
   async logout(): Promise<void> {
