@@ -51,7 +51,7 @@ function hat({ outline }) {
 </g>`;
 }
 
-function sun({ outline, face, bell = 1 }) {
+function sun({ outline, face, bell = 1, part = 'all' }) {
   const r = 33 * bell, SUN = { x: SUN_TIP.x, y: SUN_TIP.y + r };
   const rays = Array.from({ length: 8 }, (_, i) => {
     const a = (i * Math.PI) / 4;
@@ -63,10 +63,13 @@ function sun({ outline, face, bell = 1 }) {
   <circle cx="${SUN.x + r * 0.32}" cy="${SUN.y - r * 0.15}" r="${r * 0.1}" fill="${C.goldDark}"/>
   <path d="M ${SUN.x - r * 0.38} ${SUN.y + r * 0.22} Q ${SUN.x} ${SUN.y + r * 0.58} ${SUN.x + r * 0.38} ${SUN.y + r * 0.22}" fill="none" stroke="${C.goldDark}" stroke-width="${r * 0.1}" stroke-linecap="round"/>`
     : '';
+  // The loader turns the rays on their own (stage D.3): `part` draws them or the face alone.
+  const rayPath = `<path fill="${C.gold}" d="${rays}"${stroke(outline, C.goldDark, 4)}/>`;
+  const body = `<circle cx="${SUN.x}" cy="${SUN.y}" r="${r}" fill="${C.gold}"${stroke(outline, C.goldDark, 5)}/>
+  ${details}`;
   return `<g>
-  <path fill="${C.gold}" d="${rays}"${stroke(outline, C.goldDark, 4)}/>
-  <circle cx="${SUN.x}" cy="${SUN.y}" r="${r}" fill="${C.gold}"${stroke(outline, C.goldDark, 5)}/>
-  ${details}
+  ${part === 'body' ? '' : rayPath}
+  ${part === 'rays' ? '' : body}
 </g>`;
 }
 
@@ -173,6 +176,19 @@ ${scaled(art({ outline: true, face: true }), 0.95)}`,
     '62 62 900 900',
     '<clipPath id="disc"><circle cx="512" cy="512" r="445"/></clipPath>',
   ),
+  // The loader (stage D.3): the emblem without its bells, and the bells on their own, each framed
+  // so the app can swing it about the hat's tip. Frames in the art's units (before the 0.95):
+  // sun — 124×124 about its centre (rays turn there), moon — 180×180 about its tip.
+  'emblem-base.svg': svg(
+    `<g clip-path="url(#disc)">${ground()}</g>
+<circle cx="512" cy="512" r="440" fill="none" stroke="${C.cream}" stroke-width="10" opacity="0.9"/>
+${scaled(hat({ outline: true }), 0.95)}`,
+    '62 62 900 900',
+    '<clipPath id="disc"><circle cx="512" cy="512" r="445"/></clipPath>',
+  ),
+  'bell-sun-rays.svg': svg(sun({ outline: true, face: true, part: 'rays' }), '160 390 124 124'),
+  'bell-sun-body.svg': svg(sun({ outline: true, face: true, part: 'body' }), '160 390 124 124'),
+  'bell-moon.svg': svg(moon({ outline: true, face: true }), '711 428 180 180'),
   // App layers (variant A, owner's choice 2026-10-20): ground and hat apart for Android.
   'ground.svg': svg(ground()),
   'hat.svg': svg(scaled(art({ outline: false, face: false, bell: 1.3 }), 1.0)),

@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FoolBells } from '@/components/fool-loader';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Card, ErrorText, Field } from '@/components/ui';
@@ -70,7 +71,11 @@ export default function GameScreen() {
 
   const footer = (
     <View style={styles.footer}>
-      {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator color={theme.accent} style={styles.spinner} /> : null}
+      {game.busy && (game.thinking || game.live.length === 0) ? (
+        <View style={styles.spinner}>
+          <FoolBells label={game.phase === 'adapting' ? 'The story is fitting your hero…' : 'The master is thinking…'} />
+        </View>
+      ) : null}
       {!game.online ? (
         <ThemedText type="caption" themeColor="inkMuted">
           Connecting to the server… {game.busy ? 'Your move will be sent as soon as it is back.' : ''}

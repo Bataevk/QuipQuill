@@ -35,6 +35,13 @@ await png(read('emblem.svg'), 'splash-icon.png', 1024);
 // Web favicon: the icon itself reads better than the emblem at 48 px.
 await png(read('icon-a.svg'), 'favicon.png', 48);
 
+// The loader's layers (stage D.3): the emblem without bells at 3x of 200 pt, the bells larger
+// than they show at 200 pt so the same files serve bigger emblems too.
+await png(read('emblem-base.svg'), 'loader-emblem.png', 768);
+await png(read('bell-sun-rays.svg'), 'loader-sun-rays.png', 192);
+await png(read('bell-sun-body.svg'), 'loader-sun-body.png', 192);
+await png(read('bell-moon.svg'), 'loader-moon.png', 256);
+
 // Paper for backgrounds outside the main pages (ADR 63): a grain tile and a stretched mottle.
 for (const t of ['light', 'dark']) {
   await png(read(`paper-grain-${t}.svg`), `paper-grain-${t}.png`, 256);

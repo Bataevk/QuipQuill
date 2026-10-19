@@ -2,19 +2,43 @@
 import '@/platform/polyfills';
 
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, useSegments, type Theme } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { BootScreen } from '@/components/boot-screen';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
-import { getCloud } from '@/platform/services';
+import { getCloud, getLibrary } from '@/platform/services';
 import { ensureBundledStory } from '@/platform/bundled-story';
 import { restoreThemePreference } from '@/platform/theme-preference';
 
-// The player's theme (Profile) before the first screen settles; the built-in story in the
-// background (the Stories tab waits for it and shows an error if it fails).
-void restoreThemePreference().catch(() => {});
+// The native splash stays until the boot screen takes over (stage D.3). The player's theme and
+// the library open behind it; the built-in story imports in the background (the Stories tab
+// waits for it and shows an error if it fails).
+void SplashScreen.preventAutoHideAsync();
+// At least one swing of the bells out and back, so the start reads as a moment, not a flicker.
+const MIN_BOOT_MS = 1200;
+const booting = Promise.allSettled([
+  restoreThemePreference(),
+  getLibrary(),
+  getCloud().auth.isSignedIn(),
+  new Promise((resolve) => setTimeout(resolve, MIN_BOOT_MS)),
+]);
 void ensureBundledStory().catch(() => {});
+
+/** True once the app's data is open: the boot screen fades away. */
+function useBooted(): boolean {
+  const [booted, setBooted] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void booting.then(() => active && setBooted(true));
+    return () => {
+      active = false;
+    };
+  }, []);
+  return booted;
+}
 
 /** Signed out → the login screen; signed in → the socket runs (stage 5.1). */
 function useAuthGate() {
@@ -74,6 +98,7 @@ function useNavigationTheme(): Theme {
 
 export default function RootLayout() {
   const theme = useNavigationTheme();
+  const booted = useBooted();
   useAuthGate();
   return (
     <ThemeProvider value={theme}>
@@ -90,6 +115,7 @@ export default function RootLayout() {
         <Stack.Screen name="heroes/[id]" options={{ title: 'Hero' }} />
         <Stack.Screen name="game/[id]" options={{ title: '' }} />
       </Stack>
+      <BootScreen ready={booted} />
     </ThemeProvider>
   );
 }

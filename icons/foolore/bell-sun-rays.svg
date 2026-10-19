@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 390 124 124"><defs><filter id="grain" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+  <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" stitchTiles="stitch" result="fine"/>
+  <feColorMatrix in="fine" type="saturate" values="0" result="fineMono"/>
+  <feComponentTransfer in="fineMono" result="fineSoft">
+    <feFuncR type="linear" slope="0.22" intercept="0.82"/><feFuncG type="linear" slope="0.22" intercept="0.82"/>
+    <feFuncB type="linear" slope="0.22" intercept="0.82"/><feFuncA type="linear" slope="0" intercept="1"/>
+  </feComponentTransfer>
+  <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="11" result="mottle"/>
+  <feColorMatrix in="mottle" type="saturate" values="0" result="mottleMono"/>
+  <feComponentTransfer in="mottleMono" result="mottleSoft">
+    <feFuncR type="linear" slope="0.1" intercept="0.92"/><feFuncG type="linear" slope="0.1" intercept="0.92"/>
+    <feFuncB type="linear" slope="0.1" intercept="0.92"/><feFuncA type="linear" slope="0" intercept="1"/>
+  </feComponentTransfer>
+  <feBlend in="SourceGraphic" in2="fineSoft" mode="multiply" result="a"/>
+  <feBlend in="a" in2="mottleSoft" mode="multiply" result="b"/>
+  <feComposite in="b" in2="SourceGraphic" operator="in"/>
+</filter></defs><g>
+  <path fill="#D9A441" d="M 222.0 394.3 L 228.9 418.0 L 215.1 418.0 Z M 262.8 411.2 L 250.9 432.9 L 241.1 423.1 Z M 279.8 452.0 L 256.0 458.9 L 256.0 445.1 Z M 262.8 492.8 L 241.1 480.9 L 250.9 471.1 Z M 222.0 509.8 L 215.1 486.0 L 228.9 486.0 Z M 181.2 492.8 L 193.1 471.1 L 202.9 480.9 Z M 164.3 452.0 L 188.0 445.1 L 188.0 458.9 Z M 181.2 411.2 L 202.9 423.1 L 193.1 432.9 Z" stroke="#9C6F22" stroke-width="4" stroke-linejoin="round"/>
+  
+</g></svg>
