@@ -9,6 +9,7 @@
     "@langchain/langgraph": "1.5.0",
     "@op-engineering/op-sqlite": "18.2.5",
     "expo": "57.0.28",
+    "expo-asset": "57.0.20",
     "expo-build-properties": "57.0.22",
     "expo-constants": "57.0.21",
     "expo-crypto": "57.0.4",

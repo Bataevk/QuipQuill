@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ErrorText, Row, Screen, errorText } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { Character, SaveRecord, StoryRecord } from '@/core/library/app-db';
+import { ensureBundledStory } from '@/platform/bundled-story';
 import { getLibrary } from '@/platform/services';
 
 /** How many recent games the top of the page offers to continue. */
@@ -15,7 +16,7 @@ const RECENT = 3;
 
 /**
  * Stories (stage D.7): where you stopped on top, the library below. A story opens its page,
- * where you pick a hero. The cloud catalogue joins the library in D.5.
+ * where you pick a hero. The demo story ships inside the app until the cloud catalogue (D.5).
  */
 export default function StoriesScreen() {
   const [stories, setStories] = useState<StoryRecord[]>([]);
@@ -26,7 +27,9 @@ export default function StoriesScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void getLibrary()
+      void ensureBundledStory()
+        .catch((e) => active && setError(errorText(e)))
+        .then(getLibrary)
         .then(async ({ repository }) => {
           const [s, sv, h] = await Promise.all([repository.listStories(), repository.listSaves(), repository.listCharacters()]);
           if (!active) return;
@@ -70,7 +73,7 @@ export default function StoriesScreen() {
         ))}
         {stories.length === 0 ? (
           <ThemedText themeColor="inkMuted">
-            No stories yet. Soon they will come by themselves; for now, import a story file in Profile.
+            No stories yet.
           </ThemedText>
         ) : null}
       </View>

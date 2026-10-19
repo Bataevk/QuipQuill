@@ -97,7 +97,7 @@ npx expo run:android
 
 **Облако** приложение на эмуляторе находит само: `localhost` компьютера для эмулятора — это `10.0.2.2`, адрес подставляется автоматически (`src/platform/services.ts`).
 
-**Импорт истории на Android** — через обычный выбор файла: положить файл в «Загрузки» эмулятора (из корня репозитория)
+**Импорт истории на Android** не нужен: The Brass Vault встроена в приложение и импортируется сама при первом запуске (ADR 64). Другую историю в dev-сборке — через обычный выбор файла: положить файл в «Загрузки» эмулятора (из корня репозитория)
 
 ```bash
 adb push stories/brass-vault/brass-vault.qqstory /sdcard/Download/
@@ -120,7 +120,7 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start --clear
 ## 3. В приложении
 
 1. **Вход.** Email, пароль и инвайт-код из `INVITE_CODES` → **Create account**. В следующие разы — только email и пароль → **Sign in**. Email с доменами `.test`, `.example` облако отклоняет — возьмите любой обычный, письма не отправляются.
-2. **Импорт истории.** На Android — см. раздел 2а. На iOS **Profile** → **Import a story file** открывает системный выбор файла, но в «Файлы» симулятора `.qqstory` просто так не положить. Проще одной командой из корня репозитория (приложение должно быть открыто):
+2. **История.** The Brass Vault уже в приложении (встроена, ADR 64): после первого запуска она во вкладке **Stories**. Новая сборка файла (`builder export`) заменит её сама при следующем запуске. Другую историю в dev-сборке: на Android — см. раздел 2а; на iOS **Profile** → **Import a story file** открывает системный выбор файла, но в «Файлы» симулятора `.qqstory` просто так не положить — проще одной командой из корня репозитория (приложение должно быть открыто):
 
    ```bash
    DATA=$(xcrun simctl get_app_container booted app.quipquill.mobile data); cp stories/brass-vault/brass-vault.qqstory "$DATA/tmp/"; xcrun simctl openurl booted "quipquill://profile?importPath=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$DATA/tmp/brass-vault.qqstory")"

@@ -96,4 +96,4 @@ APK собирается локально, см. [run-guide, раздел 7](run
 
 ### История на телефон
 
-Файл [stories/brass-vault/brass-vault.qqstory](../../stories/brass-vault/brass-vault.qqstory) прислать себе (мессенджер, почта, AirDrop) и сохранить в «Файлы» / Downloads. В приложении **Profile** → **Import a story file** → выбрать файл.
+Ничего делать не нужно: The Brass Vault встроена в сборку и появляется во вкладке **Stories** при первом запуске (ADR 64).

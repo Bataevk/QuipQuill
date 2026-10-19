@@ -30,6 +30,17 @@ export class StoryImporter {
     this.library = library;
   }
 
+  /**
+   * Imports only if the library lacks this story or holds another build of it (`built_at`):
+   * for a story shipped inside the app, checked at every start. Undefined when nothing changed.
+   */
+  async importIfChanged(sourcePath: string): Promise<ImportResult | undefined> {
+    const meta = await withDb(this.driver, sourcePath, readStoryMeta, { readOnly: true });
+    const current = await this.library.getStory(meta.storyId);
+    if (current && current.builtAt === meta.builtAt) return undefined;
+    return this.import(sourcePath);
+  }
+
   /** `sourcePath` is an absolute path (e.g. what the system file picker returned). */
   async import(sourcePath: string): Promise<ImportResult> {
     // Throws StoryFormatError for anything that is not a playable story file.

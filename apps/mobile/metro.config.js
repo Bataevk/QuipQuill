@@ -18,4 +18,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return (resolveDefault ?? context.resolveRequest)(context, moduleName, platform);
 };
 
+// The demo story ships inside the app for now (stories/brass-vault, built by builder): Metro
+// bundles it as an asset from the repo's stories/ folder, the single copy of the file.
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, '../../stories')];
+config.resolver.assetExts.push('qqstory');
+
 module.exports = config;

@@ -62,6 +62,19 @@ describe('StoryImporter', () => {
     expect(await env.library.repository.listStories()).toHaveLength(1);
   });
 
+  it('imports a story shipped with the app only when it is new or another build', async () => {
+    env = await makeTestEnv();
+    expect((await env.library.importer.importIfChanged(DEMO_STORY))?.replaced).toBe(false);
+    expect(await env.library.importer.importIfChanged(DEMO_STORY)).toBeUndefined();
+
+    const rebuilt = join(env.dir, 'rebuilt.qqstory');
+    await copyFile(DEMO_STORY, rebuilt);
+    await withDb(env.driver, rebuilt, (db) => db.run("UPDATE meta SET value = '2099-01-01T00:00:00Z' WHERE key = 'built_at'"));
+    const updated = await env.library.importer.importIfChanged(rebuilt);
+    expect(updated?.replaced).toBe(true);
+    expect((await env.library.repository.getStory(DEMO_STORY_ID))?.builtAt).toBe('2099-01-01T00:00:00Z');
+  });
+
   it('rejects files that are not stories, leaving nothing behind', async () => {
     env = await makeTestEnv();
     const text = join(env.dir, 'notes.qqstory');

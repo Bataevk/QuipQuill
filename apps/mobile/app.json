@@ -60,7 +60,8 @@
             "./node_modules/@expo-google-fonts/literata/600SemiBold/Literata_600SemiBold.ttf"
           ]
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

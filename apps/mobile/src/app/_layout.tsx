@@ -8,10 +8,13 @@ import { AppState } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
 import { getCloud } from '@/platform/services';
+import { ensureBundledStory } from '@/platform/bundled-story';
 import { restoreThemePreference } from '@/platform/theme-preference';
 
-// The player's theme (Profile) before the first screen settles.
+// The player's theme (Profile) before the first screen settles; the built-in story in the
+// background (the Stories tab waits for it and shows an error if it fails).
 void restoreThemePreference().catch(() => {});
+void ensureBundledStory().catch(() => {});
 
 /** Signed out → the login screen; signed in → the socket runs (stage 5.1). */
 function useAuthGate() {

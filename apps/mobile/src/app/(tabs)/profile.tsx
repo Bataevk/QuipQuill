@@ -20,11 +20,8 @@ const THEMES: { value: ThemePreference; label: string }[] = [
 
 const OFL_URL = 'https://openfontlicense.org';
 
-/**
- * Story import from a file. Release builds keep it until stories come from the cloud (D.5) — demo
- * phones have no other way to get one; then it becomes dev-only (`__DEV__`).
- */
-const SHOW_IMPORT = true;
+/** Story import from a file: dev builds only, the demo story ships inside the app. */
+const SHOW_IMPORT = __DEV__;
 
 /** The profile (stage D.7): the account, the theme, the fonts' credits; story import in dev builds. */
 export default function ProfileScreen() {
