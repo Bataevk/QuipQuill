@@ -52,7 +52,7 @@ function shownLine(message: BaseMessage): BaseMessage {
   if (!ref) return message;
   const failed = actorFailureOf(message);
   const content = failed
-    ? `Error: ${ref.name} [${ref.id}] could not react right now (${failed}). Narrate around it.`
+    ? `Error: ${ref.name} [${ref.id}] could not react right now (${failed}). Narrate around it, without words for them.`
     : message.text.trim()
       ? `${ref.name} [${ref.id}]: ${message.text.trim()}`
       : `${ref.name} [${ref.id}] does not react.`;
