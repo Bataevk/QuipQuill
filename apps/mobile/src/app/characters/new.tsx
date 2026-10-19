@@ -40,7 +40,7 @@ export default function NewCharacterScreen() {
       <Field label="Age" value={age} onChangeText={setAge} keyboardType="number-pad" />
       <Field label="Race" value={race} onChangeText={setRace} autoCorrect={false} />
       <Field label="Description" value={description} onChangeText={setDescription} multiline style={{ minHeight: 96 }} />
-      <Button title="Save" onPress={save} disabled={!name.trim()} />
+      <Button title="Save" variant="primary" onPress={save} disabled={!name.trim()} />
       <ErrorText>{error}</ErrorText>
     </Screen>
   );

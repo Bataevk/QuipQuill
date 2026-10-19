@@ -25,11 +25,11 @@ export default function CharactersScreen() {
 
   return (
     <Screen>
-      <Button title="New character" onPress={() => router.push('/characters/new')} />
+      <Button title="New character" variant="primary" onPress={() => router.push('/characters/new')} />
       {characters.map((c) => (
         <Row key={c.id} title={c.name} subtitle={characterLine(c)} />
       ))}
-      {characters.length === 0 ? <ThemedText themeColor="textSecondary">No characters yet.</ThemedText> : null}
+      {characters.length === 0 ? <ThemedText themeColor="inkMuted">No characters yet.</ThemedText> : null}
     </Screen>
   );
 }

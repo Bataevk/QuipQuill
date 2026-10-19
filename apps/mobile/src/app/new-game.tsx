@@ -52,17 +52,17 @@ export default function NewGameScreen() {
 
   return (
     <Screen>
-      <ThemedText type="smallBold">Story</ThemedText>
+      <ThemedText type="label">Story</ThemedText>
       {stories.map((s) => (
         <Row key={s.id} title={s.title} selected={s.id === story} onPress={() => setStory(s.id)} />
       ))}
       {stories.length === 0 ? <Button title="Import a story first" onPress={() => router.push('/stories')} /> : null}
-      <ThemedText type="smallBold">Character</ThemedText>
+      <ThemedText type="label">Character</ThemedText>
       {characters.map((c) => (
         <Row key={c.id} title={c.name} subtitle={characterLine(c)} selected={c.id === character} onPress={() => setCharacter(c.id)} />
       ))}
       {characters.length === 0 ? <Button title="Create a character first" onPress={() => router.push('/characters/new')} /> : null}
-      <Button title="Start" onPress={start} busy={busy} disabled={!story || !character} />
+      <Button title="Start" variant="primary" onPress={start} busy={busy} disabled={!story || !character} />
       <ErrorText>{error}</ErrorText>
     </Screen>
   );

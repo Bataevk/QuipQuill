@@ -34,7 +34,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "dark": {
-            "backgroundColor": "#221F23",
+            "backgroundColor": "#201D21",
             "image": "./assets/images/splash-icon.png"
           }
         }
@@ -48,7 +48,19 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/im-fell-english/400Regular/IMFellEnglish_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/im-fell-english/400Regular_Italic/IMFellEnglish_400Regular_Italic.ttf",
+            "./node_modules/@expo-google-fonts/literata/400Regular/Literata_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/literata/400Regular_Italic/Literata_400Regular_Italic.ttf",
+            "./node_modules/@expo-google-fonts/literata/600SemiBold/Literata_600SemiBold.ttf"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

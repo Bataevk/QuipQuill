@@ -35,6 +35,8 @@ await png(read('emblem.svg'), 'splash-icon.png', 1024);
 // Web favicon: the icon itself reads better than the emblem at 48 px.
 await png(read('icon-a.svg'), 'favicon.png', 48);
 
-// Paper tiles for backgrounds outside the main pages (ADR 63), repeated at 1x.
-await png(read('paper-light.svg'), 'paper-light.png', 512);
-await png(read('paper-dark.svg'), 'paper-dark.png', 512);
+// Paper for backgrounds outside the main pages (ADR 63): a grain tile and a stretched mottle.
+for (const t of ['light', 'dark']) {
+  await png(read(`paper-grain-${t}.svg`), `paper-grain-${t}.png`, 256);
+  await png(read(`paper-mottle-${t}.svg`), `paper-mottle-${t}.png`, 160);
+}

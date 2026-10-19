@@ -61,12 +61,12 @@ export default function StoriesScreen() {
 
   return (
     <Screen>
-      <Button title="Import story" onPress={pickAndImport} />
-      {status ? <ThemedText themeColor="textSecondary">{status}</ThemedText> : null}
+      <Button title="Import story" variant="primary" onPress={pickAndImport} />
+      {status ? <ThemedText themeColor="inkMuted">{status}</ThemedText> : null}
       {stories.map((story) => (
         <Row key={story.id} title={story.title} subtitle={`Imported ${story.importedAt.slice(0, 10)}`} />
       ))}
-      {stories.length === 0 ? <ThemedText themeColor="textSecondary">No stories yet.</ThemedText> : null}
+      {stories.length === 0 ? <ThemedText themeColor="inkMuted">No stories yet.</ThemedText> : null}
     </Screen>
   );
 }

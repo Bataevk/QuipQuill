@@ -41,13 +41,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen title="foolore">
+    <Screen title="foolore" paper>
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" />
       <Field label="Invite code (new account only)" value={invite} onChangeText={setInvite} autoCapitalize="none" />
-      <Button title={invite.trim() ? 'Create account' : 'Sign in'} onPress={submit} busy={busy} disabled={!email || !password} />
+      <Button title={invite.trim() ? 'Create account' : 'Sign in'} variant="primary" onPress={submit} busy={busy} disabled={!email || !password} />
       <ErrorText>{error}</ErrorText>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="caption" themeColor="inkMuted">
         Accounts are invite-only during the prototype.
       </ThemedText>
     </Screen>

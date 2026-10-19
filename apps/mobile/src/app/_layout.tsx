@@ -1,10 +1,12 @@
 // Must stay first: standard Web APIs the core expects (ADR 27).
 import '@/platform/polyfills';
 
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, useSegments } from 'expo-router';
-import { useEffect } from 'react';
-import { AppState, useColorScheme } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, useSegments, type Theme } from 'expo-router';
+import { useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 
+import { Colors, Fonts } from '@/constants/theme';
+import { useScheme } from '@/hooks/use-theme';
 import { getCloud } from '@/platform/services';
 
 /** Signed out → the login screen; signed in → the socket runs (stage 5.1). */
@@ -50,12 +52,30 @@ function useAuthGate() {
   }, []);
 }
 
+/** React Navigation's theme from the design tokens (ADR 63): headers and backgrounds match the screens. */
+function useNavigationTheme(): Theme {
+  const scheme = useScheme();
+  return useMemo(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+    const c = Colors[scheme];
+    return {
+      ...base,
+      colors: { ...base.colors, primary: c.accent, background: c.bg, card: c.bg, text: c.ink, border: c.line, notification: c.accent },
+    };
+  }, [scheme]);
+}
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const theme = useNavigationTheme();
   useAuthGate();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <ThemeProvider value={theme}>
+      <Stack
+        screenOptions={{
+          headerBackTitle: 'Back',
+          headerShadowVisible: false,
+          headerTitleStyle: { fontFamily: Fonts.display, fontSize: 22 },
+        }}>
         <Stack.Screen name="index" options={{ title: 'foolore' }} />
         <Stack.Screen name="login" options={{ title: 'Sign in', headerBackVisible: false }} />
         <Stack.Screen name="stories" options={{ title: 'Stories' }} />

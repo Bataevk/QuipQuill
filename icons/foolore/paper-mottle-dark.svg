@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 346" width="160" height="346">
+<defs><filter id="s" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="160" height="346">
+  <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="3" seed="11" stitchTiles="stitch"/>
+  <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.03 0 0 0 -0.007"/>
+</filter></defs>
+<rect width="160" height="346" fill="#000" filter="url(#s)"/>
+</svg>

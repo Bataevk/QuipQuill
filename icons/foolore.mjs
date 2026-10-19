@@ -132,28 +132,25 @@ function monochrome(body) {
 <rect width="1024" height="1024" fill="#000" mask="url(#mono)"/>`;
 }
 
-// A seamless paper tile for backgrounds (ADR 63): the theme's bg with fine grain and soft mottling.
-// Light paper darkens a little (multiply), dark paper lightens a little (screen); the mean stays near bg.
-function paper(bg, dark, size = 512) {
-  const soft = (slope, intercept) =>
-    ['R', 'G', 'B'].map((c) => `<feFunc${c} type="linear" slope="${slope}" intercept="${intercept}"/>`).join('') +
-    '<feFuncA type="linear" slope="0" intercept="1"/>';
-  const [fine, mottle, mode] = dark ? [soft(0.03, 0), soft(0.02, 0), 'screen'] : [soft(0.16, 0.9), soft(0.1, 0.94), 'multiply'];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-<defs><filter id="p" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="${size}" height="${size}">
-  <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5" stitchTiles="stitch" result="fine"/>
-  <feColorMatrix in="fine" type="saturate" values="0" result="fineMono"/>
-  <feComponentTransfer in="fineMono" result="fineSoft">${fine}</feComponentTransfer>
-  <feTurbulence type="fractalNoise" baseFrequency="0.0117" numOctaves="3" seed="11" stitchTiles="stitch" result="mottle"/>
-  <feColorMatrix in="mottle" type="saturate" values="0" result="mottleMono"/>
-  <feComponentTransfer in="mottleMono" result="mottleSoft">${mottle}</feComponentTransfer>
-  <feBlend in="SourceGraphic" in2="fineSoft" mode="${mode}" result="a"/>
-  <feBlend in="a" in2="mottleSoft" mode="${mode}"/>
+// Paper for backgrounds (ADR 63) in two layers over the theme's bg: a small tile of fine grain,
+// repeated, and soft mottling as one small image stretched over the screen (low-frequency, so it
+// stays smooth when stretched and leaves no seams to show). Both are alpha-only: dark specks on
+// parchment, light ones at night; together they shift the mean to the splash's colour (D.2).
+function speckle({ width, height, frequency, octaves, seed, light, k, b }) {
+  const rgb = light ? '0' : '1';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+<defs><filter id="s" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">
+  <feTurbulence type="fractalNoise" baseFrequency="${frequency}" numOctaves="${octaves}" seed="${seed}" stitchTiles="stitch"/>
+  <feColorMatrix type="matrix" values="0 0 0 0 ${rgb}  0 0 0 0 ${rgb}  0 0 0 0 ${rgb}  ${k} 0 0 0 ${b}"/>
 </filter></defs>
-<rect width="${size}" height="${size}" fill="${bg}" filter="url(#p)"/>
+<rect width="${width}" height="${height}" fill="#000" filter="url(#s)"/>
 </svg>
 `;
 }
+const grain = (light) =>
+  speckle({ width: 256, height: 256, frequency: 0.9, octaves: 2, seed: 5, light, ...(light ? { k: 0.07, b: -0.012 } : { k: 0.035, b: -0.005 }) });
+const mottle = (light) =>
+  speckle({ width: 160, height: 346, frequency: 0.03, octaves: 3, seed: 11, light, ...(light ? { k: 0.06, b: -0.016 } : { k: 0.03, b: -0.007 }) });
 
 const frame = `<rect x="54" y="54" width="916" height="916" rx="176" fill="none" stroke="${C.cream}" stroke-width="10" opacity="0.85"/>`;
 
@@ -180,8 +177,10 @@ ${scaled(art({ outline: true, face: true }), 0.95)}`,
   'ground.svg': svg(ground()),
   'hat.svg': svg(scaled(art({ outline: false, face: false, bell: 1.3 }), 1.0)),
   'hat-mono.svg': svg(monochrome(scaled(art({ outline: true, face: false, bell: 1.3 }), 1.0))),
-  'paper-light.svg': paper('#F4ECDD', false),
-  'paper-dark.svg': paper('#1D1A1E', true),
+  'paper-grain-light.svg': grain(true),
+  'paper-grain-dark.svg': grain(false),
+  'paper-mottle-light.svg': mottle(true),
+  'paper-mottle-dark.svg': mottle(false),
   // Hat and bells alone, outlined, for the loader and screens with their own background.
   'hat-outlined.svg': svg(art({ outline: true, face: true }), '150 180 724 520'),
 };

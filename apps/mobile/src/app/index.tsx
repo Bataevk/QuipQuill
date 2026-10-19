@@ -84,10 +84,10 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Button title="New game" onPress={() => router.push('/new-game')} />
+      <Button title="New game" variant="primary" onPress={() => router.push('/new-game')} />
       <Button title="Stories" onPress={() => router.push('/stories')} />
       <Button title="Characters" onPress={() => router.push('/characters')} />
-      <ThemedText type="smallBold">Continue</ThemedText>
+      <ThemedText type="label">Continue</ThemedText>
       {saves.map((save) => (
         <View key={save.id} style={styles.save}>
           <Row
@@ -105,9 +105,9 @@ export default function HomeScreen() {
           </View>
         </View>
       ))}
-      {saves.length === 0 ? <ThemedText themeColor="textSecondary">No games yet.</ThemedText> : null}
+      {saves.length === 0 ? <ThemedText themeColor="inkMuted">No games yet.</ThemedText> : null}
       <ErrorText>{error}</ErrorText>
-      <Button title="Sign out" onPress={signOut} />
+      <Button title="Sign out" variant="ghost" onPress={signOut} />
     </Screen>
   );
 }

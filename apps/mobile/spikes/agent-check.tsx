@@ -87,7 +87,7 @@ export default function AgentCheckScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView>
-          <ThemedText type="small">{report}</ThemedText>
+          <ThemedText type="caption">{report}</ThemedText>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

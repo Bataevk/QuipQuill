@@ -5,8 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Button, ErrorText, Field } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Button, Card, ErrorText, Field } from '@/components/ui';
+import { Radius, Spacing } from '@/constants/theme';
 import type { CharacterOption } from '@/core/agent/character';
 import { PROPOSAL_CARD } from '@/core/agent/session';
 import { isActorChannel } from '@/core/protocol/channels';
@@ -26,6 +26,7 @@ export default function GameScreen() {
   const [text, setText] = useState('');
   const [inputKey, setInputKey] = useState(0); // a new key clears the (uncontrolled) field
   const list = useRef<FlatList<FeedItem>>(null);
+  const theme = useTheme();
 
   const adapting = game.phase === 'adapting';
   const canType = game.ready && !game.busy && (game.phase === 'playing' || (adapting && !!game.proposal?.canClarify));
@@ -64,15 +65,15 @@ export default function GameScreen() {
 
   const footer = (
     <View style={styles.footer}>
-      {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator style={styles.spinner} /> : null}
+      {game.busy && (game.thinking || game.live.length === 0) ? <ActivityIndicator color={theme.accent} style={styles.spinner} /> : null}
       {!game.online ? (
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="caption" themeColor="inkMuted">
           Connecting to the server… {game.busy ? 'Your move will be sent as soon as it is back.' : ''}
         </ThemedText>
       ) : null}
       <ErrorText>{game.error}</ErrorText>
       {game.sessionCost ? (
-        <ThemedText type="code" themeColor="textSecondary">
+        <ThemedText type="mono" themeColor="inkMuted">
           Session: {game.sessionCost}
         </ThemedText>
       ) : null}
@@ -100,7 +101,7 @@ export default function GameScreen() {
               item.kind === 'footer' ? (
                 footer
               ) : item.kind === 'cost' ? (
-                <ThemedText type="code" themeColor="textSecondary">
+                <ThemedText type="mono" themeColor="inkMuted">
                   {item.text}
                 </ThemedText>
               ) : (
@@ -123,7 +124,7 @@ export default function GameScreen() {
                   returnKeyType="send"
                 />
               </View>
-              <Button title="Send" onPress={submit} disabled={!canType || !text.trim()} />
+              <Button title="Send" variant="primary" onPress={submit} disabled={!canType || !text.trim()} />
             </View>
           ) : null}
         </KeyboardAvoidingView>
@@ -141,10 +142,16 @@ function Bubble({ speaker, name, text }: { speaker: string; name?: string; text:
       style={[
         styles.bubble,
         player ? styles.player : styles.other,
-        { backgroundColor: player ? theme.backgroundSelected : theme.backgroundElement },
+        player
+          ? { backgroundColor: theme.sunken, borderColor: theme.sunken }
+          : { backgroundColor: theme.surface, borderColor: theme.line },
       ]}>
-      {npc ? <ThemedText type="smallBold">{name ?? 'Someone'}</ThemedText> : null}
-      <ThemedText>{text}</ThemedText>
+      {npc ? (
+        <ThemedText type="label" themeColor="accent">
+          {name ?? 'Someone'}
+        </ThemedText>
+      ) : null}
+      <ThemedText type={player ? 'body' : 'story'}>{text}</ThemedText>
     </View>
   );
 }
@@ -161,13 +168,19 @@ function Cards({
   return (
     <View style={styles.cards}>
       {options.map((option, i) => (
-        <View key={i} style={styles.card}>
-          <ThemedText type="smallBold">
-            {option.name} — {[option.race, option.age ? `${option.age}` : ''].filter(Boolean).join(', ')}
+        <Card key={i}>
+          <ThemedText type="title">{option.name}</ThemedText>
+          <ThemedText type="caption" themeColor="inkMuted">
+            {[option.race, option.age ? `${option.age}` : ''].filter(Boolean).join(', ')}
           </ThemedText>
-          <ThemedText type="small">{option.description}</ThemedText>
-          <Button title={i === 0 ? 'Play this character' : 'Play this one instead'} disabled={disabled} onPress={() => onChoose(i)} />
-        </View>
+          <ThemedText type="story">{option.description}</ThemedText>
+          <Button
+            title={i === 0 ? 'Play this character' : 'Play this one instead'}
+            variant={i === 0 ? 'primary' : 'secondary'}
+            disabled={disabled}
+            onPress={() => onChoose(i)}
+          />
+        </Card>
       ))}
     </View>
   );
@@ -177,12 +190,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   feed: { gap: Spacing.two, padding: Spacing.three },
   footer: { gap: Spacing.two },
-  bubble: { borderRadius: Spacing.three, gap: Spacing.one, maxWidth: '88%', padding: Spacing.three },
+  bubble: { borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth * 2, gap: Spacing.one, maxWidth: '88%', padding: Spacing.three },
   player: { alignSelf: 'flex-end' },
   other: { alignSelf: 'flex-start' },
   spinner: { alignSelf: 'flex-start', padding: Spacing.two },
   cards: { gap: Spacing.two, marginTop: Spacing.two },
-  card: { gap: Spacing.two },
   inputRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, padding: Spacing.two },
   input: { flex: 1 },
 });
