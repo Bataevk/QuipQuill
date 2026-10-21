@@ -1,7 +1,7 @@
 // Must stay first: standard Web APIs the core expects (ADR 27).
 import '@/platform/polyfills';
 
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, type Theme } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
@@ -11,6 +11,7 @@ import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
 import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 import { ensureBundledStory } from '@/platform/bundled-story';
+import { isOnboarded } from '@/platform/onboarding';
 import { restoreThemePreference } from '@/platform/theme-preference';
 
 // The native splash stays until the boot screen takes over (stage D.3). The player's theme and
@@ -19,20 +20,32 @@ import { restoreThemePreference } from '@/platform/theme-preference';
 void SplashScreen.preventAutoHideAsync();
 // At least one swing of the bells out and back, so the start reads as a moment, not a flicker.
 const MIN_BOOT_MS = 1200;
+// Whether the first launch is done (stage D.6): the boot screen hides the jump to onboarding.
+const onboarded = isOnboarded().catch(() => true);
 const booting = Promise.allSettled([
   restoreThemePreference(),
   getLibrary(),
   getCloud().auth.isSignedIn(),
+  onboarded,
   new Promise((resolve) => setTimeout(resolve, MIN_BOOT_MS)),
 ]);
 void ensureBundledStory().catch(() => {});
 
-/** True once the app's data is open: the boot screen fades away. */
+/**
+ * True once the app's data is open: the boot screen fades away. A first launch goes to the
+ * onboarding (stage D.6) behind the boot screen, so the main pages never flash.
+ */
 function useBooted(): boolean {
   const [booted, setBooted] = useState(false);
   useEffect(() => {
     let active = true;
-    void booting.then(() => active && setBooted(true));
+    void booting
+      .then(() => onboarded)
+      .then((done) => {
+        if (!active) return;
+        if (!done) router.replace('/onboarding');
+        setBooted(true);
+      });
     return () => {
       active = false;
     };
@@ -101,6 +114,7 @@ export default function RootLayout() {
           headerTitleStyle: { fontFamily: Fonts.display, fontSize: 22 },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'foolore' }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="login" options={{ title: 'Sign in' }} />
         <Stack.Screen name="story/[id]" options={{ title: '' }} />
         <Stack.Screen name="heroes/new" options={{ title: 'New hero' }} />
