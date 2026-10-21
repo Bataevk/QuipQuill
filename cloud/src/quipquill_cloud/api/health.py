@@ -1,5 +1,5 @@
 """Liveness (/health) and dependency checks (/health/db, /health/mq, /health/llm,
-/health/prompts).
+/health/prompts, /health/stories).
 
 A dependency check answers 200 when the dependency works and 503 when it does not, so a
 deployment probe or a human can tell which part is down.
@@ -83,6 +83,17 @@ def health_prompts(
     if missing:
         return _answer(response, Check(status="down", detail="missing: " + ", ".join(missing)))
     return Check(status="ok")
+
+
+@router.get("/health/stories")
+def health_stories(
+    services: Annotated[Services, Depends(get_services)], response: Response
+) -> Check:
+    """The catalogue offers at least one story (ADR 61)."""
+    entries = services.stories.entries()
+    if not entries:
+        return _answer(response, Check(status="down", detail="no_stories"))
+    return Check(status="ok", info={"stories": len(entries)})
 
 
 @router.get("/health/llm")

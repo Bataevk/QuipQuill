@@ -118,4 +118,4 @@ graph LR
 
 ## Авторизация (REST)
 
-`POST /auth/register` `{email, password, invite_code}`, `POST /auth/login` → `{access_token, refresh_token, token_type, expires_in}`; `POST /auth/refresh` `{refresh_token}` (ротация); `GET /me` → `{id, email, tier, created_at, usage_today}` (лимиты тарифа — с этапа 2.3). Подробности — [cloud/README.md](../../cloud/README.md#авторизация).
+`POST /auth/guest` (гость устройства, ADR 60), `POST /auth/register` `{email, password, invite_code}`, `POST /auth/login` → `{access_token, refresh_token, token_type, expires_in}`; `POST /auth/refresh` `{refresh_token}` (ротация); `GET /me` → `{id, email, kind, tier, terms_version, …, usage_today}`; `POST /me/consent` `{terms_version}`. Каталог историй (ADR 61): `GET /stories`, `GET /stories/{id}/file`. Подробности — [cloud/README.md](../../cloud/README.md#авторизация).

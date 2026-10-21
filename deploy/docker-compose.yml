@@ -61,10 +61,13 @@ services:
       QUEUE_PREFIX: qq.prod
       # Prompt templates, written by CI from the variables PROMPT_<NAME> (ADR 57); read on change.
       PROMPTS_DIR: /app/prompts
+      # The story catalogue, copied by CI from the repository's stories/ (ADR 61); read on change.
+      STORIES_DIR: /app/stories
       # Only Caddy reaches this port, so its X-Forwarded-For can be trusted.
       FORWARDED_ALLOW_IPS: "*"
     volumes:
       - ./prompts:/app/prompts:ro
+      - ./stories:/app/stories:ro
     expose:
       - "8000"
     depends_on:

@@ -4,9 +4,9 @@ name: cloud
 
 on:
   push:
-    paths: ["cloud/**", "deploy/**", "prompts/**", ".github/workflows/cloud.yml"]
+    paths: ["cloud/**", "deploy/**", "prompts/**", "stories/*/*.qqstory", ".github/workflows/cloud.yml"]
   pull_request:
-    paths: ["cloud/**", "deploy/**", "prompts/**", ".github/workflows/cloud.yml"]
+    paths: ["cloud/**", "deploy/**", "prompts/**", "stories/*/*.qqstory", ".github/workflows/cloud.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -143,6 +143,24 @@ jobs:
             jq -r --arg k "$key" '.[$k]' <<<"$VARS" \
               | ssh "$HOST" "cd /opt/quipquill/prompts && umask 022 && cat > .$name.tmp && mv .$name.tmp $name.md"
           done
+      - name: Stories
+        env:
+          HOST: deploy@${{ vars.DEPLOY_HOST }}
+        run: |
+          # The story catalogue (ADR 61): every stories/<id>/<id>.qqstory of the repository goes to
+          # /opt/quipquill/stories/ (temporary file + mv, so the cloud never reads half a file; it
+          # rescans on change). A story removed from the repository stays on the server until
+          # deleted there by hand.
+          ssh "$HOST" 'install -d -m 755 /opt/quipquill/stories'
+          shopt -s nullglob
+          files=(stories/*/*.qqstory)
+          [ ${#files[@]} -gt 0 ] || echo "::warning::No stories in the repository: keeping the server's"
+          for file in "${files[@]}"; do
+            name=$(basename "$file")
+            scp -q "$file" "$HOST:/opt/quipquill/stories/.$name.tmp"
+            # shellcheck disable=SC2029 # the file name is meant to expand here, on the runner
+            ssh "$HOST" "mv /opt/quipquill/stories/.$name.tmp /opt/quipquill/stories/$name"
+          done
       - name: Roll out
         # The job token pulls the image (the GHCR package may be private); logout right after.
         env:
@@ -154,6 +172,6 @@ jobs:
              && /opt/quipquill/deploy.sh $IMAGE:${{ github.sha }}; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"
       - name: Smoke test
         run: |
-          for path in health health/db health/mq health/prompts; do
+          for path in health health/db health/mq health/prompts health/stories; do
             curl -fsS --retry 10 --retry-delay 3 --retry-all-errors "https://${{ vars.DEPLOY_DOMAIN }}/$path"; echo
           done

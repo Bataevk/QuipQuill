@@ -62,8 +62,10 @@ services:
       RABBITMQ_URL: amqp://quipquill:quipquill@rabbitmq:5672/
       QUEUE_PREFIX: qq.app    # separate from a dev server on the host (qq.dev)
       PROMPTS_DIR: /app/prompts
+      STORIES_DIR: /app/stories
     volumes:
       - ./prompts:/app/prompts:ro   # the repository's prompt originals (ADR 57)
+      - ./stories:/app/stories:ro   # the story catalogue (ADR 61)
     ports:
       - "8080:8000"           # host 8080, so it can run next to `make cloud-dev` on 8000
     depends_on:

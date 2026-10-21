@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The repository's prompts/ (development); production sets PROMPTS_DIR (ADR 57).
 REPO_PROMPTS_DIR = Path(__file__).resolve().parents[4] / "prompts"
+# The repository's stories/ (development); production sets STORIES_DIR (ADR 61).
+REPO_STORIES_DIR = Path(__file__).resolve().parents[4] / "stories"
 
 # HS256 needs a key of at least 32 bytes (RFC 7518 §3.2).
 MIN_JWT_SECRET_BYTES = 32
@@ -59,6 +61,11 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
     # Registration requires one of these codes (JSON list in env); empty = registration closed.
     invite_codes: list[str] = []
+    # A guest account per device, no email or password (ADR 60); off unless the env opens it.
+    guest_signup: bool = False
+    # New guests per client IP: on average per minute, at most `burst` in a row.
+    guest_signup_per_minute: float = 2
+    guest_signup_burst: int = 5
 
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -68,6 +75,8 @@ class Settings(BaseSettings):
     embed_model: str = "openai/text-embedding-3-small"
     # The LLM prompt templates `<name>.md` (llm/prompts.py, ADR 57).
     prompts_dir: Path = REPO_PROMPTS_DIR
+    # The story catalogue: every `*.qqstory` under this folder (stories.py, ADR 61).
+    stories_dir: Path = REPO_STORIES_DIR
 
     @model_validator(mode="after")
     def _require_real_secrets_in_prod(self) -> "Settings":

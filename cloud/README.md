@@ -20,16 +20,20 @@ make cloud-lint
 
 ## Авторизация
 
-Email + пароль, регистрация только по инвайт-коду (`INVITE_CODES`).
+Гость устройства без email и пароля (ADR 60, включается `GUEST_SIGNUP`) или email + пароль, регистрация только по инвайт-коду (`INVITE_CODES`).
 
 Дневной лимит трат — по тарифу (`llm/policy.py`, free $0.05 в UTC-сутки); `DAILY_COST_LIMIT_USD` переопределяет его для всех (локальные прогоны, демо; ADR 38).
 
 | Эндпоинт | Что |
 |---|---|
+| `POST /auth/guest` | 201 → пара токенов нового гостя (`kind = guest`, `free`); 403 `guest_signup_closed`, пока `GUEST_SIGNUP` не включён; 429 `too_many_guests` — больше `GUEST_SIGNUP_BURST` подряд с одного IP |
 | `POST /auth/register` `{email, password, invite_code}` | 201 → `{access_token, refresh_token, token_type, expires_in}`; 403 `invalid_invite_code`; 409 `email_taken` |
 | `POST /auth/login` `{email, password}` | 200 → пара токенов; 401 `invalid_credentials` |
 | `POST /auth/refresh` `{refresh_token}` | 200 → новая пара; старый refresh отзывается. Повтор уже отозванного → отзыв **всех** токенов пользователя, 401 `refresh_token_reused` |
-| `GET /me` (Bearer) | `{id, email, tier, created_at, usage_today, limits: {daily_cost_usd}}` |
+| `GET /me` (Bearer) | `{id, email (null у гостя), kind, tier, terms_version, terms_accepted_at, created_at, usage_today, limits: {daily_cost_usd}}` |
+| `POST /me/consent` (Bearer) `{terms_version}` | 200 → `{terms_version, terms_accepted_at}`: игрок принял условия этой версии (ADR 60) |
+| `GET /stories` (Bearer) | каталог (ADR 61): `[{id, version (sha256 файла), title, tagline, summary, heroes, size}]` |
+| `GET /stories/{id}/file` (Bearer) | файл `.qqstory` (ETag — `version`); 404 `story_not_found` |
 
 - Пароли — argon2id (`pwdlib`); email хранится в нижнем регистре.
 - Access — JWT HS256 на 15 минут (`sub`, `tier`, `type=access`); ключ не короче 32 байт.
@@ -84,7 +88,8 @@ graph LR
 |---|---|---|
 | `main.py` | `create_app()`, подключение роутеров | 0.2 |
 | `core/` | `config` (`Settings`), `security` (пароли, JWT, refresh), `logs` (JSON-логи с контекстом), `ratelimit` | 0.2–2.4 |
-| `api/` | `health`, `auth`, `me`, `ws` (WebSocket), `embeddings`, `deps` (текущий пользователь) | 0.2+ |
+| `api/` | `health`, `auth`, `me`, `ws` (WebSocket), `embeddings`, `stories` (каталог), `deps` (текущий пользователь) | 0.2+ |
+| `stories.py` | `StoryCatalog`: `*.qqstory` из `STORIES_DIR` (рекурсивно), описание из `meta`, пересканирует при изменении файлов | D.4 |
 | `db/` | модели SQLAlchemy 2 (async, asyncpg), сессии; миграции — `cloud/migrations/` | 2.1 |
 | `mq/` | `schemas` (протокол), `broker` (RabbitMQ), `worker` (команды → события, отмена), `dispatcher` (доставка, буфер для resume). Не `queue`, чтобы не путать со stdlib | 2.2 |
 | `llm/` | `handler` (стрим OpenRouter → события), `policy` (модели, effort, лимиты), `usage` (учёт и лимит) | 2.3 |

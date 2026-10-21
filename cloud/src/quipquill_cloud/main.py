@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 
 from quipquill_cloud import __version__
-from quipquill_cloud.api import auth, embeddings, health, me, ws
+from quipquill_cloud.api import auth, embeddings, health, me, stories, ws
 from quipquill_cloud.core import logs
 from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.core.ratelimit import RateLimiter
@@ -20,6 +20,7 @@ from quipquill_cloud.mq.broker import Broker
 from quipquill_cloud.mq.dispatcher import EventDispatcher
 from quipquill_cloud.mq.worker import CancelRegistry, CommandWorker, EchoHandler, Handler
 from quipquill_cloud.services import Services
+from quipquill_cloud.stories import StoryCatalog
 
 logger = logging.getLogger(__name__)
 
@@ -97,12 +98,18 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
             dispatcher=EventDispatcher(settings.generation_ttl_seconds),
             cancels=CancelRegistry(settings.generation_ttl_seconds),
             prompts=PromptStore(settings.prompts_dir),
+            guest_limiter=RateLimiter(
+                settings.guest_signup_per_minute, settings.guest_signup_burst
+            ),
+            stories=StoryCatalog(settings.stories_dir),
         )
         app.state.services = services
         if settings.llm_handler == "openrouter" and settings.openrouter_api_key is None:
             logger.warning("OPENROUTER_API_KEY is not set: LLM calls will fail")
         if missing := services.prompts.missing():
             logger.warning("Prompts missing in %s: %s", settings.prompts_dir, ", ".join(missing))
+        if not services.stories.entries():
+            logger.warning("No stories in %s: the catalogue is empty", settings.stories_dir)
         await _start_queue(services)
         yield
         if services.mq_task is not None:
@@ -135,6 +142,7 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
     app.include_router(me.router)
     app.include_router(ws.router)
     app.include_router(embeddings.router)
+    app.include_router(stories.router)
     return app
 
 

@@ -17,6 +17,8 @@
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — builder (ruff, pytest) и мобильное ядро (`tsc`, `expo lint`, vitest).
 - Окружение `production` разрешает деплой только из ветки `project-131027`. В нём секреты `DEPLOY_SSH_KEY` (ключ пользователя `deploy`), `DEPLOY_KNOWN_HOSTS`, **`CLOUD_SECRET_ENV`** и переменные `DEPLOY_HOST`, `DEPLOY_DOMAIN`, **`CLOUD_CONFIG_ENV`**.
 - **Настройки облака — два env-файла в GitHub** (ADR 51): переменная `CLOUD_CONFIG_ENV` — несекретные (`DAILY_COST_LIMIT_USD`, `PROVIDER_ORDER`, `LOG_LEVEL`…), секрет `CLOUD_SECRET_ENV` — `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES`. В каждую вставляется **файл целиком**, по шаблонам [deploy/cloud.config.env.example](../../deploy/cloud.config.env.example) и [deploy/cloud.secret.env.example](../../deploy/cloud.secret.env.example). Шаг **Env files** перед выкаткой пишет их в `/opt/quipquill/cloud.config.env` и `cloud.secret.env` (права 600); compose читает оба, секреты — последними. Пока значение в GitHub не задано, на сервере остаётся свой файл (старый `cloud.env` один раз становится `cloud.secret.env`), а в запуске — предупреждение.
+- **Истории — из репозитория** (ADR 61): шаг **Stories** копирует каждый `stories/<id>/<id>.qqstory` в `/opt/quipquill/stories/` (через временный файл и `mv`); compose монтирует папку только для чтения (`STORIES_DIR=/app/stories`), облако пересканирует её при изменении файлов — без перезапуска. Изменение `.qqstory` в репозитории само запускает деплой. Удалённая из репозитория история остаётся на сервере, пока её не удалить руками. Smoke test проверяет `/health/stories`: пустой каталог — деплой красный.
+- **Гостевой вход** (ADR 60) включает `GUEST_SIGNUP=true` в `CLOUD_CONFIG_ENV`: без него `POST /auth/guest` отвечает 403, и онбординг приложения (D.6) не сможет войти.
 - **Промпты — переменными `PROMPT_<NAME>`** окружения `production` (ADR 57): `PROMPT_GM`, `PROMPT_ACTOR`, `PROMPT_GUARD`, `PROMPT_GENERATOR`, `PROMPT_CHARACTER`, `PROMPT_SUMMARY`, `PROMPT_NOTE_ENTITY`. Оригиналы — `prompts/<name>.md` в репозитории; в образ и в приложение они не попадают. Шаг **Prompts** пишет каждую переменную `PROMPT_*` в `/opt/quipquill/prompts/<name>.md` (через временный файл и `mv`); compose монтирует папку в облако только для чтения (`PROMPTS_DIR=/app/prompts`), облако перечитывает файл, когда он изменился, — без перезапуска. Не заданная переменная — на сервере остаётся свой файл. Smoke test проверяет и `/health/prompts`: нет хоть одного шаблона — деплой красный.
 - Образ тянется токеном самого job'а (`docker login` на время деплоя, затем `logout`), поэтому пакет в GHCR может оставаться приватным.
 
@@ -31,6 +33,7 @@
 | `cloud.config.env` | несекретные настройки облака | пишет CI из переменной `CLOUD_CONFIG_ENV` |
 | `cloud.secret.env` | `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES` | пишет CI из секрета `CLOUD_SECRET_ENV` |
 | `prompts/<name>.md` | шаблоны промптов (ADR 57) | пишет CI из переменных `PROMPT_<NAME>` |
+| `stories/<id>.qqstory` | каталог историй (ADR 61) | копирует CI из `stories/*/*.qqstory` репозитория |
 | `cloud.env` | до ADR 51: всё вместе | больше не читается; удалить после переноса в GitHub |
 
 Доступ: `ssh -i ~/.ssh/quipquill_vps root@146.103.120.112` (ключ администратора на Mac владельца). Вход по паролю отключён (`/etc/ssh/sshd_config.d/01-quipquill.conf`), открыты только 22, 80, 443 (ufw). Первичная настройка — [deploy/bootstrap.sh](../../deploy/bootstrap.sh) (повторный запуск безопасен).
@@ -74,7 +77,7 @@ EXPO_PUBLIC_CLOUD_URL=https://146-103-120-112.sslip.io npx expo start
 Docker и containerd включены в автозагрузку, у `postgres`, `rabbitmq`, `cloud`, `caddy` — `restart: unless-stopped`; `migrate` одноразовый и при перезапуске не нужен. Docker поднимает контейнеры без учёта `depends_on`, поэтому облако может стартовать раньше RabbitMQ: тогда оно подключается к очереди в фоне (2 → 30 с) и `/health/mq` до этого отвечает `down: connecting` (ADR 52). Проверка после перезагрузки:
 
 ```bash
-for p in health health/db health/mq health/prompts; do curl -s https://146-103-120-112.sslip.io/$p; echo; done
+for p in health health/db health/mq health/prompts health/stories; do curl -s https://146-103-120-112.sslip.io/$p; echo; done
 ```
 
 ## Ограничения

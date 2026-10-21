@@ -1,9 +1,9 @@
-"""Email + password auth: register (invite only), login, refresh with rotation."""
+"""Auth: a guest of the device (ADR 60), email + password (invite only), refresh with rotation."""
 
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -20,6 +20,7 @@ from quipquill_cloud.core.security import (
 )
 from quipquill_cloud.db.models import RefreshToken, User
 from quipquill_cloud.db.session import get_session
+from quipquill_cloud.services import Services, get_services
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -68,6 +69,32 @@ async def _issue_tokens(session: AsyncSession, user: User, settings: Settings) -
         refresh_token=raw,
         expires_in=settings.access_token_ttl_seconds,
     )
+
+
+def client_ip(request: Request) -> str:
+    """The caller's address (behind Caddy, uvicorn --proxy-headers reads X-Forwarded-For)."""
+    return request.client.host if request.client else "unknown"
+
+
+@router.post("/guest", status_code=status.HTTP_201_CREATED)
+async def guest(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    services: Annotated[Services, Depends(get_services)],
+) -> TokenPair:
+    """A new guest account for this device: no email, no password, tier `free` (ADR 60).
+
+    Closed unless GUEST_SIGNUP is on; a few per client IP, so one script cannot mint thousands.
+    """
+    if not settings.guest_signup:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="guest_signup_closed")
+    if not services.guest_limiter.allow(client_ip(request)):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="too_many_guests")
+    user = User(kind="guest", email=None, password_hash=None)
+    session.add(user)
+    await session.flush()
+    return await _issue_tokens(session, user, settings)
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)

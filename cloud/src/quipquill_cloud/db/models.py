@@ -19,6 +19,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 TIERS = ("free", "pro", "max")
+# A guest of the device has no email or password yet (ADR 60); Google / Apple attach to it later.
+KINDS = ("guest", "email")
 
 
 class Base(DeclarativeBase):
@@ -27,13 +29,24 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("tier IN ('free', 'pro', 'max')", name="users_tier_valid"),)
+    __table_args__ = (
+        CheckConstraint("tier IN ('free', 'pro', 'max')", name="users_tier_valid"),
+        CheckConstraint("kind IN ('guest', 'email')", name="users_kind_valid"),
+        CheckConstraint(
+            "(kind = 'email') = (email IS NOT NULL AND password_hash IS NOT NULL)",
+            name="users_email_kind",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     # Stored lowercased; uniqueness is therefore case-insensitive.
-    email: Mapped[str] = mapped_column(String(320), unique=True)
-    password_hash: Mapped[str] = mapped_column(Text)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(8), default="email", server_default="email")
     tier: Mapped[str] = mapped_column(String(16), default="free", server_default="free")
+    # The terms the player accepted last (ADR 60): their version and when.
+    terms_version: Mapped[str | None] = mapped_column(String(32))
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

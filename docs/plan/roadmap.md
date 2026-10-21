@@ -74,7 +74,7 @@
 | D.1 | Дизайн-система: токены, шрифты, компоненты | ✅ | 9 |
 | D.2 | Иконка и сплэш | ✅ | 9 |
 | D.3 | Анимация загрузки «Бубенцы» | ✅ | 10 |
-| D.4 | Облако: каталог историй, гость, согласие | — | 9 |
+| D.4 | Облако: каталог историй, гость, согласие | ▶ | 9 |
 | D.5 | Ядро и builder: скачивание историй, настройки, герои истории | — | 10 |
 | D.6 | Онбординг | — | 10 |
 | D.7 | Основной интерфейс: вкладки, страница истории, игровой экран | ✅ | 11 |
@@ -506,6 +506,7 @@ graph LR
   - Каталог: `STORIES_DIR` (по умолчанию — `stories/` репозитория); при старте облако читает `meta` каждого `*.qqstory` (Python `sqlite3`, только чтение) и считает sha256. `GET /stories` → `[{id, version, title, tagline, summary, heroes, size}]` (`version` — sha256 файла); `GET /stories/{id}/file` — файл. Оба — с Bearer. `/health/stories` — каталог не пуст.
   - Деплой: CI копирует `stories/*/*.qqstory` в `/opt/quipquill/stories/` (как промпты, временный файл + `mv`), compose монтирует папку только для чтения; smoke test проверяет `/health/stories`. `deploy.md` — по факту.
 - **Готово, когда:** pytest: гость при включённом и выключенном флаге, лимит частоты, согласие, каталог (пустая папка, битый файл пропускается), скачивание (404, без токена — 401); `make cloud-test`, `make cloud-lint`; smoke на тестовом сервере.
+- **Итог (2026-10-21):** миграция `5d2c8e41a7b3` (`users.email` / `password_hash` — NULL у гостя, `kind`, `terms_version`, `terms_accepted_at`; ограничение «email и пароль ⇔ kind = email»; откат проверен). `POST /auth/guest` (флаг `GUEST_SIGNUP`, лимит на IP — `GUEST_SIGNUP_BURST` подряд, затем `GUEST_SIGNUP_PER_MINUTE`; IP за Caddy — из X-Forwarded-For), `POST /me/consent`, `GET /me` с `kind` и согласием. Каталог — `stories.py` (`StoryCatalog`: `*.qqstory` из `STORIES_DIR` рекурсивно, `version` = sha256, битые и чужого формата пропускаются, из двух файлов одной истории — более новая сборка, пересканирует при изменении), `GET /stories`, `GET /stories/{id}/file`, `/health/stories`. Деплой: шаг **Stories** в `cloud.yml`, том `./stories` в обоих compose, `health/stories` в smoke test. Проверено: 92 теста облака (+7 гость, +8 каталог), ruff; вживую на локальном облаке — гость → согласие → каталог → скачанный файл совпадает с `stories/brass-vault/brass-vault.qqstory`. **Не сделано:** деплой на тестовый сервер — нужен push в `project-131027` и `GUEST_SIGNUP=true` в переменной `CLOUD_CONFIG_ENV` окружения `production`.
 
 ### D.5 Ядро и builder: скачивание историй, настройки, герои истории
 - **Цель:** ядро умеет войти гостем, скачать историю из каталога и начать игру героем истории.

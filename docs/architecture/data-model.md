@@ -203,8 +203,11 @@ CREATE TABLE settings (               -- шаг 2 (D.7): настройки иг
 Модели — [`cloud/src/quipquill_cloud/db/models.py`](../../cloud/src/quipquill_cloud/db/models.py), миграции — `cloud/migrations/` (Alembic).
 
 ```sql
-users          (id uuid PK, email varchar(320) UNIQUE  -- хранится в нижнем регистре
-                , password_hash text                    -- argon2id
+users          (id uuid PK, email varchar(320) UNIQUE NULL  -- нижний регистр; NULL у гостя (ADR 60)
+                , password_hash text NULL                   -- argon2id; NULL у гостя
+                , kind varchar(8) DEFAULT 'email' CHECK (kind IN ('guest','email'))
+                                                        -- email и пароль есть ⇔ kind = 'email'
+                , terms_version varchar(32) NULL, terms_accepted_at timestamptz NULL
                 , tier varchar(16) DEFAULT 'free' CHECK (tier IN ('free','pro','max'))
                 , created_at timestamptz)
 refresh_tokens (id uuid PK, user_id uuid FK → users ON DELETE CASCADE (index),

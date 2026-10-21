@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,8 +33,11 @@ class Limits(BaseModel):
 
 class Me(BaseModel):
     id: uuid.UUID
-    email: str
+    email: str | None  # None for a guest (ADR 60)
+    kind: str
     tier: str
+    terms_version: str | None
+    terms_accepted_at: datetime | None
     created_at: datetime
     usage_today: UsageToday
     limits: Limits
@@ -60,7 +63,10 @@ async def me(
     return Me(
         id=user.id,
         email=user.email,
+        kind=user.kind,
         tier=user.tier,
+        terms_version=user.terms_version,
+        terms_accepted_at=user.terms_accepted_at,
         created_at=user.created_at,
         usage_today=UsageToday(
             requests=row[0],
@@ -70,3 +76,26 @@ async def me(
         ),
         limits=Limits(daily_cost_usd=daily_cap(user.tier, settings.daily_cost_limit_usd)),
     )
+
+
+class ConsentIn(BaseModel):
+    terms_version: str = Field(min_length=1, max_length=32)
+
+
+class Consent(BaseModel):
+    terms_version: str
+    terms_accepted_at: datetime
+
+
+@router.post("/me/consent")
+async def consent(
+    body: ConsentIn,
+    user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Consent:
+    """The player accepted these terms (ADR 60); a later version is accepted again."""
+    user.terms_version = body.terms_version
+    user.terms_accepted_at = datetime.now(UTC)
+    session.add(user)
+    await session.commit()
+    return Consent(terms_version=user.terms_version, terms_accepted_at=user.terms_accepted_at)
