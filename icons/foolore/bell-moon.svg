@@ -2,14 +2,14 @@
   <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" stitchTiles="stitch" result="fine"/>
   <feColorMatrix in="fine" type="saturate" values="0" result="fineMono"/>
   <feComponentTransfer in="fineMono" result="fineSoft">
-    <feFuncR type="linear" slope="0.22" intercept="0.82"/><feFuncG type="linear" slope="0.22" intercept="0.82"/>
-    <feFuncB type="linear" slope="0.22" intercept="0.82"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.1" intercept="0.94"/><feFuncG type="linear" slope="0.1" intercept="0.94"/>
+    <feFuncB type="linear" slope="0.1" intercept="0.94"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="11" result="mottle"/>
   <feColorMatrix in="mottle" type="saturate" values="0" result="mottleMono"/>
   <feComponentTransfer in="mottleMono" result="mottleSoft">
-    <feFuncR type="linear" slope="0.1" intercept="0.92"/><feFuncG type="linear" slope="0.1" intercept="0.92"/>
-    <feFuncB type="linear" slope="0.1" intercept="0.92"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.04" intercept="0.97"/><feFuncG type="linear" slope="0.04" intercept="0.97"/>
+    <feFuncB type="linear" slope="0.04" intercept="0.97"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feBlend in="SourceGraphic" in2="fineSoft" mode="multiply" result="a"/>
   <feBlend in="a" in2="mottleSoft" mode="multiply" result="b"/>
@@ -19,11 +19,11 @@
     <rect width="1024" height="1024" fill="#fff"/>
     <circle cx="822" cy="544.88" r="31.08" fill="#000"/>
   </mask>
-  <circle cx="801" cy="560" r="42" fill="#D9A441" mask="url(#crescent)"/>
+  <circle cx="801" cy="560" r="42" fill="#F2BD4F" mask="url(#crescent)"/>
   <circle cx="801" cy="560" r="42" fill="none" stroke="#9C6F22" stroke-width="5" mask="url(#crescent)"/>
   <circle cx="822" cy="544.88" r="31.08" fill="none" stroke="#9C6F22" stroke-width="5" clip-path="url(#moonClip)"/>
   <clipPath id="moonClip"><circle cx="801" cy="560" r="42"/></clipPath>
-  <path fill="#D9A441" d="M 838.8 542.78 L 843.0336 553.6664 L 853.92 557.9 L 843.0336 562.1336 L 838.8 573.02 L 834.5663999999999 562.1336 L 823.68 557.9 L 834.5663999999999 553.6664 Z" stroke="#9C6F22" stroke-width="3" stroke-linejoin="round"/>
+  <path fill="#F2BD4F" d="M 838.8 542.78 L 843.0336 553.6664 L 853.92 557.9 L 843.0336 562.1336 L 838.8 573.02 L 834.5663999999999 562.1336 L 823.68 557.9 L 834.5663999999999 553.6664 Z" stroke="#9C6F22" stroke-width="3" stroke-linejoin="round"/>
   <path d="M 777.9 562.1 q 5.04 4.2 10.08 0" fill="none" stroke="#9C6F22" stroke-width="3.36" stroke-linecap="round"/>
   <path d="M 783.36 577.64 q 8.4 5.04 15.12 -2.52" fill="none" stroke="#9C6F22" stroke-width="3.36" stroke-linecap="round"/>
 </g></svg>

@@ -10,10 +10,12 @@ const OUT = 'foolore';
 const PREVIEW = join(OUT, 'preview');
 mkdirSync(PREVIEW, { recursive: true });
 
+// Brighter than the app's accent (#A3313A): a home-screen icon sits next to saturated ones, and
+// the first set (#B8323B, #2E2A30, #D9A441, a heavier grain) looked dull there (2026-10-21).
 const C = {
-  red: '#B8323B',
-  black: '#2E2A30',
-  gold: '#D9A441',
+  red: '#D9343F',
+  black: '#332E36',
+  gold: '#F2BD4F',
   goldDark: '#9C6F22',
   cream: '#EFE3C8',
 };
@@ -99,14 +101,14 @@ const GRAIN = `<filter id="grain" color-interpolation-filters="sRGB" filterUnits
   <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" stitchTiles="stitch" result="fine"/>
   <feColorMatrix in="fine" type="saturate" values="0" result="fineMono"/>
   <feComponentTransfer in="fineMono" result="fineSoft">
-    <feFuncR type="linear" slope="0.22" intercept="0.82"/><feFuncG type="linear" slope="0.22" intercept="0.82"/>
-    <feFuncB type="linear" slope="0.22" intercept="0.82"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.1" intercept="0.94"/><feFuncG type="linear" slope="0.1" intercept="0.94"/>
+    <feFuncB type="linear" slope="0.1" intercept="0.94"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="11" result="mottle"/>
   <feColorMatrix in="mottle" type="saturate" values="0" result="mottleMono"/>
   <feComponentTransfer in="mottleMono" result="mottleSoft">
-    <feFuncR type="linear" slope="0.1" intercept="0.92"/><feFuncG type="linear" slope="0.1" intercept="0.92"/>
-    <feFuncB type="linear" slope="0.1" intercept="0.92"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.04" intercept="0.97"/><feFuncG type="linear" slope="0.04" intercept="0.97"/>
+    <feFuncB type="linear" slope="0.04" intercept="0.97"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feBlend in="SourceGraphic" in2="fineSoft" mode="multiply" result="a"/>
   <feBlend in="a" in2="mottleSoft" mode="multiply" result="b"/>
@@ -133,6 +135,19 @@ function monochrome(body) {
   const masked = parts.map((chunk) => (chunk.startsWith('<mask') ? chunk : tint(chunk))).join('');
   return `<mask id="mono" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">${masked}</mask>
 <rect width="1024" height="1024" fill="#000" mask="url(#mono)"/>`;
+}
+
+// One colour for every part (the boot silhouette): fills outside the crescent's <mask> become `color`.
+function silhouette(body, color) {
+  return body
+    .split(/(<mask[\s\S]*?<\/mask>)/)
+    // A hairline stroke of the same colour closes the antialiased seams where parts meet.
+    .map((chunk) =>
+      chunk.startsWith('<mask')
+        ? chunk
+        : chunk.replace(/fill="(?!none)[^"]+"/g, `fill="${color}" stroke="${color}" stroke-width="2" stroke-linejoin="round"`),
+    )
+    .join('');
 }
 
 // Paper for backgrounds (ADR 63) in two layers over the theme's bg: a small tile of fine grain,
@@ -164,6 +179,11 @@ const art = (o) => `${hat(o)}\n${sun(o)}\n${moon(o)}`;
 
 // Scale the drawing about the centre (the hat fills ~60% of the canvas; icons want a little air).
 const scaled = (body, s) => `<g transform="translate(512 520) scale(${s}) translate(-512 -512)">${body}</g>`;
+
+// The app's accent (src/constants/theme.ts) and the silhouette's frame: the art's own units.
+const ACCENT = { light: '#A3313A', dark: '#E06C70' };
+// The hat with its bells spans x 165–853, y 275–703; a little air around it.
+const SILHOUETTE_BOX = '150 255 724 470';
 
 const files = {
   'icon-a.svg': svg(`${ground()}${scaled(art({ outline: false, face: false, bell: 1.3 }), 1.0)}`),
@@ -199,6 +219,15 @@ ${scaled(hat({ outline: true }), 0.95)}`,
   'paper-mottle-dark.svg': mottle(false),
   // Hat and bells alone, outlined, for the loader and screens with their own background.
   'hat-outlined.svg': svg(art({ outline: true, face: true }), '150 180 724 520'),
+  // The start (2026-10-21): the hat's silhouette in the theme's accent on the theme's ground —
+  // for the native splash in both themes, and in white for the app to tint (the boot screen's
+  // layers: the hat without bells, and each bell in the frame the loader swings it in).
+  'splash-light.svg': svg(silhouette(art({ outline: false, face: false }), ACCENT.light), SILHOUETTE_BOX),
+  'splash-dark.svg': svg(silhouette(art({ outline: false, face: false }), ACCENT.dark), SILHOUETTE_BOX),
+  'silhouette-hat.svg': svg(silhouette(hat({ outline: false }), '#fff'), SILHOUETTE_BOX),
+  'silhouette-sun-rays.svg': svg(silhouette(sun({ outline: false, face: false, part: 'rays' }), '#fff'), '160 390 124 124'),
+  'silhouette-sun-body.svg': svg(silhouette(sun({ outline: false, face: false, part: 'body' }), '#fff'), '160 390 124 124'),
+  'silhouette-moon.svg': svg(silhouette(moon({ outline: false, face: false }), '#fff'), '711 428 180 180'),
 };
 for (const [name, text] of Object.entries(files)) writeFileSync(join(OUT, name), text);
 

@@ -2,8 +2,8 @@
  * «Бубенцы» — the loader (stage D.3, ADR 63). The emblem's bells swing like pendulums about the
  * hat's tips, the sun and the moon in counter-phase; the sun's rays turn slowly; the emblem
  * breathes. With Reduce Motion nothing swings — the bells only fade softly in and out.
- * The art is the emblem itself (icons/render.mjs → assets/images/loader-*), so the first frame
- * is the splash screen's.
+ * The art is the emblem itself (icons/render.mjs → assets/images/loader-*); the start shows the
+ * hat's silhouette instead (`FoolHat`, assets/images/silhouette-*), the native splash's picture.
  */
 import { useLayoutEffect } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -26,6 +26,10 @@ const EMBLEM = require('@/assets/images/loader-emblem.png');
 const SUN_RAYS = require('@/assets/images/loader-sun-rays.png');
 const SUN_BODY = require('@/assets/images/loader-sun-body.png');
 const MOON = require('@/assets/images/loader-moon.png');
+const HAT_SHAPE = require('@/assets/images/silhouette-hat.png');
+const SUN_RAYS_SHAPE = require('@/assets/images/silhouette-sun-rays.png');
+const SUN_BODY_SHAPE = require('@/assets/images/silhouette-sun-body.png');
+const MOON_SHAPE = require('@/assets/images/silhouette-moon.png');
 
 /** Half a swing (one side to the other), in ms; a full pendulum period is twice this. */
 const SWING_MS = 800;
@@ -127,6 +131,44 @@ export function FoolEmblem({ size = 200, style }: { size?: number; style?: Style
       </Animated.View>
       <Animated.View style={[styles.layer, frame(MOON_FRAME), { transformOrigin: MOON_PIVOT }, moon]}>
         <Image source={MOON} style={styles.fill} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+/**
+ * The silhouette's frame in the art's units (icons/foolore.mjs, SILHOUETTE_BOX): the hat and its
+ * bells span 724 × 470 from (150, 255); the bells' frames are the emblem's, unscaled.
+ */
+const HAT_BOX = { x: 150, y: 255, width: 724, height: 470 };
+const hatFrame = (x: number, y: number, units: number, width: number) => {
+  const k = width / HAT_BOX.width;
+  return { left: (x - HAT_BOX.x) * k, top: (y - HAT_BOX.y) * k, width: units * k, height: units * k };
+};
+
+/**
+ * The hat's silhouette in one colour (the accent by default) with the same live bells: the start,
+ * on the theme's ground, matching the native splash (app.json). `width` in pt (the splash shows 200).
+ */
+export function FoolHat({ width = 200, color, style }: { width?: number; color?: string; style?: StyleProp<ViewStyle> }) {
+  const theme = useTheme();
+  const { still, sun, moon, turn } = useBells();
+  const breath = useLoop(still, BREATH_MS, true);
+  const breathe = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.012 * breath.value }] }));
+  const tint = { tintColor: color ?? theme.accent };
+  return (
+    <Animated.View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading"
+      style={[{ width, height: (width * HAT_BOX.height) / HAT_BOX.width }, breathe, style]}>
+      <Image source={HAT_SHAPE} style={[styles.fill, tint]} />
+      <Animated.View style={[styles.layer, hatFrame(160, 390, 124, width), { transformOrigin: SUN_PIVOT }, sun]}>
+        <Animated.Image source={SUN_RAYS_SHAPE} style={[styles.fill, tint, turn]} />
+        <Image source={SUN_BODY_SHAPE} style={[styles.fill, tint]} />
+      </Animated.View>
+      <Animated.View style={[styles.layer, hatFrame(711, 428, 180, width), { transformOrigin: MOON_PIVOT }, moon]}>
+        <Image source={MOON_SHAPE} style={[styles.fill, tint]} />
       </Animated.View>
     </Animated.View>
   );

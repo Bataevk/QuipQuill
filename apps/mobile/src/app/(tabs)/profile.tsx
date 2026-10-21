@@ -3,13 +3,14 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
+import { TermsSheet } from '@/components/terms';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Screen } from '@/components/ui';
+import { WaitlistForm } from '@/components/waitlist-form';
 import { Spacing } from '@/constants/theme';
 import type { Account } from '@/core/net/auth';
 import { StoryFormatError } from '@/core/story/story-meta';
 import { pickedFilePath, removeFile } from '@/platform/expo-files';
-import { WaitlistForm } from '@/components/waitlist-form';
 import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 import { loadThemePreference, setThemePreference, type ThemePreference } from '@/platform/theme-preference';
 
@@ -24,10 +25,11 @@ const OFL_URL = 'https://openfontlicense.org';
 /** Story import from a file: dev builds only, the demo story ships inside the app. */
 const SHOW_IMPORT = __DEV__;
 
-/** The profile (stage D.7): the account, the theme, the fonts' credits; story import in dev builds. */
+/** The profile (stage D.7): the account, the waitlist, the theme, the terms, the fonts' credits; story import in dev builds. */
 export default function ProfileScreen() {
   const [account, setAccount] = useState<Account | null>();
   const [theme, setTheme] = useState<ThemePreference>('system');
+  const [readingTerms, setReadingTerms] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +109,17 @@ export default function ProfileScreen() {
 
       <Card>
         <ThemedText type="caption" themeColor="inkMuted" style={styles.eyebrow}>
+          TERMS
+        </ThemedText>
+        <ThemedText type="caption" themeColor="inkMuted">
+          You accepted the draft terms when you started.
+        </ThemedText>
+        <Button title="Read the terms and privacy" variant="ghost" onPress={() => setReadingTerms(true)} />
+      </Card>
+      <TermsSheet visible={readingTerms} onClose={() => setReadingTerms(false)} />
+
+      <Card>
+        <ThemedText type="caption" themeColor="inkMuted" style={styles.eyebrow}>
           ACKNOWLEDGEMENTS
         </ThemedText>
         <ThemedText type="caption">
@@ -117,7 +130,6 @@ export default function ProfileScreen() {
       </Card>
 
       {SHOW_IMPORT ? <StoryImport /> : null}
-
     </Screen>
   );
 }

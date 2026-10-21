@@ -2,19 +2,19 @@
   <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" stitchTiles="stitch" result="fine"/>
   <feColorMatrix in="fine" type="saturate" values="0" result="fineMono"/>
   <feComponentTransfer in="fineMono" result="fineSoft">
-    <feFuncR type="linear" slope="0.22" intercept="0.82"/><feFuncG type="linear" slope="0.22" intercept="0.82"/>
-    <feFuncB type="linear" slope="0.22" intercept="0.82"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.1" intercept="0.94"/><feFuncG type="linear" slope="0.1" intercept="0.94"/>
+    <feFuncB type="linear" slope="0.1" intercept="0.94"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="11" result="mottle"/>
   <feColorMatrix in="mottle" type="saturate" values="0" result="mottleMono"/>
   <feComponentTransfer in="mottleMono" result="mottleSoft">
-    <feFuncR type="linear" slope="0.1" intercept="0.92"/><feFuncG type="linear" slope="0.1" intercept="0.92"/>
-    <feFuncB type="linear" slope="0.1" intercept="0.92"/><feFuncA type="linear" slope="0" intercept="1"/>
+    <feFuncR type="linear" slope="0.04" intercept="0.97"/><feFuncG type="linear" slope="0.04" intercept="0.97"/>
+    <feFuncB type="linear" slope="0.04" intercept="0.97"/><feFuncA type="linear" slope="0" intercept="1"/>
   </feComponentTransfer>
   <feBlend in="SourceGraphic" in2="fineSoft" mode="multiply" result="a"/>
   <feBlend in="a" in2="mottleSoft" mode="multiply" result="b"/>
   <feComposite in="b" in2="SourceGraphic" operator="in"/>
 </filter></defs><g filter="url(#grain)">
-  <rect width="1024" height="1024" fill="#2E2A30"/>
-  <path d="M 0 0 L 1024 0 L 0 1024 Z" fill="#B8323B"/>
+  <rect width="1024" height="1024" fill="#332E36"/>
+  <path d="M 0 0 L 1024 0 L 0 1024 Z" fill="#D9343F"/>
 </g></svg>

@@ -13,7 +13,7 @@ const ORIGINS = ['Human', 'Elf', 'Half-elf', 'Dwarf', 'Halfling', 'Automaton'];
 
 /**
  * The hero's sheet on one screen (stage D.7): name, who, from where, a few lines about them.
- * The step-by-step version for the first launch comes with onboarding (D.6).
+ * For editing a hero; a new one is made step by step (`useHeroWizard`).
  */
 export function HeroForm({
   initial,

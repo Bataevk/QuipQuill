@@ -8,10 +8,11 @@ import sharp from 'sharp';
 const [src, out] = process.argv.slice(2);
 const read = (f) => readFileSync(join(src, f), 'utf8');
 
-async function png(svgText, file, size, { flatten } = {}) {
+async function png(svgText, file, size, { flatten, srgb } = {}) {
   const raw = new Resvg(svgText, { fitTo: { mode: 'width', value: size } }).render().asPng();
   let img = sharp(raw);
   if (flatten) img = img.flatten({ background: flatten }).removeAlpha();
+  if (srgb) img = img.withIccProfile('srgb');
   writeFileSync(join(out, file), await img.png().toBuffer());
   console.log(file, size);
 }
@@ -21,7 +22,7 @@ const shrink = (svgText, s) =>
   svgText.replace(/(<\/defs>)([\s\S]*)(<\/svg>)/, `$1<g transform="translate(512 512) scale(${s}) translate(-512 -512)">$2</g>$3`);
 
 // iOS / generic icon: full square, no alpha (App Store rejects alpha).
-await png(read('icon-a.svg'), 'icon.png', 1024, { flatten: '#2E2A30' });
+await png(read('icon-a.svg'), 'icon.png', 1024, { flatten: '#332E36' });
 
 // Android adaptive (108dp canvas, ~72dp visible): hat at 2/3 so it looks like the iOS icon.
 const ANDROID_HAT = 0.667;
@@ -29,8 +30,11 @@ await png(read('ground.svg'), 'android-icon-background.png', 1024);
 await png(shrink(read('hat.svg'), ANDROID_HAT), 'android-icon-foreground.png', 1024);
 await png(shrink(read('hat-mono.svg'), ANDROID_HAT), 'android-icon-monochrome.png', 1024);
 
-// Splash: the outlined round emblem (Android 12+ shows it inside a circle).
-await png(read('emblem.svg'), 'splash-icon.png', 1024);
+// Splash: the hat's silhouette in the accent of each theme, on the theme's ground (app.json).
+// Tagged sRGB: iOS showed the untagged launch image more saturated than the same colour drawn by
+// the app (#A3313A came out ~#B12336), so the handoff to the boot screen jumped. Expo keeps the tag.
+await png(read('splash-light.svg'), 'splash-icon.png', 1024, { srgb: true });
+await png(read('splash-dark.svg'), 'splash-icon-dark.png', 1024, { srgb: true });
 
 // Web favicon: the icon itself reads better than the emblem at 48 px.
 await png(read('icon-a.svg'), 'favicon.png', 48);
@@ -41,6 +45,11 @@ await png(read('emblem-base.svg'), 'loader-emblem.png', 768);
 await png(read('bell-sun-rays.svg'), 'loader-sun-rays.png', 192);
 await png(read('bell-sun-body.svg'), 'loader-sun-body.png', 192);
 await png(read('bell-moon.svg'), 'loader-moon.png', 256);
+// The boot screen's silhouette (white, tinted with the accent in the app) at 3x of 200 pt.
+await png(read('silhouette-hat.svg'), 'silhouette-hat.png', 600);
+await png(read('silhouette-sun-rays.svg'), 'silhouette-sun-rays.png', 120);
+await png(read('silhouette-sun-body.svg'), 'silhouette-sun-body.png', 120);
+await png(read('silhouette-moon.svg'), 'silhouette-moon.png', 160);
 
 // Paper for backgrounds outside the main pages (ADR 63): a grain tile and a stretched mottle.
 for (const t of ['light', 'dark']) {

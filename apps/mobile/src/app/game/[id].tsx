@@ -4,6 +4,7 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FoolBells } from '@/components/fool-loader';
+import { Prose } from '@/components/prose';
 import { WaitlistForm } from '@/components/waitlist-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,12 +19,12 @@ import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 
 /** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
 type FeedItem =
-  | { key: string; kind: 'bubble'; speaker: string; name?: string; text: string; cards?: CharacterOption[] }
+  | { key: string; kind: 'bubble'; speaker: string; name?: string; text: string; streaming?: boolean; cards?: CharacterOption[] }
   | { key: string; kind: 'cost'; text: string }
   | { key: string; kind: 'footer' };
 
 /**
- * The game (stage 5.2, restyled in D.7): the master's narration as plain text in the story's font,
+ * The game (stage 5.2, restyled in D.7): the master's narration in the story's font (with prose markup, ADR 67),
  * the characters' lines in bubbles under their names, the player's on the right; live streaming, cards.
  */
 export default function GameScreen() {
@@ -64,7 +65,7 @@ export default function GameScreen() {
     });
     if (game.pending) rows.push({ key: 'pending', kind: 'bubble', speaker: 'player', text: game.pending });
     for (const bubble of game.live) {
-      rows.push({ key: `live-${bubble.requestId}`, kind: 'bubble', speaker: bubble.channel, name: bubble.speaker, text: bubble.text });
+      rows.push({ key: `live-${bubble.requestId}`, kind: 'bubble', speaker: bubble.channel, name: bubble.speaker, text: bubble.text, streaming: true });
     }
     rows.push({ key: 'footer', kind: 'footer' });
     return rows;
@@ -124,7 +125,7 @@ export default function GameScreen() {
                 </ThemedText>
               ) : (
                 <View>
-                  <Bubble speaker={item.speaker} name={item.name} text={item.text} />
+                  <Bubble speaker={item.speaker} name={item.name} text={item.text} streaming={item.streaming} />
                   {item.cards ? <Cards options={item.cards} disabled={game.busy} onChoose={game.choose} /> : null}
                 </View>
               )
@@ -151,15 +152,15 @@ export default function GameScreen() {
   );
 }
 
-function Bubble({ speaker, name, text }: { speaker: string; name?: string; text: string }) {
+function Bubble({ speaker, name, text, streaming }: { speaker: string; name?: string; text: string; streaming?: boolean }) {
   const theme = useTheme();
   const player = speaker === 'player';
   const npc = isActorChannel(speaker);
   if (!player && !npc) {
     return (
-      <ThemedText type="story" style={styles.narration}>
-        {text}
-      </ThemedText>
+      <View style={styles.narration}>
+        <Prose text={text} streaming={streaming} />
+      </View>
     );
   }
   return (
@@ -176,7 +177,7 @@ function Bubble({ speaker, name, text }: { speaker: string; name?: string; text:
           {name ?? 'Someone'}
         </ThemedText>
       ) : null}
-      <ThemedText type={player ? 'body' : 'story'}>{text}</ThemedText>
+      <Prose text={text} type={player ? 'body' : 'story'} streaming={streaming} />
     </View>
   );
 }
@@ -198,7 +199,7 @@ function Cards({
           <ThemedText type="caption" themeColor="inkMuted">
             {[option.race, option.age ? `${option.age}` : ''].filter(Boolean).join(', ')}
           </ThemedText>
-          <ThemedText type="story">{option.description}</ThemedText>
+          <Prose text={option.description} />
           <Button
             title={i === 0 ? 'Play this character' : 'Play this one instead'}
             variant={i === 0 ? 'primary' : 'secondary'}
