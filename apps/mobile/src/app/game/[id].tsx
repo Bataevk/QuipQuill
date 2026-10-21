@@ -4,6 +4,7 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FoolBells } from '@/components/fool-loader';
+import { WaitlistForm } from '@/components/waitlist-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Card, ErrorText, Field } from '@/components/ui';
@@ -13,7 +14,7 @@ import { PROPOSAL_CARD } from '@/core/agent/session';
 import { isActorChannel } from '@/core/protocol/channels';
 import { useGame } from '@/hooks/use-game';
 import { useTheme } from '@/hooks/use-theme';
-import { getLibrary } from '@/platform/services';
+import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 
 /** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
 type FeedItem =
@@ -69,7 +70,13 @@ export default function GameScreen() {
     return rows;
   }, [game.lines, game.pending, game.live, game.proposal, game.costs, adapting]);
 
-  const footer = (
+  const spent = useAllowanceSpent();
+  const limit = spent ? 'prototype' : limitOf(game.error);
+  const footer = limit ? (
+    <View style={styles.footer}>
+      <LimitNotice limit={limit} />
+    </View>
+  ) : (
     <View style={styles.footer}>
       {game.busy && (game.thinking || game.live.length === 0) ? (
         <View style={styles.spinner}>
@@ -123,7 +130,7 @@ export default function GameScreen() {
               )
             }
           />
-          {game.phase === 'playing' || adapting ? (
+          {(game.phase === 'playing' || adapting) && limit !== 'prototype' ? (
             <View style={[styles.inputRow, { borderTopColor: theme.line }]}>
               <View style={styles.input}>
                 <Field
@@ -201,6 +208,50 @@ function Cards({
         </Card>
       ))}
     </View>
+  );
+}
+
+type Limit = 'prototype' | 'daily';
+
+/** A spent allowance (protocol `error` codes, ADR 66): the prototype's for good, or today's. */
+function limitOf(error: string | undefined): Limit | undefined {
+  if (!error) return undefined;
+  if (error.includes('prototype_limit')) return 'prototype';
+  if (error.includes('limit_exceeded')) return 'daily';
+  return undefined;
+}
+
+/**
+ * The guest's prototype allowance is already spent (ADR 66): say so when the game opens, before
+ * the player types a move that would only fail.
+ */
+function useAllowanceSpent(): boolean {
+  const [spent, setSpent] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void ensureSignedIn()
+      .then(() => getCloud().auth.me())
+      .then((me) => active && setSpent(me.totalLimitUsd !== null && me.spentUsd >= me.totalLimitUsd))
+      .catch(() => {}); // offline: the cloud still refuses, and the notice comes then
+    return () => {
+      active = false;
+    };
+  }, []);
+  return spent;
+}
+
+/** What the player sees instead of an error when the allowance is spent; asks for an email. */
+function LimitNotice({ limit }: { limit: Limit }) {
+  return (
+    <Card>
+      <ThemedText type="title">{limit === 'prototype' ? 'The prototype ends here' : 'That is all for today'}</ThemedText>
+      <ThemedText type="story">
+        {limit === 'prototype'
+          ? 'You have played every turn this prototype allows. Thank you for trying foolore!'
+          : 'Today’s allowance is spent. The story will wait for you tomorrow.'}
+      </ThemedText>
+      <WaitlistForm source="limit" intro="Leave an email and we will tell you when the full version is out." />
+    </Card>
   );
 }
 

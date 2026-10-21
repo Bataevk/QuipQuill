@@ -9,7 +9,8 @@ import { Spacing } from '@/constants/theme';
 import type { Account } from '@/core/net/auth';
 import { StoryFormatError } from '@/core/story/story-meta';
 import { pickedFilePath, removeFile } from '@/platform/expo-files';
-import { getCloud, getLibrary } from '@/platform/services';
+import { WaitlistForm } from '@/components/waitlist-form';
+import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 import { loadThemePreference, setThemePreference, type ThemePreference } from '@/platform/theme-preference';
 
 const THEMES: { value: ThemePreference; label: string }[] = [
@@ -32,8 +33,8 @@ export default function ProfileScreen() {
     useCallback(() => {
       let active = true;
       void loadThemePreference().then((t) => active && setTheme(t));
-      getCloud()
-        .auth.me()
+      ensureSignedIn()
+        .then(() => getCloud().auth.me())
         .then((a) => active && setAccount(a))
         .catch(() => active && setAccount(null));
       return () => {
@@ -47,12 +48,18 @@ export default function ProfileScreen() {
     void setThemePreference(value);
   };
 
+  /** Back to being a guest of this device (ADR 66): a new guest, a fresh allowance. */
   const signOut = async () => {
     const { auth, socket } = getCloud();
     socket.stop();
     await auth.logout();
-    router.replace('/login');
+    setAccount(undefined);
+    await ensureSignedIn().catch(() => {});
+    setAccount(await auth.me().catch(() => null));
   };
+
+  const used =
+    account && account.totalLimitUsd ? Math.min(100, Math.round((account.spentUsd / account.totalLimitUsd) * 100)) : null;
 
   return (
     <Screen>
@@ -61,13 +68,30 @@ export default function ProfileScreen() {
           ACCOUNT
         </ThemedText>
         <ThemedText type="label">
-          {account === undefined ? '…' : account === null ? 'Offline' : (account.email ?? 'Guest')}
+          {account === undefined ? '…' : account === null ? 'Offline' : (account.email ?? 'Guest of this device')}
         </ThemedText>
         {account === null ? (
           <ThemedText type="caption" themeColor="inkMuted">
             The server cannot be reached right now.
           </ThemedText>
         ) : null}
+        {used !== null ? (
+          <ThemedText type="caption" themeColor="inkMuted">
+            Prototype allowance: {used}% used.
+          </ThemedText>
+        ) : null}
+        {account?.kind === 'email' ? (
+          <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
+        ) : (
+          <Button title="Sign in with an invite" variant="ghost" onPress={() => router.push('/login')} />
+        )}
+      </Card>
+
+      <Card>
+        <ThemedText type="caption" themeColor="inkMuted" style={styles.eyebrow}>
+          THE FULL VERSION
+        </ThemedText>
+        <WaitlistForm source="profile" intro="This is a prototype. Leave an email to hear when foolore is released." />
       </Card>
 
       <Card>
@@ -94,7 +118,6 @@ export default function ProfileScreen() {
 
       {SHOW_IMPORT ? <StoryImport /> : null}
 
-      <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
     </Screen>
   );
 }

@@ -302,12 +302,12 @@ def test_daily_limit_can_be_raised_for_everyone(settings: Settings) -> None:
         )
         body = {"model": "openai/text-embedding-3-small", "input": ["abc"]}
         assert client.post("/embeddings", json=body, headers=headers).status_code == 200
-        assert client.get("/me", headers=headers).json()["limits"] == {"daily_cost_usd": "5"}
+        assert client.get("/me", headers=headers).json()["limits"]["daily_cost_usd"] == "5"
 
 
 def test_me_reports_limits(app_client: TestClient) -> None:
     headers = {"Authorization": f"Bearer {token_for(app_client)}"}
-    assert app_client.get("/me", headers=headers).json()["limits"] == {"daily_cost_usd": "0.05"}
+    assert app_client.get("/me", headers=headers).json()["limits"]["daily_cost_usd"] == "0.05"
 
 
 # --- prompts filled in by the cloud (ADR 57) ---

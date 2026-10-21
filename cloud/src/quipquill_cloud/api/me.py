@@ -13,7 +13,7 @@ from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.db.models import UsageEvent
 from quipquill_cloud.db.session import get_session
 from quipquill_cloud.llm.policy import daily_cap
-from quipquill_cloud.llm.usage import utc_day_start
+from quipquill_cloud.llm.usage import spent_total, utc_day_start
 
 router = APIRouter(tags=["account"])
 
@@ -29,6 +29,10 @@ class UsageToday(BaseModel):
 
 class Limits(BaseModel):
     daily_cost_usd: Decimal | None  # None = not limited; the day is the UTC day
+    # A guest's allowance for the whole prototype (ADR 66); None for email accounts.
+    total_cost_usd: Decimal | None
+    # What this account has spent so far, all days together.
+    spent_total_usd: Decimal
 
 
 class Me(BaseModel):
@@ -74,7 +78,11 @@ async def me(
             output_tokens=row[2],
             cost_usd=Decimal(row[3]).quantize(COST_QUANTUM),
         ),
-        limits=Limits(daily_cost_usd=daily_cap(user.tier, settings.daily_cost_limit_usd)),
+        limits=Limits(
+            daily_cost_usd=daily_cap(user.tier, settings.daily_cost_limit_usd),
+            total_cost_usd=settings.guest_total_cost_limit_usd if user.kind == "guest" else None,
+            spent_total_usd=(await spent_total(session, user.id)).quantize(COST_QUANTUM),
+        ),
     )
 
 

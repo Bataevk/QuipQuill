@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Overrides the tier's spend cap per UTC day for everyone (local test runs, demos);
     # unset = each tier's own cap (llm/policy.py). The product cap stays in code.
     daily_cost_limit_usd: Decimal | None = None
+    # The prototype's limit for a guest, for all time (ADR 66): ~30 turns. Email accounts (the
+    # team's) are not held by it. Unset = no such limit.
+    guest_total_cost_limit_usd: Decimal | None = Decimal("0.10")
     max_http_body_bytes: int = 1_000_000
     # Rough guard (chars / 4) keeping a request under Haiku's 100K-token price step.
     max_request_tokens: int = 95_000

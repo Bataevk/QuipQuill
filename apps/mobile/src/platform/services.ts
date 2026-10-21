@@ -38,6 +38,24 @@ export interface Cloud {
 
 let cloud: Cloud | undefined;
 
+let signingIn: Promise<void> | undefined;
+
+/**
+ * The prototype needs no sign-in (ADR 66): without tokens the device becomes a guest of the cloud
+ * on its own, then the socket starts. Signing in with an invite (Profile) replaces the guest.
+ * Fails quietly offline: the next call tries again.
+ */
+export function ensureSignedIn(): Promise<void> {
+  signingIn ??= (async () => {
+    const { auth, socket } = getCloud();
+    if (!(await auth.isSignedIn())) await auth.guest();
+    socket.start();
+  })().finally(() => {
+    signingIn = undefined;
+  });
+  return signingIn;
+}
+
 /** The signed-in session and the one WebSocket (call `socket.start()` once signed in). */
 export function getCloud(): Cloud {
   if (!cloud) {

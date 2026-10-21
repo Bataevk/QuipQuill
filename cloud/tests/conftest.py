@@ -97,7 +97,7 @@ def _delete_test_queues() -> Iterator[None]:
 
 @pytest.fixture
 def settings(migrated_db: str) -> Settings:
-    db_run("TRUNCATE users, refresh_tokens, usage_events RESTART IDENTITY CASCADE")
+    db_run("TRUNCATE users, refresh_tokens, usage_events, waitlist RESTART IDENTITY CASCADE")
     return Settings(
         _env_file=None,
         env="test",

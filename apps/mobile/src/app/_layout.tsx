@@ -1,7 +1,7 @@
 // Must stay first: standard Web APIs the core expects (ADR 27).
 import '@/platform/polyfills';
 
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, useSegments, type Theme } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
@@ -9,7 +9,7 @@ import { AppState } from 'react-native';
 import { BootScreen } from '@/components/boot-screen';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
-import { getCloud, getLibrary } from '@/platform/services';
+import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 import { ensureBundledStory } from '@/platform/bundled-story';
 import { restoreThemePreference } from '@/platform/theme-preference';
 
@@ -40,27 +40,19 @@ function useBooted(): boolean {
   return booted;
 }
 
-/** Signed out → the login screen; signed in → the socket runs (stage 5.1). */
-function useAuthGate() {
-  const segments = useSegments();
-  const onLogin = segments[0] === 'login';
-
+/**
+ * No sign-in in the prototype (ADR 66): without tokens the device becomes a guest of the cloud and
+ * the socket starts; when the cloud drops the session (`signed-out`), a new guest takes over.
+ * Signing in with an invite is in the profile (`/login`).
+ */
+function useCloudSession() {
   useEffect(() => {
-    const { auth, socket } = getCloud();
-    let active = true;
-    void auth.isSignedIn().then((signedIn) => {
-      if (!active) return;
-      if (signedIn) socket.start();
-      else if (!onLogin) router.replace('/login');
+    void ensureSignedIn().catch(() => {}); // offline: the next action tries again
+    const off = getCloud().socket.onStatus((status) => {
+      if (status === 'signed-out') void ensureSignedIn().catch(() => {});
     });
-    const off = socket.onStatus((status) => {
-      if (status === 'signed-out') router.replace('/login');
-    });
-    return () => {
-      active = false;
-      off();
-    };
-  }, [onLogin]);
+    return off;
+  }, []);
 
   // Back from the background: the OS may have killed the socket while the app was suspended,
   // often without a close event (stage 6.2e); reconnect at once and resume (the server replays
@@ -99,7 +91,7 @@ function useNavigationTheme(): Theme {
 export default function RootLayout() {
   const theme = useNavigationTheme();
   const booted = useBooted();
-  useAuthGate();
+  useCloudSession();
   return (
     <ThemeProvider value={theme}>
       <Stack
@@ -109,7 +101,7 @@ export default function RootLayout() {
           headerTitleStyle: { fontFamily: Fonts.display, fontSize: 22 },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'foolore' }} />
-        <Stack.Screen name="login" options={{ title: 'Sign in', headerBackVisible: false }} />
+        <Stack.Screen name="login" options={{ title: 'Sign in' }} />
         <Stack.Screen name="story/[id]" options={{ title: '' }} />
         <Stack.Screen name="heroes/new" options={{ title: 'New hero' }} />
         <Stack.Screen name="heroes/[id]" options={{ title: 'Hero' }} />

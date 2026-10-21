@@ -16,7 +16,10 @@ function loginError(e: unknown): string {
   return errorText(e);
 }
 
-/** Email + password; an invite code registers a new account (ADR 17). */
+/**
+ * Email + password; an invite code registers a new account (ADR 17). Opened from the profile: the
+ * prototype plays as a guest (ADR 66), this is for the team's accounts. It replaces the guest.
+ */
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,8 +34,10 @@ export default function LoginScreen() {
       const { auth, socket } = getCloud();
       if (invite.trim()) await auth.register(email.trim(), password, invite.trim());
       else await auth.login(email.trim(), password);
+      // The socket signs in again with the new account.
+      socket.stop();
       socket.start();
-      router.replace('/');
+      router.back();
     } catch (e) {
       setError(loginError(e));
     } finally {
@@ -41,14 +46,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen title="foolore" paper>
+    <Screen title="Sign in" paper>
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" />
       <Field label="Invite code (new account only)" value={invite} onChangeText={setInvite} autoCapitalize="none" />
       <Button title={invite.trim() ? 'Create account' : 'Sign in'} variant="primary" onPress={submit} busy={busy} disabled={!email || !password} />
       <ErrorText>{error}</ErrorText>
       <ThemedText type="caption" themeColor="inkMuted">
-        Accounts are invite-only during the prototype.
+        For the team and invited testers. Without an account you play as a guest of this device.
       </ThemedText>
     </Screen>
   );

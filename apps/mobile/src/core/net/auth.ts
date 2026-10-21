@@ -48,7 +48,14 @@ export interface Account {
   tier: string;
   kind: 'guest' | 'email';
   termsVersion: string | null;
+  /** A guest's allowance for the whole prototype, USD (ADR 66); null for email accounts. */
+  totalLimitUsd: number | null;
+  /** Spent so far, all days together, USD. */
+  spentUsd: number;
 }
+
+/** Where the player left an email for the release waitlist (ADR 66). */
+export type WaitlistSource = 'limit' | 'profile' | 'onboarding';
 
 export class AuthRequiredError extends Error {
   constructor(message = 'Sign in required') {
@@ -107,16 +114,27 @@ export class AuthSession {
 
   /** Who is signed in (`GET /me`): the profile shows it. */
   async me(): Promise<Account> {
-    const me = await requestJson<{ email: string | null; tier: string; kind?: string; terms_version?: string | null }>(
-      `${this.baseUrl}/me`,
-      { token: await this.accessToken() },
-    );
+    const me = await requestJson<{
+      email: string | null;
+      tier: string;
+      kind?: string;
+      terms_version?: string | null;
+      limits?: { total_cost_usd?: string | null; spent_total_usd?: string };
+    }>(`${this.baseUrl}/me`, { token: await this.accessToken() });
+    const total = me.limits?.total_cost_usd;
     return {
       email: me.email,
       tier: me.tier,
       kind: me.kind === 'guest' ? 'guest' : 'email',
       termsVersion: me.terms_version ?? null,
+      totalLimitUsd: total === null || total === undefined ? null : Number(total),
+      spentUsd: Number(me.limits?.spent_total_usd ?? 0),
     };
+  }
+
+  /** Leaves an email for the release waitlist (ADR 66); the same email again changes nothing. */
+  async joinWaitlist(email: string, source: WaitlistSource): Promise<void> {
+    await requestJson(`${this.baseUrl}/waitlist`, { body: { email, source }, token: await this.accessToken() });
   }
 
   async logout(): Promise<void> {

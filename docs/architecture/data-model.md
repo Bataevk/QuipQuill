@@ -219,5 +219,9 @@ usage_events   (id bigserial PK, user_id uuid FK → users ON DELETE CASCADE, re
                 purpose, model, input_tokens, output_tokens, cache_read_tokens,
                 cost_usd numeric(12,6), created_at timestamptz;
                 INDEX (user_id, created_at))
--- лимиты (2.3): сумма usage_events за UTC-сутки по user_id против конфигурации тарифа
+waitlist       (id bigserial PK, email varchar(320) UNIQUE  -- нижний регистр; ADR 66
+                , user_id uuid FK → users ON DELETE SET NULL
+                , source varchar(16) CHECK (source IN ('limit','profile','onboarding')), created_at)
+-- лимиты (2.3): сумма usage_events за UTC-сутки по user_id против конфигурации тарифа;
+-- у гостя ещё и за всё время против GUEST_TOTAL_COST_LIMIT_USD (ADR 66)
 ```

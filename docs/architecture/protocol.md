@@ -88,7 +88,7 @@ graph LR
 - Невалидное сообщение клиента → `error` с `code: "bad_request"` (слишком большое — `message_too_large`), сокет **не** закрывается.
 - `cancel` останавливает генерацию между дельтами: приходит `done` с `finishReason: "cancelled"` и тем текстом, что успел сгенерироваться.
 - `heartbeat` приходит, только пока в подписанных сессиях идёт генерация и сокет молчал дольше интервала (по умолчанию 2 с); `ping` → `heartbeat` всегда.
-- Коды `error`: `rate_limited` (30/мин на пользователя, повторяемо), `request_too_large` (> ~95K токенов), `too_many_tools` (> 32), `bad_request` (в т.ч. провайдер отверг запрос), `message_too_large`, `queue_unavailable`, `provider_error` (повторяемо), `timeout` (повторяемо), `limit_exceeded` (дневной лимит тарифа; приходит **без** `status`, модель не вызывается).
+- Коды `error`: `rate_limited` (30/мин на пользователя, повторяемо), `request_too_large` (> ~95K токенов), `too_many_tools` (> 32), `bad_request` (в т.ч. провайдер отверг запрос), `message_too_large`, `queue_unavailable`, `provider_error` (повторяемо), `timeout` (повторяемо), `limit_exceeded` (дневной лимит тарифа; приходит **без** `status`, модель не вызывается), `prototype_limit` (гость исчерпал общий лимит прототипа, ADR 66; так же без `status`, навсегда).
 - Порядок событий генерации: `status` → `delta`* → `tool_call`* (все вызовы — после текста, каждый целиком) → `done`; либо один `error`.
 - **Промпты — в облаке** ([ADR 57](decisions.md#57-промпты--в-облаке-приложение-шлёт-ссылку-на-шаблон)). В `content` сообщения (массивом частей) клиент вместо текста промпта шлёт `{"type": "prompt", "name": "gm", "vars": {"STORY_STYLE": "…"}, "cache_control": {…}}`; воркер заменяет её на `{"type": "text", "text": <шаблон с подставленными vars>, "cache_control": …}`. Шаблон — `PROMPTS_DIR/<name>.md`, `{{VAR}}` — только заглавные; vars — строки, ровно те, что есть в шаблоне (нет лишних и недостающих), подстановка в один проход. Неизвестный шаблон или неверные vars → `error` `bad_request`, до провайдера не доходит. Оценка размера запроса (~95K токенов) считает ссылку, а не подставленный текст.
 - `messages` (после подстановки промптов), `tools`, `responseFormat` передаются провайдеру как есть (формат OpenAI). Точки кэширования ставит **клиент**: `cache_control: {type: "ephemeral"}` на content-part — в конце системного промпта и на последнем сообщении истории, в том числе у ответа ассистента или результата инструмента (тогда их `content` — массив частей, ADR 46); `ttl: "1h"` — для префиксов, стабильных всю партию (системные промпты, ADR 49). Haiku 5.5 кэширует префиксы от 512 токенов.
@@ -114,7 +114,7 @@ graph LR
 
 ## Эмбеддинги (REST)
 
-`POST /embeddings` (Bearer) `{ "model": "openai/text-embedding-3-small", "input": ["…", …] }` (≤ 64 строк по ≤ 8000 символов) → `{ "model", "vectors": [[…], …] (в порядке input), "usage": {"input", "costUsd"} }`. Другая модель → 400 `model_not_allowed`; превышен дневной лимит → 429 `limit_exceeded`; ошибка провайдера → 502. Расход пишется в `usage_events` (`purpose = "embed"`).
+`POST /embeddings` (Bearer) `{ "model": "openai/text-embedding-3-small", "input": ["…", …] }` (≤ 64 строк по ≤ 8000 символов) → `{ "model", "vectors": [[…], …] (в порядке input), "usage": {"input", "costUsd"} }`. Другая модель → 400 `model_not_allowed`; превышен дневной лимит → 429 `limit_exceeded`, общий лимит гостя → 429 `prototype_limit`; ошибка провайдера → 502. Расход пишется в `usage_events` (`purpose = "embed"`).
 
 ## Авторизация (REST)
 

@@ -43,8 +43,15 @@ async def embeddings(
     if not services.rate_limiter.allow(str(user.id)):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited")
     sessionmaker = services.sessionmaker
-    if await usage.over_limit(sessionmaker, user.id, user.tier, settings.daily_cost_limit_usd):
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="limit_exceeded")
+    reached = await usage.limit_reached(
+        sessionmaker,
+        user.id,
+        user.tier,
+        settings.daily_cost_limit_usd,
+        settings.guest_total_cost_limit_usd,
+    )
+    if reached:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=reached)
     try:
         response = await services.llm_client.embeddings.create(model=body.model, input=body.input)
     except openai.APIError as error:

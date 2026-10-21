@@ -59,7 +59,14 @@ describe('AuthSession', () => {
     const store = new MemoryTokenStore();
     await store.save({ accessToken: 'live', refreshToken: 'r', accessExpiresAt: Date.now() + 600_000 });
 
-    expect(await new AuthSession('http://cloud', store).me()).toEqual({ email: 'a@b.co', tier: 'free', kind: 'email', termsVersion: null });
+    expect(await new AuthSession('http://cloud', store).me()).toEqual({
+      email: 'a@b.co',
+      tier: 'free',
+      kind: 'email',
+      termsVersion: null,
+      totalLimitUsd: null,
+      spentUsd: 0,
+    });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://cloud/me');
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer live');

@@ -68,11 +68,15 @@ class OpenRouterHandler:
     async def run(self, command: Command, is_cancelled: Callable[[], bool]) -> AsyncIterator[Event]:
         request = command.request
         common = command.address()
-        cap = self._settings.daily_cost_limit_usd
-        if await usage.over_limit(
-            self._sessionmaker, uuid.UUID(command.user_id), command.tier, cap
-        ):
-            yield error_event("limit_exceeded", **common)
+        reached = await usage.limit_reached(
+            self._sessionmaker,
+            uuid.UUID(command.user_id),
+            command.tier,
+            self._settings.daily_cost_limit_usd,
+            self._settings.guest_total_cost_limit_usd,
+        )
+        if reached:
+            yield error_event(reached, **common)
             return
 
         yield Event(type="status", status="thinking", meta=request.meta, **common)

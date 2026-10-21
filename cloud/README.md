@@ -22,7 +22,7 @@ make cloud-lint
 
 Гость устройства без email и пароля (ADR 60, включается `GUEST_SIGNUP`) или email + пароль, регистрация только по инвайт-коду (`INVITE_CODES`).
 
-Дневной лимит трат — по тарифу (`llm/policy.py`, free $0.05 в UTC-сутки); `DAILY_COST_LIMIT_USD` переопределяет его для всех (локальные прогоны, демо; ADR 38).
+Дневной лимит трат — по тарифу (`llm/policy.py`, free $0.05 в UTC-сутки); `DAILY_COST_LIMIT_USD` переопределяет его для всех (локальные прогоны, демо; ADR 38). У гостя ещё и общий лимит прототипа за всё время — `GUEST_TOTAL_COST_LIMIT_USD` (по умолчанию $0.10, ~30 ходов; ADR 66): исчерпан — ошибка `prototype_limit`.
 
 | Эндпоинт | Что |
 |---|---|
@@ -31,6 +31,7 @@ make cloud-lint
 | `POST /auth/login` `{email, password}` | 200 → пара токенов; 401 `invalid_credentials` |
 | `POST /auth/refresh` `{refresh_token}` | 200 → новая пара; старый refresh отзывается. Повтор уже отозванного → отзыв **всех** токенов пользователя, 401 `refresh_token_reused` |
 | `GET /me` (Bearer) | `{id, email (null у гостя), kind, tier, terms_version, terms_accepted_at, created_at, usage_today, limits: {daily_cost_usd}}` |
+| `POST /waitlist` (Bearer) `{email, source: limit\|profile\|onboarding}` | 204; список желающих узнать о релизе (ADR 66), повтор той же почты ничего не меняет |
 | `POST /me/consent` (Bearer) `{terms_version}` | 200 → `{terms_version, terms_accepted_at}`: игрок принял условия этой версии (ADR 60) |
 | `GET /stories` (Bearer) | каталог (ADR 61): `[{id, version (sha256 файла), title, tagline, summary, heroes, built_at, size}]` |
 | `GET /stories/{id}/file` (Bearer) | файл `.qqstory` (ETag — `version`); 404 `story_not_found` |

@@ -65,6 +65,28 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+WAITLIST_SOURCES = ("limit", "profile", "onboarding")
+
+
+class WaitlistEntry(Base):
+    """An email to write to when foolore is released (ADR 66); one row per email."""
+
+    __tablename__ = "waitlist"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('limit', 'profile', 'onboarding')", name="waitlist_source_valid"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Stored lowercased; one row per email, whoever leaves it again.
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # Where the player left it: the prototype limit, the profile or the onboarding.
+    source: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class UsageEvent(Base):
     """One LLM or embeddings call billed to a user (written by the LLM worker, stage 2.3)."""
 
