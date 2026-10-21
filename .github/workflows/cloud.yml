@@ -106,11 +106,17 @@ jobs:
         env:
           HOST: deploy@${{ vars.DEPLOY_HOST }}
           CONFIG_ENV: ${{ vars.CLOUD_CONFIG_ENV }}
+          # One secret per key (ADR 65): changing one never needs the others pasted again.
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          INVITE_CODES: ${{ secrets.INVITE_CODES }}
+          # The old whole-file secret (ADR 51), read until it is deleted from the environment.
           SECRET_ENV: ${{ secrets.CLOUD_SECRET_ENV }}
         run: |
-          # Each file comes whole from the environment `production` (ADR 51; templates in deploy/).
-          # Until a value is set there, the server keeps its own file (the old cloud.env becomes
-          # cloud.secret.env once), so a deploy never starts the cloud without its secrets.
+          # The config comes whole from the environment `production` (ADR 51; template in deploy/).
+          # Secrets are kept in the server's cloud.secret.env and updated key by key: a secret set in
+          # the environment replaces its line, one not set keeps the server's value, so a deploy
+          # never starts the cloud without its secrets.
           # shellcheck disable=SC2029 # the file name is meant to expand here, on the runner
           put() { printf '%s\n' "$2" | ssh "$HOST" "umask 077 && cat > /opt/quipquill/$1"; }
           if [ -n "$CONFIG_ENV" ]; then
@@ -119,12 +125,23 @@ jobs:
             echo "::warning::CLOUD_CONFIG_ENV is not set: keeping the server's cloud.config.env"
             ssh "$HOST" 'cd /opt/quipquill && { [ -f cloud.config.env ] || touch cloud.config.env; }'
           fi
+          ssh "$HOST" 'cd /opt/quipquill && umask 077 && { [ -f cloud.secret.env ] || { [ -f cloud.env ] && cp -p cloud.env cloud.secret.env; } || touch cloud.secret.env; }'
           if [ -n "$SECRET_ENV" ]; then
+            echo "::warning::CLOUD_SECRET_ENV is still set: it is written first; move its keys to JWT_SECRET, OPENROUTER_API_KEY, INVITE_CODES and delete it"
             put cloud.secret.env "$SECRET_ENV"
-          else
-            echo "::warning::CLOUD_SECRET_ENV is not set: keeping the server's cloud.secret.env"
-            ssh "$HOST" 'cd /opt/quipquill && { [ -f cloud.secret.env ] || cp -p cloud.env cloud.secret.env; }'
           fi
+          for key in JWT_SECRET OPENROUTER_API_KEY INVITE_CODES; do
+            value=${!key}
+            if [ -z "$value" ]; then
+              echo "::notice::$key is not set: keeping the server's value"
+              continue
+            fi
+            # The value goes through stdin, never the command line; the key is one of the names above.
+            # shellcheck disable=SC2029
+            printf '%s' "$value" | ssh "$HOST" "cd /opt/quipquill && umask 077 && v=\$(cat) \
+              && { grep -v '^$key=' cloud.secret.env || true; printf '%s=%s\n' '$key' \"\$v\"; } > .secret.tmp \
+              && mv .secret.tmp cloud.secret.env"
+          done
       - name: Prompts
         env:
           HOST: deploy@${{ vars.DEPLOY_HOST }}
