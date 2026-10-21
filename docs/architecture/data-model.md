@@ -189,6 +189,8 @@ CREATE TABLE saves (
 CREATE TABLE settings (               -- шаг 2 (D.7): настройки игрока
   key TEXT PRIMARY KEY, value TEXT NOT NULL   -- 'theme' = system | light | dark
 ) STRICT;
+ALTER TABLE characters ADD COLUMN story_id TEXT;  -- шаг 3 (D.5): герой истории (ADR 62),
+                                                  -- id = '<story_id>:<key>'; NULL — свой герой
 ```
 
 - Схема — в коде: [`src/core/library/app-db.ts`](../../apps/mobile/src/core/library/app-db.ts); версии — `PRAGMA user_version`, шаги миграций только дописываются.

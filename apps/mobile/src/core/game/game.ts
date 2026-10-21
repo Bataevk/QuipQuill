@@ -17,6 +17,7 @@ import { queueModels } from '../agent/models';
 import type { Entity } from '../world/model';
 import { isUnfinished, retryTurn, runTurn, type TurnResult } from '../agent/run-turn';
 import {
+  beginAuthoredSession,
   beginSession,
   chooseCharacter,
   clarifyCharacter,
@@ -230,12 +231,22 @@ export class Game {
     return isUnfinished(await this.chats.load(GM_CHAT));
   }
 
-  /** Starts the playthrough with the save's character: the first proposal. */
-  async start(signal?: AbortSignal): Promise<CharacterProposal> {
+  /** A hero of the story itself (ADR 62): played as written, without adaptation. */
+  get authored(): boolean {
+    return !!this.character?.storyId;
+  }
+
+  /**
+   * Starts the playthrough with the save's character: the first proposal — or, for a hero of the
+   * story itself, straight to the opening scene (ADR 62).
+   */
+  async start(signal?: AbortSignal): Promise<CharacterProposal | TurnResult> {
     await this.settle();
-    return this.metered(() =>
-      beginSession({ ...this.sessionDeps, signal }, { storyId: this.save.storyId, character: this.sheet() }),
-    );
+    const input = { storyId: this.save.storyId, character: this.sheet() };
+    if (this.authored) {
+      return this.metered(() => this.touched(beginAuthoredSession({ ...this.sessionDeps, agent: this.agent, signal }, input)));
+    }
+    return this.metered(() => beginSession({ ...this.sessionDeps, signal }, input));
   }
 
   async clarify(wishes: string, signal?: AbortSignal): Promise<CharacterProposal> {

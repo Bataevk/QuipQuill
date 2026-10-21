@@ -1,5 +1,6 @@
 import type { Db } from '../storage/db';
 import { migrate } from '../storage/migrate';
+import type { StoryHero } from '../story/story-meta';
 
 /**
  * app.db: what lives outside any playthrough — characters, imported stories, saves.
@@ -41,6 +42,9 @@ const STEPS = [
      key   TEXT PRIMARY KEY,
      value TEXT NOT NULL
    ) STRICT;`,
+  // Stage D.5: heroes written by a story's author (ADR 62) are kept next to the player's own,
+  // marked with their story; the Heroes tab shows only the player's (story_id IS NULL).
+  `ALTER TABLE characters ADD COLUMN story_id TEXT;`,
 ];
 
 export async function migrateAppDb(db: Db): Promise<void> {
@@ -64,7 +68,12 @@ export interface Character {
   race: string | null;
   description: string;
   createdAt: string;
+  /** Set for a hero of a story (ADR 62): `<story_id>:<key>`, played without adaptation. */
+  storyId: string | null;
 }
+
+/** A new hero of the player's own (no story). */
+export type NewCharacter = Omit<Character, 'storyId'>;
 
 export interface StoryRecord {
   id: string;
@@ -110,6 +119,7 @@ type CharacterRow = {
   race: string | null;
   description: string;
   created_at: string;
+  story_id: string | null;
 };
 
 /** Typed access to app.db. Holds an open connection owned by the caller. */
@@ -122,7 +132,7 @@ export class AppRepository {
 
   // --- characters
 
-  async addCharacter(character: Character): Promise<void> {
+  async addCharacter(character: NewCharacter): Promise<void> {
     await this.db.run(
       `INSERT INTO characters (id, name, sex, age, race, description, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -148,8 +158,24 @@ export class AppRepository {
     return row && toCharacter(row);
   }
 
+  /**
+   * A story's hero as a character the saves can point to (ADR 62): `<story_id>:<key>`. A newer
+   * build of the story may change the sheet; games already started keep the hero they began with.
+   */
+  async upsertStoryHero(storyId: string, hero: StoryHero, createdAt: string): Promise<Character> {
+    const id = `${storyId}:${hero.key}`;
+    await this.db.run(
+      `INSERT INTO characters (id, name, sex, age, race, description, created_at, story_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET name = excluded.name, sex = excluded.sex, age = excluded.age,
+         race = excluded.race, description = excluded.description`,
+      [id, hero.name, hero.sex, hero.age, hero.race, hero.description, createdAt, storyId],
+    );
+    return (await this.getCharacter(id))!;
+  }
+
   /** Rewrites the sheet; games already started keep the hero they adapted (ADR 37). */
-  async updateCharacter(character: Omit<Character, 'createdAt'>): Promise<void> {
+  async updateCharacter(character: Omit<Character, 'createdAt' | 'storyId'>): Promise<void> {
     await this.db.run('UPDATE characters SET name = ?, sex = ?, age = ?, race = ?, description = ? WHERE id = ?', [
       character.name,
       character.sex,
@@ -252,6 +278,7 @@ function toCharacter(row: CharacterRow): Character {
     race: row.race,
     description: row.description,
     createdAt: row.created_at,
+    storyId: row.story_id ?? null,
   };
 }
 

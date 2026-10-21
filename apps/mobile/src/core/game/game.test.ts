@@ -2,6 +2,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { CharacterProposal } from '@/core/agent/character';
 import { ChatStore } from '@/core/agent/chat-store';
 import { ScriptedChatModel } from '@/core/agent/testing/scripted-model';
 import type { CloudSocket } from '@/core/net/cloud-socket';
@@ -24,7 +25,7 @@ let generator: BaseChatModel | undefined;
 /** The entity memory's model for the next `open()`; none by default. */
 let memory: BaseChatModel | undefined;
 
-async function open(): Promise<Game> {
+async function open(saveId?: string): Promise<Game> {
   const socket = {
     onEvent(listener: (event: ServerEvent) => void) {
       listeners.add(listener);
@@ -43,7 +44,7 @@ async function open(): Promise<Game> {
     }),
   };
   const saves = await env.library.repository.listSaves();
-  return Game.open(services, saves[0].id);
+  return Game.open(services, saveId ?? saves[0].id);
 }
 
 beforeEach(async () => {
@@ -66,10 +67,33 @@ afterEach(async () => {
 });
 
 describe('Game', () => {
+  it("plays a story's own hero as written: no adaptation, straight to the opening (ADR 62)", async () => {
+    const [ada] = game.meta.heroes;
+    const hero = await env.library.repository.upsertStoryHero(DEMO_STORY_ID, ada, '2026-10-21T00:00:00.000Z');
+    expect(hero).toMatchObject({ id: `${DEMO_STORY_ID}:ada`, name: 'Ada Merrow', storyId: DEMO_STORY_ID });
+    const save = await env.library.saves.create({ storyId: DEMO_STORY_ID, characterId: hero.id, title: 'Vault — Ada' });
+    await game.close();
+    game = await open(save.id);
+    expect(game.authored).toBe(true);
+    expect(await game.nextStep()).toBe('start');
+
+    master.push({ text: 'Rain on the bay. Mags Holloway slides a key across the table.' });
+    const opened = await game.recover();
+    expect(opened).toMatchObject({ reply: 'Rain on the bay. Mags Holloway slides a key across the table.' });
+    expect(character.calls).toHaveLength(0);
+    expect(await game.phase()).toBe('playing');
+    const kinds = (await game.world.log.recent(5)).map((e) => [e.kind, 'choice' in e.payload ? e.payload.choice : null]);
+    expect(kinds).toEqual([
+      ['session.started', null],
+      ['character.adapted', 'authored'],
+    ]);
+    expect(await game.world.state.player()).toMatchObject({ name: 'Ada Merrow', props: { race: 'human', age: 24 } });
+  });
+
   it('goes from a new save to turns: start, choose, play', async () => {
     expect(await game.phase()).toBe('new');
     character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'No elves here.' }) });
-    const proposal = await game.start();
+    const proposal = (await game.start()) as CharacterProposal;
     expect(proposal.options[0]).toEqual(ADAPTED);
     expect(character.calls[0][1].text).toContain('Race: elf'); // the save's character from app.db
     expect(await game.phase()).toBe('adapting');

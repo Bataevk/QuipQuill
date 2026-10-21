@@ -46,6 +46,8 @@ export class MemoryTokenStore implements TokenStore {
 export interface Account {
   email: string | null;
   tier: string;
+  kind: 'guest' | 'email';
+  termsVersion: string | null;
 }
 
 export class AuthRequiredError extends Error {
@@ -90,12 +92,31 @@ export class AuthSession {
     );
   }
 
-  /** Who is signed in (`GET /me`): the profile shows it. */
-  async me(): Promise<Account> {
-    const me = await requestJson<{ email: string | null; tier: string }>(`${this.baseUrl}/me`, {
+  /** A new guest account for this device (ADR 60): no email, no password. */
+  async guest(): Promise<void> {
+    await this.keep(await requestJson<TokenPair>(`${this.baseUrl}/auth/guest`, { method: 'POST' }));
+  }
+
+  /** The player accepted these terms (ADR 60); the cloud keeps the version and the time. */
+  async consent(termsVersion: string): Promise<void> {
+    await requestJson(`${this.baseUrl}/me/consent`, {
+      body: { terms_version: termsVersion },
       token: await this.accessToken(),
     });
-    return { email: me.email, tier: me.tier };
+  }
+
+  /** Who is signed in (`GET /me`): the profile shows it. */
+  async me(): Promise<Account> {
+    const me = await requestJson<{ email: string | null; tier: string; kind?: string; terms_version?: string | null }>(
+      `${this.baseUrl}/me`,
+      { token: await this.accessToken() },
+    );
+    return {
+      email: me.email,
+      tier: me.tier,
+      kind: me.kind === 'guest' ? 'guest' : 'email',
+      termsVersion: me.terms_version ?? null,
+    };
   }
 
   async logout(): Promise<void> {

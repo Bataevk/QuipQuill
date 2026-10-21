@@ -17,7 +17,8 @@ export default function HeroesScreen() {
       let active = true;
       void getLibrary()
         .then((library) => library.repository.listCharacters())
-        .then((list) => active && setHeroes(list))
+        // The player's own; the heroes written for a story live on its page (ADR 62).
+        .then((list) => active && setHeroes(list.filter((c) => c.storyId === null)))
         .catch((e) => active && setError(errorText(e)));
       return () => {
         active = false;

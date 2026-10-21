@@ -1,6 +1,6 @@
 /// <reference types="node" />
 /** FileStore port on node:fs. Used by core tests (and later the desktop app). */
-import { access, copyFile, mkdir, rename, rm } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
 
 import type { FileStore } from '@/core/storage/files';
 
@@ -34,5 +34,13 @@ export class NodeFileStore implements FileStore {
 
   async ensureDir(path: string): Promise<void> {
     await mkdir(path, { recursive: true });
+  }
+
+  async size(path: string): Promise<number | null> {
+    try {
+      return (await stat(path)).size;
+    } catch {
+      return null;
+    }
   }
 }

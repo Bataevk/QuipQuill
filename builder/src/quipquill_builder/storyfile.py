@@ -28,8 +28,12 @@ REQUIRED_META = (
 # Keys written by `builder meta` (LLM draft + manual edits) rather than by `export`.
 AUTHORED_META = ("world_summary", "world_constraints", "style")
 # Optional authored keys (meta.toml or `builder meta --set`): luck, 0..1, how lucky the world is
-# for the player (ADR 47); missing means a fair world, 0.5.
-OPTIONAL_META = ("luck",)
+# for the player (ADR 47), missing means a fair world, 0.5; tagline, one line under the title on
+# the cover; heroes, the story's ready-made player characters as a JSON list (ADR 62; in meta.toml
+# they are [[heroes]] tables).
+OPTIONAL_META = ("luck", "tagline", "heroes")
+# A hero's sheet (ADR 62): `key` is stable across rebuilds (the app keeps `<story_id>:<key>`).
+HERO_FIELDS = ("key", "name", "sex", "age", "race", "blurb", "description")
 
 
 def schema_path() -> Path:

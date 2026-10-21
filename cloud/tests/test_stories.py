@@ -27,6 +27,14 @@ def catalogue_client(settings: Settings, stories_dir: Path) -> TestClient:
     return TestClient(create_app(settings.model_copy(update={"stories_dir": stories_dir})))
 
 
+def read_meta(path: Path) -> dict[str, str]:
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        return dict(connection.execute("SELECT key, value FROM meta").fetchall())
+    finally:
+        connection.close()
+
+
 def set_meta(path: Path, key: str, value: str) -> None:
     connection = sqlite3.connect(path)
     with connection:
@@ -45,7 +53,9 @@ def test_the_catalogue_lists_the_story_and_hands_out_its_file(
         assert story["id"] == DEMO_ID
         assert story["title"] == "The Brass Vault"
         assert story["summary"].startswith("The Brass Vault is set in Vellmoor")
-        assert story["heroes"] == []
+        assert [hero["key"] for hero in story["heroes"]] == ["ada", "elias", "imogen"]
+        assert story["tagline"] == read_meta(DEMO)["tagline"]
+        assert story["built_at"] == read_meta(DEMO)["built_at"]
         assert story["size"] == DEMO.stat().st_size
         assert len(story["version"]) == 64
 

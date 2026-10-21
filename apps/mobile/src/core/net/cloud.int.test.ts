@@ -12,7 +12,10 @@ import { QueueChatModel } from '@/core/net/queue-chat-model';
 import type { LlmRequest, ServerEvent } from '@/core/protocol/messages';
 import { StreamText } from '@/core/protocol/stream-text';
 import { newId } from '@/core/util/ids';
+import { StoryCatalog } from '@/core/library/catalog';
 import { startTestCloud, TEST_INVITE, type TestCloud } from '@/platform/node/cloud-server';
+import { NodeDownloader } from '@/platform/node/node-downloader';
+import { DEMO_STORY_ID, makeTestEnv } from '@/platform/node/test-env';
 
 const TEXT = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
 
@@ -91,6 +94,37 @@ describe('auth', () => {
     const second = await store.load();
     expect(forced).toBe(second?.accessToken);
     expect(second?.refreshToken).not.toBe(first?.refreshToken);
+  });
+});
+
+describe('guest, consent and the story catalogue (D.4–D.5)', () => {
+  it('a guest accepts the terms, finds the demo story and plays it after download', async () => {
+    const auth = new AuthSession(cloud.httpUrl, new MemoryTokenStore());
+    await auth.guest();
+    await auth.consent('0-draft');
+    expect(await auth.me()).toMatchObject({ email: null, kind: 'guest', termsVersion: '0-draft' });
+
+    const env = await makeTestEnv();
+    try {
+      const catalog = new StoryCatalog({
+        baseUrl: cloud.httpUrl,
+        auth,
+        downloader: new NodeDownloader(),
+        files: env.files,
+        importer: env.library.importer,
+        repository: env.library.repository,
+      });
+      const story = (await catalog.list()).find((s) => s.id === DEMO_STORY_ID);
+      expect(story).toBeDefined();
+      expect(story!.heroes.map((h) => h.key)).toEqual(['ada', 'elias', 'imogen']);
+      expect(StoryCatalog.state(story!, undefined)).toBe('available');
+
+      const record = await catalog.install(story!);
+      expect(record).toMatchObject({ id: DEMO_STORY_ID, builtAt: story!.builtAt });
+      expect(StoryCatalog.state(story!, record)).toBe('installed');
+    } finally {
+      await env.cleanup();
+    }
   });
 });
 

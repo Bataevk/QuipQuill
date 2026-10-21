@@ -1,11 +1,13 @@
 /** Composition root: the core's ports wired to this platform's adapters. */
 import { Platform } from 'react-native';
 
+import { StoryCatalog } from '@/core/library/catalog';
 import { Library } from '@/core/library/library';
 import { AuthSession } from '@/core/net/auth';
 import { CloudSocket } from '@/core/net/cloud-socket';
 import { CloudEmbeddings } from '@/core/net/embeddings';
 import { Game } from '@/core/game/game';
+import { ExpoDownloader } from './expo-downloader';
 import { ExpoFileStore } from './expo-files';
 import { OpSqliteDriver } from './op-sqlite-driver';
 import { SecureTokenStore } from './secure-token-store';
@@ -44,6 +46,24 @@ export function getCloud(): Cloud {
     cloud = { auth, socket };
   }
   return cloud;
+}
+
+let catalog: Promise<StoryCatalog> | undefined;
+
+/** The cloud's story catalogue, downloading into this device's library (ADR 61). */
+export function getCatalog(): Promise<StoryCatalog> {
+  catalog ??= getLibrary().then(
+    (library) =>
+      new StoryCatalog({
+        baseUrl: CLOUD_URL,
+        auth: getCloud().auth,
+        downloader: new ExpoDownloader(),
+        files: new ExpoFileStore(),
+        importer: library.importer,
+        repository: library.repository,
+      }),
+  );
+  return catalog;
 }
 
 /** Opens a playthrough wired to this platform's library and cloud (the game screen). */

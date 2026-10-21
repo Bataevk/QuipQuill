@@ -110,3 +110,48 @@ def test_luck_goes_from_meta_toml_into_the_story(graph_file: Path, tmp_path: Pat
     with storyfile.connect(story) as conn:
         issues = validate(conn, check_embeddings=False, require_authored_meta=False)
     assert "meta_luck" in [i.code for i in issues]
+
+
+HEROES = [
+    {
+        "key": "ada",
+        "name": "Ada Merrow",
+        "sex": "female",
+        "age": 24,
+        "race": "human",
+        "blurb": "Locksmith",
+        "description": 'Quick hands, "quicker" tongue.',
+    },
+    {"key": "elias", "name": "Elias Crane", "description": "A clockwright."},
+]
+
+
+def test_heroes_are_tables_in_toml_and_json_in_the_story(tmp_path: Path) -> None:
+    path = tmp_path / "meta.toml"
+    story_meta.save(
+        path, {"story_id": "id-1", "tagline": "One line.", "heroes": json.dumps(HEROES)}
+    )
+    text = path.read_text(encoding="utf-8")
+    assert text.count("[[heroes]]") == 2
+    assert text.index("tagline") < text.index("[[heroes]]")  # plain keys first
+    loaded = story_meta.load(path)
+    assert loaded["tagline"] == "One line."
+    assert json.loads(loaded["heroes"]) == HEROES
+
+
+def test_load_rejects_heroes_that_are_not_tables(tmp_path: Path) -> None:
+    path = tmp_path / "meta.toml"
+    path.write_text('story_id = "x"\nheroes = ["Ada"]\n', encoding="utf-8")
+    with pytest.raises(story_meta.StoryMetaError, match="heroes must be"):
+        story_meta.load(path)
+
+
+def test_meta_set_moves_built_at_on(graph_file: Path, tmp_path: Path) -> None:
+    story = tmp_path / "rune-halls.qqstory"
+    assert cli.main(["export", str(graph_file), "-o", str(story), "--title", "Rune Halls"]) == 0
+    with storyfile.connect(story) as conn:
+        storyfile.set_meta(conn, {"built_at": "2000-01-01T00:00:00+00:00"})
+    assert cli.main(["meta", str(story), "--set", "tagline=Down the rune halls."]) == 0
+    meta = story_meta_of(story)
+    assert meta["tagline"] == "Down the rune halls."
+    assert meta["built_at"] > "2000-01-01T00:00:00+00:00"

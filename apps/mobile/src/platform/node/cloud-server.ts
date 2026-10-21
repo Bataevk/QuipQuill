@@ -40,6 +40,7 @@ export async function startTestCloud(
         DAILY_COST_LIMIT_USD: String(options.dailyLimitUsd ?? 1),
         ECHO_DELAY_SECONDS: String(options.echoDelaySeconds ?? 0.01),
         INVITE_CODES: JSON.stringify([TEST_INVITE]),
+        GUEST_SIGNUP: 'true', // the onboarding's guest accounts (ADR 60)
         JWT_SECRET: 'ts-core-test-secret-that-is-long-enough-32b',
         WS_HEARTBEAT_INTERVAL: '0.5',
         // QQ_CLOUD_LOG=<file>: the cloud's log at info level there (e.g. which provider served

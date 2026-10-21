@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from quipquill_builder import curation, story_meta, storyfile
@@ -238,7 +239,7 @@ def run_meta(args: argparse.Namespace, settings: Settings) -> int:
                     logging.error("--set expects KEY=VALUE, got %r", item)
                     return 1
                 updates[key.strip()] = value
-            storyfile.set_meta(conn, updates)
+            storyfile.set_meta(conn, {**updates, "built_at": _now()})
             _sync_meta_file(args.meta, updates)
             print(f"Updated: {', '.join(updates)}")
             return 0
@@ -250,12 +251,18 @@ def run_meta(args: argparse.Namespace, settings: Settings) -> int:
         draft = asyncio.run(
             draft_meta(OpenRouterChatClient(settings, args.model), conn, current.get("title", ""))
         )
-        storyfile.set_meta(conn, {key: draft[key] for key in todo})
+        storyfile.set_meta(conn, {**{key: draft[key] for key in todo}, "built_at": _now()})
         _sync_meta_file(args.meta, {key: draft[key] for key in todo})
     for key in todo:
         print(f"--- {key}\n{draft[key]}\n")
     print("Draft saved. Edit with: builder meta <story> --set style='...'")
     return 0
+
+
+def _now() -> str:
+    """A changed meta is another build of the file: the app re-imports a story when built_at
+    differs (ADR 24, 64), so editing the texts moves it on like an export does."""
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _sync_meta_file(path: Path | None, updates: dict[str, str]) -> None:

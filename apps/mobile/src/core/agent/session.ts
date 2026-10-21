@@ -96,6 +96,40 @@ export async function chooseCharacter(
   return startStory(deps);
 }
 
+/**
+ * A hero written by the story's author (ADR 62): no adaptation — the sheet already fits the world.
+ * `session.started` and `character.adapted` (choice `authored`) at once, then the opening scene.
+ * Safe to run again after a failure: steps already done are not repeated.
+ */
+export async function beginAuthoredSession(
+  deps: SessionDeps & { agent: GmAgent },
+  input: { storyId: string; character: CharacterSheet },
+): Promise<TurnResult> {
+  const { world } = deps;
+  await exclusive(world, async () => {
+    if ((await world.log.count('session.started')) === 0) {
+      const started = await world.startSession({
+        storyId: input.storyId,
+        character: input.character,
+        startLocation: deps.meta.startLocation,
+      });
+      if (!started.ok) throw new Error(started.error);
+    }
+    if (!(await isAdapted(world))) {
+      const { name, race, age, description } = input.character;
+      const adapted = await world.adaptCharacter({
+        adapted: { name, ...(race ? { race } : {}), age: age ?? null, description },
+        choice: AUTHORED_CHOICE,
+      });
+      if (!adapted.ok) throw new Error(adapted.error);
+    }
+  });
+  return startStory(deps);
+}
+
+/** `character.adapted` choice of a story's own hero (ADR 62). */
+export const AUTHORED_CHOICE = 'authored';
+
 /** The master's first turn: the opening scene. Retry it alone if it failed after the choice. */
 export async function startStory(deps: SessionDeps & { agent: GmAgent }): Promise<TurnResult> {
   const player = await deps.world.state.player();

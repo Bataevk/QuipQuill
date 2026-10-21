@@ -35,6 +35,11 @@ export class ExpoFileStore implements FileStore {
     const dir = new Directory(toUri(path));
     if (!dir.exists) dir.create({ intermediates: true });
   }
+
+  async size(path: string): Promise<number | null> {
+    const file = new File(toUri(path));
+    return file.exists ? file.size : null;
+  }
 }
 
 /** file:///a%20b/c → /a b/c */

@@ -32,7 +32,7 @@ make cloud-lint
 | `POST /auth/refresh` `{refresh_token}` | 200 → новая пара; старый refresh отзывается. Повтор уже отозванного → отзыв **всех** токенов пользователя, 401 `refresh_token_reused` |
 | `GET /me` (Bearer) | `{id, email (null у гостя), kind, tier, terms_version, terms_accepted_at, created_at, usage_today, limits: {daily_cost_usd}}` |
 | `POST /me/consent` (Bearer) `{terms_version}` | 200 → `{terms_version, terms_accepted_at}`: игрок принял условия этой версии (ADR 60) |
-| `GET /stories` (Bearer) | каталог (ADR 61): `[{id, version (sha256 файла), title, tagline, summary, heroes, size}]` |
+| `GET /stories` (Bearer) | каталог (ADR 61): `[{id, version (sha256 файла), title, tagline, summary, heroes, built_at, size}]` |
 | `GET /stories/{id}/file` (Bearer) | файл `.qqstory` (ETag — `version`); 404 `story_not_found` |
 
 - Пароли — argon2id (`pwdlib`); email хранится в нижнем регистре.

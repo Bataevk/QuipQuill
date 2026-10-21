@@ -1,11 +1,19 @@
 """Checks that a .qqstory file is playable. Errors block export; warnings are reported."""
 
+import json
+import re
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Literal
 
-from quipquill_builder.storyfile import AUTHORED_META, REQUIRED_META, SCHEMA_VERSION, read_meta
+from quipquill_builder.storyfile import (
+    AUTHORED_META,
+    HERO_FIELDS,
+    REQUIRED_META,
+    SCHEMA_VERSION,
+    read_meta,
+)
 
 KNOWN_RELATIONS = {"LOCATED_IN", "HAS_ITEM", "LEADS_TO", "HAS_ATTRIBUTE", "INTERACTS_WITH"}
 PORTABLE_TYPES = ("ITEM", "DOCUMENT")
@@ -56,6 +64,10 @@ def validate(
     luck = meta.get("luck", "").strip()
     if luck and not _is_luck(luck):
         error("meta_luck", f"luck must be a number from 0 to 1, got {luck!r}")
+    if "\n" in meta.get("tagline", ""):
+        error("meta_tagline", "tagline must be one line")
+    for problem in _hero_problems(meta.get("heroes", "")):
+        error("meta_heroes", problem)
 
     # --- entities
     locations = {eid for eid, (etype, _, _) in entities.items() if etype == "LOCATION"}
@@ -159,6 +171,48 @@ def _check_embeddings(conn: sqlite3.Connection, meta: dict[str, str], ids) -> li
 
 def has_errors(issues: list[Issue]) -> bool:
     return any(issue.level == "error" for issue in issues)
+
+
+HERO_KEY = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def _hero_problems(raw: str) -> list[str]:
+    """The story's heroes (ADR 62): a JSON list of sheets with a unique key, a name and a text."""
+    if not raw.strip():
+        return []
+    try:
+        heroes = json.loads(raw)
+    except ValueError as error:
+        return [f"heroes is not JSON: {error}"]
+    if not isinstance(heroes, list):
+        return ["heroes must be a list"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for i, hero in enumerate(heroes, 1):
+        if not isinstance(hero, dict):
+            problems.append(f"hero #{i} is not an object")
+            continue
+        key = hero.get("key")
+        label = f"hero #{i} ({key or hero.get('name') or '?'})"
+        if not isinstance(key, str) or not HERO_KEY.match(key):
+            problems.append(f"{label}: key must be lowercase letters, digits and dashes")
+        elif key in seen:
+            problems.append(f"{label}: key is used twice")
+        else:
+            seen.add(key)
+        for field in ("name", "description"):
+            if not isinstance(hero.get(field), str) or not hero[field].strip():
+                problems.append(f"{label}: {field} is required")
+        for field in ("sex", "race", "blurb"):
+            if field in hero and not isinstance(hero[field], str):
+                problems.append(f"{label}: {field} must be text")
+        age = hero.get("age")
+        if age is not None and (isinstance(age, bool) or not isinstance(age, int) or age <= 0):
+            problems.append(f"{label}: age must be a whole number above 0")
+        unknown = sorted(set(hero) - set(HERO_FIELDS))
+        if unknown:
+            problems.append(f"{label}: unknown fields {', '.join(unknown)}")
+    return problems
 
 
 def _is_luck(value: str) -> bool:

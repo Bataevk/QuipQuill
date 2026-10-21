@@ -40,9 +40,10 @@ describe('app.db', () => {
     env = await makeTestEnv();
     const repo = env.library.repository;
     const hero = { id: 'h1', name: 'Wren', sex: null, age: null, race: 'half-elf', description: 'A locksmith.', createdAt: '2026-10-20T00:00:00.000Z' };
+    const own = { ...hero, storyId: null };
     await repo.addCharacter(hero);
     await repo.updateCharacter({ ...hero, name: 'Wren Ashby', age: 31 });
-    expect(await repo.getCharacter('h1')).toEqual({ ...hero, name: 'Wren Ashby', age: 31 });
+    expect(await repo.getCharacter('h1')).toEqual({ ...own, name: 'Wren Ashby', age: 31 });
 
     const story = (await env.library.importer.import(DEMO_STORY)).story;
     const save = await env.library.saves.create({ storyId: story.id, characterId: 'h1', title: 'Vault — Wren' });

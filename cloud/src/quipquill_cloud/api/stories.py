@@ -23,6 +23,8 @@ class Story(BaseModel):
     tagline: str
     summary: str
     heroes: list[dict[str, Any]]
+    # meta.built_at: the app compares it with the copy it has (ADR 24) to see a new build.
+    built_at: str
     size: int
 
 
@@ -36,6 +38,7 @@ def list_stories(_user: CurrentUser, services: ServicesDep) -> list[Story]:
             tagline=entry.tagline,
             summary=entry.summary,
             heroes=entry.heroes,
+            built_at=entry.built_at,
             size=entry.size,
         )
         for entry in services.stories.entries()

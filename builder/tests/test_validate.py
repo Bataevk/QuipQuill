@@ -125,3 +125,30 @@ def test_place_inside_a_reachable_place_counts_as_reachable(make) -> None:
     unreachable = next(i.message for i in issues if i.code == "unreachable")
     assert "loc:nowhere" in unreachable
     assert "loc:back-room" not in unreachable
+
+
+def test_story_heroes(make) -> None:
+    rows = ([loc("loc:a")], [])
+    good = '[{"key": "ada", "name": "Ada", "age": 24, "description": "A locksmith."}]'
+    assert "meta_heroes" not in codes(make(*rows, start_location="loc:a", heroes=good), "error")
+    bad = (
+        '[{"key": "Ada!", "name": "", "description": "x"},'
+        ' {"key": "b", "name": "B", "description": "y", "age": 0, "hat": "red"},'
+        ' {"key": "b", "name": "B2", "description": "z"}, "not a hero"]'
+    )
+    conn = make(*rows, start_location="loc:a", heroes=bad)
+    problems = [
+        i.message for i in validate(conn, check_embeddings=False) if i.code == "meta_heroes"
+    ]
+    assert any("key must be lowercase" in p for p in problems)
+    assert any("name is required" in p for p in problems)
+    assert any("age must be a whole number" in p for p in problems)
+    assert any("unknown fields hat" in p for p in problems)
+    assert any("key is used twice" in p for p in problems)
+    assert any("not an object" in p for p in problems)
+    assert "meta_heroes" in codes(make(*rows, start_location="loc:a", heroes="{nope"), "error")
+
+
+def test_tagline_is_one_line(make) -> None:
+    conn = make([loc("loc:a")], [], start_location="loc:a", tagline="One\nTwo")
+    assert "meta_tagline" in codes(conn, "error")

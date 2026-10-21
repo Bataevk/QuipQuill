@@ -17,3 +17,31 @@ world_constraints = """
 - Player character: a freelance specialist new to Vellmoor, recruited by Mags Holloway for skills the crew lacks. Any human background fits (a colonial traveller, a dockhand, a disgraced aristocrat, an engineer, a con artist...). Adapt anything that breaks the world instead of refusing it: a non-human becomes a human from a distant island with an unusual look; magic becomes stage illusion, sleight of hand or chemistry; legendary gear becomes a well-made but ordinary tool. The character starts with only modest, era-appropriate possessions.
 - Time pressure: the Clockheart must be out of the city before dawn, when the Wren's Promise leaves; the auction is at noon."""
 style = "Atmospheric heist thriller with steampunk industrial dread. Narration is terse and sensory, focused on heat, steam, brass, smoke and ticking machinery. Keep the tone tense and morally grey, with humour from the crew and the city's street characters. Use second-person present tense for player actions and consequences."
+tagline = "Steal the Clockheart before the Admiralty buys it at noon."
+
+[[heroes]]
+key = "ada"
+name = "Ada Merrow"
+sex = "female"
+age = 24
+race = "human"
+blurb = "Locksmith from Brassworks Alley"
+description = "A wiry locksmith raised in the workshops of Brassworks Alley, with burn-scarred fingers and a roll of picks sewn into her sleeve. She owes money to the wrong people and talks faster than she runs. Carries lock picks, a tension wrench and a stub of candle."
+
+[[heroes]]
+key = "elias"
+name = "Elias Crane"
+sex = "male"
+age = 41
+race = "human"
+blurb = "Dismissed Admiralty clockwright"
+description = "A former clockwright of the Admiralty dockyards, dismissed for asking where his designs went. Precise, tired and stubborn, he reads a mechanism like a page. Carries a jeweller's loupe, a set of fine screwdrivers and a notebook of gear ratios."
+
+[[heroes]]
+key = "imogen"
+name = "Lady Imogen Hart"
+sex = "female"
+age = 33
+race = "human"
+blurb = "Penniless lady with a gala invitation"
+description = "The last of a ruined noble house, with a good dress, a better smile and an invitation to the Founders' Gala she can no longer afford to use honestly. She knows the manners of the rich and the names of their servants. Carries a fan, a calling card and a small flask of brandy."

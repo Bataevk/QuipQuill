@@ -14,6 +14,8 @@ export interface FileStore {
   remove(path: string): Promise<void>;
   /** Creates a directory with its parents; no error if it exists. */
   ensureDir(path: string): Promise<void>;
+  /** A file's size in bytes; null if there is no such file. */
+  size(path: string): Promise<number | null>;
 }
 
 export function joinPath(...parts: string[]): string {

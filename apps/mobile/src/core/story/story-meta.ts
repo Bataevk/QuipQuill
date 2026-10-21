@@ -19,6 +19,22 @@ export interface StoryMeta {
   builtAt: string;
   /** How lucky this world is, 0..1 (optional `meta.luck`, ADR 47): 0.5 is fair, below 0.25 brings mishaps. */
   luck: number;
+  /** One line under the title on the cover (optional `meta.tagline`). */
+  tagline: string;
+  /** The author's ready-made player characters (optional `meta.heroes`, ADR 62). */
+  heroes: StoryHero[];
+}
+
+/** A hero written by the story's author (ADR 62); `key` is stable across rebuilds. */
+export interface StoryHero {
+  key: string;
+  name: string;
+  sex: string | null;
+  age: number | null;
+  race: string | null;
+  /** A few words for the picker: "Locksmith from Brassworks Alley". */
+  blurb: string;
+  description: string;
 }
 
 /** A fair world, when the story does not say. */
@@ -66,7 +82,36 @@ export async function readStoryMeta(db: Db): Promise<StoryMeta> {
     embedDim,
     builtAt: text('built_at'),
     luck: parseLuck(meta.get('luck')),
+    tagline: text('tagline'),
+    heroes: parseHeroes(meta.get('heroes')),
   };
+}
+
+/**
+ * `meta.heroes` as sheets; anything unreadable is no heroes rather than a broken story (the
+ * builder validates them, ADR 62). A sheet without a key, a name or a description is dropped.
+ */
+export function parseHeroes(value: string | undefined): StoryHero[] {
+  let raw: unknown;
+  try {
+    raw = value?.trim() ? JSON.parse(value) : [];
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const heroes: StoryHero[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const hero = item as Record<string, unknown>;
+    const key = str(hero.key);
+    const name = str(hero.name);
+    const description = str(hero.description);
+    if (!key || !name || !description || heroes.some((h) => h.key === key)) continue;
+    const age = typeof hero.age === 'number' && Number.isInteger(hero.age) && hero.age > 0 ? hero.age : null;
+    heroes.push({ key, name, sex: str(hero.sex), age, race: str(hero.race), blurb: str(hero.blurb) ?? '', description });
+  }
+  return heroes;
 }
 
 /** `meta.luck` as a number in 0..1; missing or unreadable → DEFAULT_LUCK. */
