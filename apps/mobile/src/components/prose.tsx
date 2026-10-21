@@ -5,7 +5,7 @@
  * fonts in SDK 57 have no weight mapping); the system sans takes `fontStyle` / `fontWeight`.
  */
 import { useMemo } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
@@ -49,8 +49,16 @@ export function Prose({ text, type = 'story', streaming = false, style }: ProseP
   );
 }
 
+// iOS takes the family from a face's PostScript name and then picks the face by `fontStyle` /
+// `fontWeight` (plain ones gave Literata Regular, seen on the simulator), so it needs both;
+// Android names the face's own file, and a style on top would slant or embolden it twice.
+const IOS = Platform.OS === 'ios';
 const storyFace = (span: ProseSpan): TextStyle | undefined =>
-  span.bold ? { fontFamily: Fonts.storyBold } : span.italic ? { fontFamily: Fonts.storyItalic } : undefined;
+  span.bold
+    ? { fontFamily: Fonts.storyBold, ...(IOS ? { fontWeight: 600 } : null) }
+    : span.italic
+      ? { fontFamily: Fonts.storyItalic, ...(IOS ? { fontStyle: 'italic' } : null) }
+      : undefined;
 
 const sansFace = (span: ProseSpan): TextStyle | undefined =>
   span.bold || span.italic ? { fontStyle: span.italic ? 'italic' : 'normal', fontWeight: span.bold ? 600 : 'normal' } : undefined;
