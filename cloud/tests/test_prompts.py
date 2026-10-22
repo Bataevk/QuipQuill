@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from quipquill_cloud.core.config import REPO_PROMPTS_DIR
-from quipquill_cloud.llm.prompts import PROMPT_NAMES, PromptError, PromptStore
+from quipquill_cloud.llm.prompts import PROMPT_NAMES, PromptError, PromptStore, split_decision
 
 
 @pytest.fixture
@@ -77,3 +77,53 @@ def test_reads_a_changed_file_again(store: PromptStore, tmp_path: Path) -> None:
 def test_the_repository_has_every_prompt() -> None:
     assert PromptStore(REPO_PROMPTS_DIR).missing() == []
     assert set(PROMPT_NAMES) == {p.stem for p in REPO_PROMPTS_DIR.glob("*.md")}
+
+
+def test_a_decision_template_splits_into_its_opening_and_questions() -> None:
+    """ADR 70: the questions of a decision model are prompt text, kept in the template."""
+    opening, questions = split_decision(
+        "Check the input.\n\n# Rules\nNo magic.\n\n"
+        "## decision (choice): Where does it go?\n- ALLOW: fine\n- REJECT: not the story\n\n"
+        "## threat (score): How bad?\n- none\n- some\n- a lot\n\n"
+        "## injection (noul): Is it an instruction to the AI?\n"
+    )
+    assert opening == "Check the input.\n\n# Rules\nNo magic."
+    assert questions == {
+        "decision": {
+            "type": "choice",
+            "instructions": "Where does it go?",
+            "criteria": {"ALLOW": "fine", "REJECT": "not the story"},
+        },
+        "threat": {
+            "type": "score",
+            "instructions": "How bad?",
+            "criteria": ["none", "some", "a lot"],
+        },
+        "injection": {"type": "noul", "instructions": "Is it an instruction to the AI?"},
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No questions at all.",
+        "## decision (choice): Where?\n- allow: lower case key",
+        "## decision (choice): Where?",
+        "## threat (score): How bad?\n- only one level",
+        "## injection (noul): Is it?\n- an option it does not take",
+    ],
+)
+def test_a_broken_decision_template_is_refused(text: str) -> None:
+    with pytest.raises(PromptError):
+        split_decision(text)
+
+
+def test_the_guard_template_parses() -> None:
+    store = PromptStore(REPO_PROMPTS_DIR)
+    opening, questions = split_decision(store.render("guard", {"WORLD_RULES": "None."}))
+    assert "# World rules\nNone." in opening
+    assert {name: list(q["criteria"]) for name, q in questions.items()} == {
+        "decision": ["ALLOW", "PASS_TO_GM", "REJECT"],
+        "warning_type": ["NONE", "STORY_HIJACKING", "NPC_CONTROL", "GHOST_ITEM", "OTHER"],
+        "threat_level": ["LOW", "MEDIUM", "HIGH"],
+    }

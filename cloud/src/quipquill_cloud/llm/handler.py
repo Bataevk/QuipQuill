@@ -2,9 +2,11 @@
 
 Order of events: status → delta* → tool_call* → done (or a single error). `done.message` is the
 assembled assistant message (text + complete tool calls) and is the agent's source of truth.
+A decision model (ADR 70) answers without streaming: status → done, the answers as JSON text.
 """
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -18,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
-from quipquill_cloud.llm.policy import PURPOSES, Route, route
-from quipquill_cloud.llm.prompts import PromptError, PromptStore
+from quipquill_cloud.llm.policy import DECISIONS, PURPOSES, Route, route
+from quipquill_cloud.llm.prompts import PromptError, PromptStore, split_decision
 from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usage, error_event
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,12 @@ class OpenRouterHandler:
 
         yield Event(type="status", status="thinking", meta=request.meta, **common)
 
+        decision_model = DECISIONS.get(request.purpose)
+        if decision_model is not None:
+            async for event in self._decide(command, decision_model):
+                yield event
+            return
+
         chosen = route(request.model)
         if chosen is None:
             logger.warning("Unknown route %r in %s", request.model, request.request_id)
@@ -113,6 +121,77 @@ class OpenRouterHandler:
 
         async for event in self._finish(command, chosen.model, answer):
             yield event
+
+    async def _decide(self, command: Command, model: str) -> AsyncIterator[Event]:
+        """A decision model (ADR 70): the template's opening text and the messages become the
+        state, the template's questions go as they are; `done.message` is the answers as JSON."""
+        request = command.request
+        common = command.address()
+        try:
+            state, questions = self._decision_input(request)
+        except PromptError as error:
+            logger.warning("Bad decision prompt in %s: %s", request.request_id, error)
+            yield error_event("bad_request", **common)
+            return
+        started = time.monotonic()
+        try:
+            async with asyncio.timeout(self._settings.decision_timeout_seconds):
+                reply = await self._client.post(
+                    self._settings.openrouter_decisions_url,
+                    cast_to=object,
+                    body={"model": model, "state": state, "questions": questions},
+                )
+        except (TimeoutError, openai.APITimeoutError):
+            yield error_event("timeout", retryable=True, **common)
+            return
+        except openai.BadRequestError as error:
+            logger.warning("Decision rejected %s: %s", request.request_id, error)
+            yield error_event("bad_request", **common)
+            return
+        except openai.APIError as error:
+            logger.warning("Decision error for %s: %s", request.request_id, error)
+            yield error_event("provider_error", retryable=True, **common)
+            return
+        answers = reply.get("answers") if isinstance(reply, dict) else None
+        if not isinstance(answers, dict):
+            logger.warning("Decision without answers for %s: %r", request.request_id, reply)
+            yield error_event("provider_error", retryable=True, **common)
+            return
+        reported = reply.get("usage") or {}
+        spent: Usage = {
+            "input": reported.get("input_tokens") or 0,
+            "output": reported.get("output_tokens") or 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "costUsd": reported.get("cost") or 0,
+        }
+        logger.info(
+            "decision %s purpose=%s provider=%s total=%.2f in=%s cost=%s",
+            request.request_id,
+            request.purpose,
+            reply.get("provider"),
+            time.monotonic() - started,
+            spent["input"],
+            spent["costUsd"],
+        )
+        await self._record(command, model, spent)
+        yield Event(
+            type="done",
+            message={"role": "assistant", "content": json.dumps(answers)},
+            finish_reason="stop",
+            usage=dict(spent),
+            meta=request.meta,
+            **common,
+        )
+
+    def _decision_input(self, request: LlmRequest) -> tuple[str, dict[str, dict[str, Any]]]:
+        """System messages: the decision template (opening text and questions); the rest: what
+        is checked now. Cache marks are dropped: decision models are not cached (ADR 70)."""
+        messages = self._prompts.expand(request.messages)
+        system = "\n\n".join(_text(m) for m in messages if m.get("role") == "system")
+        rest = "\n\n".join(_text(m) for m in messages if m.get("role") != "system")
+        opening, questions = split_decision(system)
+        return "\n\n".join(part for part in (opening, rest) if part), questions
 
     def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:
         """The OpenRouter call: the route's model and providers, the purpose's effort and limit;
@@ -192,6 +271,21 @@ class OpenRouterHandler:
             spent["cacheWrite"],
             spent["costUsd"],
         )
+        await self._record(command, model, spent)
+        message: dict[str, Any] = {"role": "assistant", "content": answer.text or None}
+        if calls:
+            message["tool_calls"] = calls
+        yield Event(
+            type="done",
+            message=message,
+            finish_reason=answer.finish,
+            usage=dict(spent),
+            meta=request.meta,
+            **common,
+        )
+
+    async def _record(self, command: Command, model: str, spent: Usage) -> None:
+        request = command.request
         try:
             await usage.record(
                 self._sessionmaker,
@@ -209,17 +303,18 @@ class OpenRouterHandler:
             # The answer is already generated and paid for: losing the accounting row is
             # cheaper than leaving the client without `done` after deltas and tool calls.
             logger.exception("Could not record usage for %s: %s", request.request_id, spent)
-        message: dict[str, Any] = {"role": "assistant", "content": answer.text or None}
-        if calls:
-            message["tool_calls"] = calls
-        yield Event(
-            type="done",
-            message=message,
-            finish_reason=answer.finish,
-            usage=dict(spent),
-            meta=request.meta,
-            **common,
+
+
+def _text(message: dict[str, Any]) -> str:
+    """A message's text: the string content, or its text parts joined."""
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
         )
+    return ""
 
 
 @dataclass

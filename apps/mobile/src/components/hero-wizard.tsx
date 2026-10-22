@@ -6,6 +6,10 @@ import type { HeroSheet } from '@/components/hero-form';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, ErrorText, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { MAX_PROPOSALS } from '@/core/agent/character';
+
+/** Changes the player may ask for during the adaptation (MAX_PROPOSALS less the first). */
+const CHANGES = MAX_PROPOSALS - 1;
 
 const SEXES = ['Woman', 'Man', 'Non-binary'];
 const AGES = [
@@ -177,6 +181,11 @@ export function useHeroWizard({ createTitle, onCreate }: { createTitle: string; 
             ) : null}
             <ThemedText type="story">{sheet.description}</ThemedText>
           </Card>
+          {/* The adaptation's limit, said before it starts (stage T.2). */}
+          <ThemedText type="caption" themeColor="inkMuted">
+            The story will fit your hero to its world and offer three versions. You have {CHANGES} attempts in all to ask for
+            changes.
+          </ThemedText>
           <ErrorText>{error}</ErrorText>
         </>
       ) : null}

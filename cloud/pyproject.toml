@@ -45,6 +45,8 @@ markers = ["integration: live calls to OpenRouter (costs money); run with -m int
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# One-off probes with live calls (stage spikes): kept for the record, not maintained code.
+extend-exclude = ["spikes"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM"]

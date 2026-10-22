@@ -1,5 +1,6 @@
 """OpenRouter worker over the real queue and WebSocket, with a scripted model."""
 
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -349,3 +350,88 @@ def test_health_reports_missing_prompts(settings: Settings, tmp_path: Path) -> N
         response = client.get("/health/prompts")
     assert response.status_code == 503
     assert response.json()["detail"].startswith("missing: actor, guard")
+
+
+def guard_request(user_text: str = "I notice a stick in my pocket.") -> dict:
+    request = gm_request(purpose="guard")
+    request["channel"] = "system"
+    request["messages"] = [
+        {
+            "role": "system",
+            "content": [{"type": "prompt", "name": "guard", "vars": {"WORLD_RULES": "No magic."}}],
+        },
+        {"role": "user", "content": [{"type": "text", "text": f"# Player input\n{user_text}"}]},
+    ]
+    return request
+
+
+def test_guard_is_a_decision_model_call(app_client: TestClient, fake: FakeOpenRouter) -> None:
+    """ADR 70: the Decisions API, not chat; the template's questions; answers as JSON in done."""
+    events = run(app_client, guard_request())
+
+    assert [e["type"] for e in events] == ["status", "done"]
+    (body,) = fake.requests
+    assert body["path"] == "https://openrouter.ai/api/alpha/decisions"
+    assert body["model"] == "typesafe/jev-1.14"
+    assert body["state"].startswith("You check one player input of an interactive story")
+    assert "# World rules\nNo magic." in body["state"]
+    assert body["state"].endswith("# Player input\nI notice a stick in my pocket.")
+    assert "## decision" not in body["state"]
+    assert list(body["questions"]) == ["decision", "warning_type", "threat_level"]
+    decision = body["questions"]["decision"]
+    assert decision["type"] == "choice"
+    assert list(decision["criteria"]) == ["ALLOW", "PASS_TO_GM", "REJECT"]
+    assert decision["instructions"] == "Where should this player input go?"
+
+    done = events[-1]
+    answers = json.loads(done["message"]["content"])
+    assert answers["decision"]["choice"] == "PASS_TO_GM"
+    assert done["usage"] == {
+        "input": 800,
+        "output": 120,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "costUsd": 0.0000336,
+    }
+    (row,) = db_run("SELECT purpose, model, input_tokens, cost_usd FROM usage_events")
+    assert (row["purpose"], row["model"], row["input_tokens"]) == (
+        "guard",
+        "typesafe/jev-1.14",
+        800,
+    )
+    assert row["cost_usd"] == Decimal("0.000034")  # the column keeps micro-dollars
+
+
+@pytest.mark.parametrize(
+    ("reply", "code"),
+    [({"error": "nothing"}, "provider_error"), ({"answers": "yes"}, "provider_error")],
+)
+def test_a_decision_without_answers_is_a_provider_error(
+    app_client: TestClient, fake: FakeOpenRouter, reply: dict, code: str
+) -> None:
+    fake.decision = reply
+    events = run(app_client, guard_request())
+    assert [e["type"] for e in events] == ["status", "error"]
+    assert events[-1]["code"] == code
+    assert db_run("SELECT count(*) AS n FROM usage_events")[0]["n"] == 0
+
+
+def test_a_failed_decision_call_is_an_error_event(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    request = httpx2.Request("POST", "https://openrouter.ai/api/alpha/decisions")
+    fake.decision_error = openai.APIConnectionError(request=request)
+    events = run(app_client, guard_request())
+    assert [e["type"] for e in events] == ["status", "error"]
+    assert (events[-1]["code"], events[-1]["retryable"]) == ("provider_error", True)
+
+
+def test_a_decision_template_without_questions_is_a_bad_request(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    request = guard_request()
+    request["messages"][0]["content"] = [{"type": "text", "text": "Just text, no questions."}]
+    events = run(app_client, request)
+    assert [e["type"] for e in events] == ["status", "error"]
+    assert events[-1]["code"] == "bad_request"
+    assert fake.requests == []

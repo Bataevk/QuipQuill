@@ -34,6 +34,33 @@ USAGE = {
 }
 
 
+DECISION = {
+    "model": "typesafe/jev-1.14-20261014",
+    "answers": {
+        "decision": {
+            "type": "choice",
+            "choice": "PASS_TO_GM",
+            "probabilities": {},
+            "confidence": 0.9,
+        },
+        "warning_type": {
+            "type": "choice",
+            "choice": "GHOST_ITEM",
+            "probabilities": {},
+            "confidence": 0.8,
+        },
+        "threat_level": {
+            "type": "choice",
+            "choice": "MEDIUM",
+            "probabilities": {},
+            "confidence": 0.7,
+        },
+    },
+    "usage": {"input_tokens": 800, "output_tokens": 120, "cost": 0.0000336},
+    "provider": "TypeSafe",
+}
+
+
 def text_stream(*pieces: str) -> list:
     return [chunk(p) for p in pieces] + [chunk("", finish="stop", usage=USAGE)]
 
@@ -132,6 +159,15 @@ class FakeOpenRouter:
         self.embeddings = _Embeddings(self)
         self.key_info: dict[str, Any] = {"data": {"limit": 5, "limit_remaining": 4.9}}
         self.key_error: Exception | None = None
+        # The Decisions API (ADR 70): what `post` answers.
+        self.decision: Any = DECISION
+        self.decision_error: Exception | None = None
+
+    async def post(self, path: str, *, cast_to: Any, body: dict[str, Any]) -> Any:
+        self.requests.append({"path": path, **body})
+        if self.decision_error is not None:
+            raise self.decision_error
+        return self.decision
 
     async def get(self, path: str, *, cast_to: Any) -> Any:
         assert path == "/key"

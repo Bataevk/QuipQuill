@@ -76,6 +76,10 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # Decision models (ADR 70): OpenRouter's Decisions API, outside the chat API's /v1.
+    openrouter_decisions_url: str = "https://openrouter.ai/api/alpha/decisions"
+    # A decision is a short call without streaming: a tighter limit than the chat models'.
+    decision_timeout_seconds: float = 15.0
     # Overrides the providers of every route (JSON list in env), e.g. while one is down;
     # empty = each route's own order (llm/policy.py, ADR 50).
     provider_order: list[str] = []

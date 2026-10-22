@@ -92,7 +92,7 @@ describe('Game', () => {
 
   it('goes from a new save to turns: start, choose, play', async () => {
     expect(await game.phase()).toBe('new');
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'No elves here.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'No elves here.' }) });
     const proposal = (await game.start()) as CharacterProposal;
     expect(proposal.options[0]).toEqual(ADAPTED);
     expect(character.calls[0][1].text).toContain('Race: elf'); // the save's character from app.db
@@ -113,7 +113,7 @@ describe('Game', () => {
   it('recovers after a failure at any step', async () => {
     character.push({ text: 'oops' });
     await expect(game.start()).rejects.toThrow();
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
     expect(await game.recover()).toMatchObject({ round: 1 }); // the proposal
     await expect(game.choose(0)).rejects.toThrow(/no step/); // the master is offline
     expect([await game.phase(), await game.unfinished()]).toEqual(['playing', true]);
@@ -132,7 +132,7 @@ describe('Game', () => {
     await game.close();
     game = await open(); // the app restarted after the failed proposal
     expect([await game.phase(), await game.proposal(), await game.nextStep()]).toEqual(['adapting', undefined, 'start']);
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
     await game.recover();
     expect(await game.nextStep()).toBeUndefined(); // waiting for the player's choice
 
@@ -148,7 +148,7 @@ describe('Game', () => {
   });
 
   it('survives reopening: the same phase and lines', async () => {
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
     await game.start();
     await game.close();
     game = await open();
@@ -157,7 +157,7 @@ describe('Game', () => {
   });
 
   it('knows what each action cost, from the done events of its own generations', async () => {
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
     await game.start();
     master.push({ text: 'It begins.' });
     await game.choose(0);
@@ -184,7 +184,7 @@ describe('Game', () => {
   });
 
   it('streams only its own session, and names speakers', async () => {
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
     await game.start();
     const seen: ServerEvent[] = [];
     const off = game.onStream((event) => seen.push(event));
@@ -249,7 +249,7 @@ describe('Game', () => {
       generator = model;
       await game.close();
       game = await open();
-      character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: 'Ok.' }) });
+      character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'Ok.' }) });
       await game.start();
       master.push({ text: 'It begins.' });
       await game.choose(0);
@@ -328,7 +328,7 @@ describe('Game', () => {
   });
 
   it('folds an overflowing entity chat into its notes after the turn, in the background (ADR 45)', async () => {
-    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [], rationale: '.' }) });
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: '.' }) });
     await game.start();
     master.push({ text: 'It begins.' });
     await game.choose(0);

@@ -1,7 +1,9 @@
 /** Building blocks of the screens, on the design system's tokens (stage D.1, ADR 63). */
-import { useState, type ReactNode } from 'react';
+import { HeaderHeightContext } from 'expo-router/react-navigation';
+import { use, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -37,6 +39,7 @@ export function Screen({
   footer?: ReactNode;
   paper?: boolean;
 }) {
+  const headerHeight = use(HeaderHeightContext) ?? 0;
   const body = (
     <View style={styles.body}>
       {title ? <ThemedText type="title">{title}</ThemedText> : null}
@@ -46,8 +49,12 @@ export function Screen({
   const content = (
     // The Stack header covers the top inset; only the bottom is ours.
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      {scroll ? <ScrollView keyboardShouldPersistTaps="handled">{body}</ScrollView> : body}
-      {footer}
+      {/* Fields stay above the keyboard; `padding` on Android too, where edge-to-edge no longer
+          shrinks the window (stage T.1). */}
+      <KeyboardAvoidingView style={styles.safeArea} behavior="padding" keyboardVerticalOffset={headerHeight}>
+        {scroll ? <ScrollView keyboardShouldPersistTaps="handled">{body}</ScrollView> : body}
+        {footer}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
   return paper ? (

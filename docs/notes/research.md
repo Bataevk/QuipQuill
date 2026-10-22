@@ -89,6 +89,12 @@
 
 Описана в блогах Seele (2026): игра отфильтровывает недопустимые действия, модель выбирает одно, вызов — по событию или таймеру; результат проверяется, при сбое — запасной вариант. Есть второй продукт с тем же названием — Jev от TypeSafe (сентябрь 2026). Независимых бенчмарков нет. Источники: [Seele JEV NPC](https://www.seeles.ai/resources/blogs/jev-npc), [Towards AI](https://pub.towardsai.net/jev-doesnt-write-it-decides-games-today-company-data-with-care-computer-vision-next-21178d277475).
 
+## Модели решений: TypeSafe Jev и Luna Decisions (2026-10-22, этап T.0)
+
+- **TypeSafe Jev 1.14** (`typesafe/jev-1.14`, вышла 2026-10-14): модель решений «System One» — возвращает типизированные ответы с вероятностями, текста не пишет. На OpenRouter — через Decisions API (alpha): `POST /api/alpha/decisions`. Цена — $0.042 за 1M входных токенов, выход бесплатно. Окно 64K на запрос (32K на `state` + вопрос), режим длинного контекста до 262K (медленнее и менее точен). Алиас `typesafe/jev` уезжает на новые версии — закреплять `jev-1.14`. Источники: [OpenRouter: What is Jev](https://openrouter.ai/blog/insights/what-is-jev/), [модель на OpenRouter](https://openrouter.ai/models/typesafe/jev-1.14).
+- **OpenAI GPT-6 Luna Decisions** (`openai/gpt-6-luna-decisions`, 2026-10-06): Decisions API OpenAI (`POST /v1/decisions`), вопросы `predicate` / `choice` / `score`, $0.10 за 1M входных. Провайдер логирует запросы (не для обучения) — для Guard не взята. Источник: [llmreference](https://www.llmreference.com/model/gpt-6-luna-decisions).
+- Замеры Guard на Jev — [spikes T.0](spikes.md#t0-guard-на-модели-решений-luna-decisions-и-typesafe-jev).
+
 ## Стоимость хода (2026-10-16, этап 6.1)
 
 | Факт | Как проверено |

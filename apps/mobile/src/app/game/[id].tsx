@@ -1,27 +1,23 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CardCarousel } from '@/components/card-carousel';
+import { ChatInput } from '@/components/chat-input';
+import { feedRows, type FeedRow } from '@/components/feed-rows';
 import { FoolBells } from '@/components/fool-loader';
 import { Prose } from '@/components/prose';
 import { WaitlistForm } from '@/components/waitlist-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Button, Card, ErrorText, Field } from '@/components/ui';
+import { Button, Card, ErrorText } from '@/components/ui';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import type { CharacterOption } from '@/core/agent/character';
-import { PROPOSAL_CARD } from '@/core/agent/session';
 import { isActorChannel } from '@/core/protocol/channels';
 import { useGame } from '@/hooks/use-game';
 import { useTheme } from '@/hooks/use-theme';
 import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
-
-/** One row of the feed: a transcript line (maybe with the character cards), the pending move, a live bubble. */
-type FeedItem =
-  | { key: string; kind: 'bubble'; speaker: string; name?: string; text: string; streaming?: boolean; cards?: CharacterOption[] }
-  | { key: string; kind: 'cost'; text: string }
-  | { key: string; kind: 'footer' };
 
 /**
  * The game (stage 5.2, restyled in D.7): the master's narration in the story's font (with prose markup, ADR 67),
@@ -30,46 +26,23 @@ type FeedItem =
 export default function GameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const game = useGame(id);
-  const [text, setText] = useState('');
-  const [inputKey, setInputKey] = useState(0); // a new key clears the (uncontrolled) field
-  const list = useRef<FlatList<FeedItem>>(null);
+  const headerHeight = useHeaderHeight();
+  const list = useRef<FlatList<FeedRow>>(null);
   const theme = useTheme();
   const title = useSaveTitle(id);
 
   const adapting = game.phase === 'adapting';
   const canType = game.ready && !game.busy && (game.phase === 'playing' || (adapting && !!game.proposal?.canClarify));
-  const submit = () => {
-    const value = text.trim();
-    if (!value) return;
-    setText('');
-    setInputKey((k) => k + 1);
+  const submit = (value: string) => {
     if (adapting) game.clarify(value);
     else game.send(value);
   };
 
-  const items = useMemo<FeedItem[]>(() => {
-    const lastCard = game.lines.findLastIndex((l) => l.extra.kind === PROPOSAL_CARD);
-    const rows: FeedItem[] = [];
-    game.lines.forEach((line, i) => {
-      rows.push({
-        key: `line-${line.seq}`,
-        kind: 'bubble',
-        speaker: line.speaker,
-        name: line.extra.name as string | undefined,
-        text: line.text,
-        cards: i === lastCard && adapting ? game.proposal?.options : undefined,
-      });
-      game.costs
-        .filter((cost) => cost.afterSeq === line.seq)
-        .forEach((cost, n) => rows.push({ key: `cost-${line.seq}-${n}`, kind: 'cost', text: cost.text }));
-    });
-    if (game.pending) rows.push({ key: 'pending', kind: 'bubble', speaker: 'player', text: game.pending });
-    for (const bubble of game.live) {
-      rows.push({ key: `live-${bubble.requestId}`, kind: 'bubble', speaker: bubble.channel, name: bubble.speaker, text: bubble.text, streaming: true });
-    }
-    rows.push({ key: 'footer', kind: 'footer' });
-    return rows;
-  }, [game.lines, game.pending, game.live, game.proposal, game.costs, adapting]);
+  // Every proposal keeps its cards, choosable until the hero is chosen (stage T.3).
+  const items = useMemo(
+    () => feedRows({ lines: game.lines, costs: game.costs, pending: game.pending, live: game.live }),
+    [game.lines, game.pending, game.live, game.costs],
+  );
 
   const spent = useAllowanceSpent();
   const limit = spent ? 'prototype' : limitOf(game.error);
@@ -105,10 +78,9 @@ export default function GameScreen() {
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{ title }} />
       <SafeAreaView style={styles.column} edges={['bottom']}>
-        <KeyboardAvoidingView
-          style={styles.screen}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+        {/* `padding` on Android too (stage T.1): with edge-to-edge (Android 15+) the system no
+            longer shrinks the window for the keyboard, so the field would stay under it. */}
+        <KeyboardAvoidingView style={styles.screen} behavior="padding" keyboardVerticalOffset={headerHeight}>
           <FlatList
             ref={list}
             data={items}
@@ -126,24 +98,19 @@ export default function GameScreen() {
               ) : (
                 <View>
                   <Bubble speaker={item.speaker} name={item.name} text={item.text} streaming={item.streaming} />
-                  {item.cards ? <Cards options={item.cards} disabled={game.busy} onChoose={game.choose} /> : null}
+                  {item.cards ? <CardCarousel cards={item.cards} disabled={game.busy || !adapting} onChoose={game.choose} /> : null}
                 </View>
               )
             }
           />
           {(game.phase === 'playing' || adapting) && limit !== 'prototype' ? (
             <View style={[styles.inputRow, { borderTopColor: theme.line }]}>
-              <View style={styles.input}>
-                <Field
-                  key={inputKey}
-                  onChangeText={setText}
-                  editable={canType}
-                  placeholder={adapting ? (game.proposal?.canClarify ? 'Ask for changes…' : 'Choose a card') : 'What do you do?'}
-                  onSubmitEditing={submit}
-                  returnKeyType="send"
-                />
-              </View>
-              <Button title="Send" variant="primary" onPress={submit} disabled={!canType || !text.trim()} />
+              {adapting && game.proposal ? <ChangesLeft round={game.proposal.round} maxRounds={game.proposal.maxRounds} /> : null}
+              <ChatInput
+                editable={canType}
+                placeholder={adapting ? (game.proposal?.canClarify ? 'Ask for changes…' : 'Choose a card') : 'What do you do?'}
+                onSend={submit}
+              />
             </View>
           ) : null}
         </KeyboardAvoidingView>
@@ -182,33 +149,19 @@ function Bubble({ speaker, name, text, streaming }: { speaker: string; name?: st
   );
 }
 
-function Cards({
-  options,
-  disabled,
-  onChoose,
-}: {
-  options: CharacterOption[];
-  disabled: boolean;
-  onChoose: (index: number) => void;
-}) {
+/**
+ * The adaptation's limit (stage T.2): three changes in all (four proposals), said plainly, and how
+ * many are left. A proposal saved before T.2 has no `maxRounds`: the old three.
+ */
+function ChangesLeft({ round, maxRounds = 3 }: { round: number; maxRounds?: number }) {
+  const changes = maxRounds - 1;
+  const left = Math.max(0, maxRounds - round);
   return (
-    <View style={styles.cards}>
-      {options.map((option, i) => (
-        <Card key={i}>
-          <ThemedText type="title">{option.name}</ThemedText>
-          <ThemedText type="caption" themeColor="inkMuted">
-            {[option.race, option.age ? `${option.age}` : ''].filter(Boolean).join(', ')}
-          </ThemedText>
-          <Prose text={option.description} />
-          <Button
-            title={i === 0 ? 'Play this character' : 'Play this one instead'}
-            variant={i === 0 ? 'primary' : 'secondary'}
-            disabled={disabled}
-            onPress={() => onChoose(i)}
-          />
-        </Card>
-      ))}
-    </View>
+    <ThemedText type="caption" themeColor="inkMuted">
+      {left > 0
+        ? `You have ${changes} attempts in all to change your character · ${left} left`
+        : 'No changes left: choose one of the characters above.'}
+    </ThemedText>
   );
 }
 
@@ -283,14 +236,10 @@ const styles = StyleSheet.create({
   player: { alignSelf: 'flex-end' },
   other: { alignSelf: 'flex-start' },
   spinner: { alignSelf: 'flex-start', padding: Spacing.two },
-  cards: { gap: Spacing.two, marginTop: Spacing.two },
   inputRow: {
-    alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  input: { flex: 1 },
 });

@@ -36,8 +36,6 @@ export interface GmAgentOptions {
   context?: Omit<ContextOptions, 'model'>;
   toolLimit?: number;
   onGuardError?: GuardOptions['onError'];
-  /** The Guard writes its gaps as drafts (ADR 48); off by default since ADR 54 (it only recommends). */
-  guardDrafts?: boolean;
   /** Background work after a player's turn: generator and entity memory (stage 6.2i). */
   afterTurn?: Omit<AfterTurnOptions, 'world' | 'meta'>;
 }
@@ -50,7 +48,7 @@ export interface GmAgentOptions {
  */
 export function createGmAgent(options: GmAgentOptions) {
   const { model, world, meta, embed, actor } = options;
-  // The Guard's recommendations for the turn: the master's world state and the generator (ADR 54).
+  // What the input check left for the turn: the master's world state and the generator (ADR 54, 70).
   const hints = createGuardHints();
   const guard = options.guardModel
     ? [
@@ -60,7 +58,6 @@ export function createGmAgent(options: GmAgentOptions) {
           worldConstraints: meta.worldConstraints,
           onError: options.onGuardError,
           hints,
-          drafts: options.guardDrafts,
         }),
       ]
     : [];

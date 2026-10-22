@@ -16,6 +16,7 @@ import { ChatStore, GM_CHAT } from './chat-store';
 import { createGmAgent } from './gm-agent';
 import { queueModels } from './models';
 import { inputMessage } from './messages';
+import { addDrafts } from './middleware/guard';
 import { isUnfinished, retryTurn, runTurn } from './run-turn';
 import { conversation, lastToolText } from './testing/demo-scenario';
 import { ScriptedChatModel, type Step } from './testing/scripted-model';
@@ -319,20 +320,13 @@ describe('react_entity and the actor pack (ADR 45)', () => {
 describe('a draft the Guard added can react (ADR 48, drafts off since ADR 54)', () => {
   it('the bartender, just noticed, speaks in this turn and stays', async () => {
     says('npc:bartender', '"What\'ll it be?"');
-    const guardModel = new ScriptedChatModel([
-      {
-        text: JSON.stringify({
-          verdict: 'pass',
-          reason: 'r',
-          reply: '',
-          expected: [{ name: 'bartender', type: 'npc', description: 'A broad man behind the bar.', likelihood: 'certain' }],
-        }),
-      },
-    ]);
+    // a draft made before the master (Before Generator, stage T.8)
+    await addDrafts(world, [{ name: 'bartender', type: 'npc', description: 'A broad man behind the bar.', likelihood: 'certain' }]);
+    const guardModel = new ScriptedChatModel([{ text: JSON.stringify({ decision: { choice: 'ALLOW' }, warning_type: { choice: 'NONE' }, threat_level: { choice: 'LOW' } }) }]);
     master.push(react('bartender', 'A stranger waves you over for an ale.'), { text: 'He reaches for a mug.' });
-    const agent = createGmAgent({ model: master, world, meta, guardModel, guardDrafts: true, actor: { model: actorModel, chats } });
+    const agent = createGmAgent({ model: master, world, meta, guardModel, actor: { model: actorModel, chats } });
     const result = await runTurn({ agent, world, chats, transcript, input: 'I wave the bartender over.' });
-    expect(result.events.map((e) => e.kind)).toEqual(['entity.added', 'entity.reacted', 'draft.confirmed']);
+    expect(result.events.map((e) => e.kind)).toEqual(['entity.reacted', 'draft.confirmed']);
     expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'npc:bartender', 'gm']);
     expect((await world.state.entity('npc:bartender'))?.props.draft).toBeUndefined();
   });

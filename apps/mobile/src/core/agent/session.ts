@@ -13,6 +13,7 @@ import {
   type CharacterProposal,
   CharacterProposalError,
   lastProposal,
+  proposalAt,
   proposeCharacter,
   sheetText,
 } from './character';
@@ -75,22 +76,29 @@ export function clarifyCharacter(deps: SessionDeps, wishes: string): Promise<Cha
 }
 
 /**
- * The player picked a card (0 = adapted, 1–2 = alternatives): `character.adapted`, the
- * adaptation chat is dropped, and the master opens the story.
+ * The player picked a card (0 = adapted, 1–2 = alternatives) of proposal `round` — the latest by
+ * default; an earlier one too, since its cards stay on the screen (stage T.3): `character.adapted`,
+ * the adaptation chat is dropped, and the master opens the story.
  */
 export async function chooseCharacter(
   deps: SessionDeps & { agent: GmAgent },
   index: number,
+  round?: number,
 ): Promise<TurnResult> {
   await exclusive(deps.world, async () => {
-    const pending = await lastProposal(deps.chats);
+    const pending = round === undefined ? await lastProposal(deps.chats) : await proposalAt(deps.chats, round);
     const option = pending?.options[index];
     if (!pending || !option) throw new CharacterProposalError(`There is no character #${index + 1} to choose.`);
     const choice = index === 0 ? 'adapted' : `alternative ${index}`;
     // Refused when already adapted, so a double tap cannot adapt twice.
     const adapted = await deps.world.adaptCharacter({ adapted: option, choice });
     if (!adapted.ok) throw new CharacterProposalError(adapted.error);
-    await deps.transcript.append('player', `${option.name}, ${option.race}`, { kind: CHOICE_CARD, choice });
+    await deps.transcript.append('player', `${option.name}, ${option.race}`, {
+      kind: CHOICE_CARD,
+      choice,
+      round: pending.round,
+      index,
+    });
     await deps.chats.clear(CHARACTER_CHAT);
   });
   return startStory(deps);
@@ -178,6 +186,7 @@ async function propose(deps: SessionDeps, message: string, echo?: string): Promi
     round: proposal.round,
     options: proposal.options,
     canClarify: proposal.canClarify,
+    maxRounds: proposal.maxRounds,
   });
   return proposal;
 }

@@ -89,3 +89,40 @@ def _expand_part(store: PromptStore, part: Any) -> Any:
     text = store.render(str(part.get("name", "")), variables)
     cache = part.get("cache_control")
     return {"type": "text", "text": text, **({"cache_control": cache} if cache else {})}
+
+
+# A question of a decision template (ADR 70): `## name (type): instructions`, then for `choice`
+# the options as `- KEY: what it means`, for `score` the levels as `- what it means` (lowest first).
+_QUESTION = re.compile(r"^## ([a-z][a-z0-9_]*) \((choice|score|noul)\): (.+)$")
+_OPTION = re.compile(r"^- ([A-Z][A-Z0-9_]*): (.+)$")
+_LEVEL = re.compile(r"^- (.+)$")
+
+
+def split_decision(text: str) -> tuple[str, dict[str, dict[str, Any]]]:
+    """A rendered decision template → the text that opens the model's state, and its questions
+    in the Decisions API's form (ADR 70). The questions are prompt text too, so they live in the
+    template, not in the app."""
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if _QUESTION.match(line)]
+    if not starts:
+        raise PromptError("a decision template needs at least one question")
+    questions: dict[str, dict[str, Any]] = {}
+    for n, start in enumerate(starts):
+        name, kind, instructions = _QUESTION.match(lines[start]).groups()  # type: ignore[union-attr]
+        end = starts[n + 1] if n + 1 < len(starts) else len(lines)
+        body = [line for line in lines[start + 1 : end] if line.strip()]
+        question: dict[str, Any] = {"type": kind, "instructions": instructions.strip()}
+        if kind == "choice":
+            options = [_OPTION.match(line) for line in body]
+            if not options or not all(options):
+                raise PromptError(f"choice {name!r}: every line must be '- KEY: meaning'")
+            question["criteria"] = {m.group(1): m.group(2).strip() for m in options if m}
+        elif kind == "score":
+            levels = [_LEVEL.match(line) for line in body]
+            if len(levels) < 2 or not all(levels):
+                raise PromptError(f"score {name!r}: at least two '- level' lines")
+            question["criteria"] = [m.group(1).strip() for m in levels if m]
+        elif body:
+            raise PromptError(f"noul {name!r} takes no options")
+        questions[name] = question
+    return "\n".join(lines[: starts[0]]).strip(), questions

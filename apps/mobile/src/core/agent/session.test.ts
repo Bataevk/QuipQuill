@@ -1,3 +1,4 @@
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Db } from '@/core/storage/db';
@@ -42,6 +43,8 @@ const ALT_2 = option('Ellie Moonwhistle', 'human', 'A colonial botanist with a t
 const proposal = (adapted: object, alternatives: object[], rationale: string) => ({
   text: JSON.stringify({ adapted, alternatives, rationale }),
 });
+/** Two alternatives: a full proposal of three cards (stage T.2). */
+const ALTS = [ALT_1, ALT_2];
 
 let env: TestEnv;
 let db: Db;
@@ -86,6 +89,7 @@ describe('session start: an elf in a world without elves', () => {
       options: [ADAPTED, ALT_1, ALT_2],
       rationale: 'Vellmoor has no elves, but it has islands far stranger than its maps admit.',
       canClarify: true,
+      maxRounds: 4,
     });
     // a chat of its own: the world rules and the player's sheet, not the master's prompt
     const [system, sheet] = characterModel.calls[0];
@@ -100,9 +104,9 @@ describe('session start: an elf in a world without elves', () => {
     expect((await world.scene()).location?.id).toBe(TAVERN);
 
     // the player asks for magic; the next proposal keeps the world's rules
-    characterModel.push(proposal(ALT_1, [ADAPTED], 'No magic here, but a fine illusion goes a long way.'));
+    characterModel.push(proposal(ALT_1, [ADAPTED, ALT_2], 'No magic here, but a fine illusion goes a long way.'));
     const second = await clarifyCharacter(deps, 'Can she keep some magic?');
-    expect(second).toMatchObject({ round: 2, options: [ALT_1, ADAPTED], canClarify: true });
+    expect(second).toMatchObject({ round: 2, options: [ALT_1, ADAPTED, ALT_2], canClarify: true });
     expect(characterModel.calls[1].slice(1).map((m) => m.text)).toEqual([
       sheet.text,
       firstAnswer.text,
@@ -155,24 +159,26 @@ describe('session start: an elf in a world without elves', () => {
       ['player', 'character_choice'],
       ['gm', null],
     ]);
-    expect(lines[0].extra).toMatchObject({ round: 1, options: [ADAPTED, ALT_1, ALT_2], canClarify: true });
+    expect(lines[0].extra).toMatchObject({ round: 1, options: [ADAPTED, ALT_1, ALT_2], canClarify: true, maxRounds: 4 });
     expect(lines[3]).toMatchObject({ text: 'Elaria Moon, human', extra: { choice: 'alternative 1' } });
   });
 });
 
 describe('session start rules', () => {
-  it('allows three proposals; the last one can only be chosen from', async () => {
-    for (let i = 0; i < MAX_PROPOSALS; i++) characterModel.push(proposal(ADAPTED, [], `Round ${i + 1}.`));
+  it('allows three changes (four proposals); the last one can only be chosen from', async () => {
+    expect(MAX_PROPOSALS).toBe(4);
+    for (let i = 0; i < MAX_PROPOSALS; i++) characterModel.push(proposal(ADAPTED, ALTS, `Round ${i + 1}.`));
     await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     await clarifyCharacter(deps, 'Older, please.');
-    const third = await clarifyCharacter(deps, 'Younger after all.');
-    expect(third).toMatchObject({ round: 3, canClarify: false, options: [ADAPTED] });
+    await clarifyCharacter(deps, 'Younger after all.');
+    const last = await clarifyCharacter(deps, 'Taller.');
+    expect(last).toMatchObject({ round: 4, canClarify: false, maxRounds: 4, options: [ADAPTED, ALT_1, ALT_2] });
     await expect(clarifyCharacter(deps, 'One more?')).rejects.toThrow(CharacterProposalError);
     expect(characterModel.remaining).toBe(0);
   });
 
   it('resumes after a restart: the pending proposal comes back without a new call', async () => {
-    characterModel.push(proposal(ADAPTED, [ALT_1], 'Welcome.'));
+    characterModel.push(proposal(ADAPTED, ALTS, 'Welcome.'));
     const first = await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     const again = await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     expect(again).toEqual(first);
@@ -181,7 +187,7 @@ describe('session start rules', () => {
   });
 
   it('keeps nothing from an unreadable proposal, so the step can be retried', async () => {
-    characterModel.push({ text: 'Sure! Here is your elf…' }, proposal(ADAPTED, [], 'Welcome.'));
+    characterModel.push({ text: 'Sure! Here is your elf…' }, proposal(ADAPTED, ALTS, 'Welcome.'));
     await expect(beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF })).rejects.toThrow(
       CharacterProposalError,
     );
@@ -198,8 +204,55 @@ describe('session start rules', () => {
     expect(await world.log.count('character.adapted')).toBe(0);
   });
 
+  it('asks once more when the model offered fewer than three characters, and keeps only the full answer', async () => {
+    const short = proposal(ADAPTED, [], 'Welcome.');
+    const full = proposal(ADAPTED, ALTS, 'Welcome, in three ways.');
+    characterModel.push(short, full);
+    const first = await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    expect(first.options).toEqual([ADAPTED, ALT_1, ALT_2]);
+    expect(first.rationale).toBe('Welcome, in three ways.');
+    // the retry sees the short answer and the reminder
+    expect(characterModel.calls[1].slice(-2).map((m) => m.text)).toEqual([
+      short.text,
+      'You offered 1 character. Offer exactly three: the adapted character and two alternatives. Answer with the whole proposal again.',
+    ]);
+    // the chat keeps the sheet and the full answer only
+    expect((await deps.chats.load(CHARACTER_CHAT)).map((m) => m.text).slice(1)).toEqual([full.text]);
+    expect((await deps.transcript.lines()).map((l) => l.text)).toEqual(['Welcome, in three ways.']);
+  });
+
+  it('gives up after a second short answer: nothing is kept, the step can be retried', async () => {
+    characterModel.push(proposal(ADAPTED, [ALT_1], 'Two.'), proposal(ADAPTED, [], 'One.'), proposal(ADAPTED, ALTS, 'Three.'));
+    await expect(beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF })).rejects.toThrow(/three characters/);
+    expect(await deps.chats.load(CHARACTER_CHAT)).toEqual([]);
+    expect(await deps.transcript.lines()).toEqual([]);
+    expect((await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF })).options).toHaveLength(3);
+  });
+
+  it('resumes a proposal saved before three cards were required, as it is', async () => {
+    // a save from before stage T.2: one card in the chat
+    characterModel.push(proposal(ADAPTED, ALTS, 'unused'));
+    await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    await deps.chats.clear(CHARACTER_CHAT);
+    await deps.chats.append(CHARACTER_CHAT, [new HumanMessage('sheet'), new AIMessage(proposal(ADAPTED, [], 'Old.').text)]);
+    const again = await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    expect(again).toMatchObject({ round: 1, options: [ADAPTED], rationale: 'Old.', canClarify: true });
+  });
+
+  it('a card of an earlier proposal can still be chosen (stage T.3)', async () => {
+    characterModel.push(proposal(ADAPTED, ALTS, 'First.'), proposal(ALT_1, [ADAPTED, ALT_2], 'Second.'));
+    await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
+    await clarifyCharacter(deps, 'Different, please.');
+    await expect(chooseCharacter({ ...deps, agent: agent() }, 0, 3)).rejects.toThrow(/no character #1/);
+    master.push({ text: 'The story begins.' });
+    await chooseCharacter({ ...deps, agent: agent() }, 2, 1);
+    expect((await world.state.player())!.description).toBe(ALT_2.description);
+    const choice = (await deps.transcript.lines()).find((l) => l.extra.kind === 'character_choice');
+    expect(choice?.extra).toMatchObject({ choice: 'alternative 2', round: 1, index: 2 });
+  });
+
   it('a double tap on a card adapts once and opens one scene', async () => {
-    characterModel.push(proposal(ADAPTED, [ALT_1], 'Welcome.'));
+    characterModel.push(proposal(ADAPTED, ALTS, 'Welcome.'));
     await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     master.push({ text: 'The story begins.' }, { text: 'Again?' });
     const both = await Promise.allSettled([
@@ -215,7 +268,7 @@ describe('session start rules', () => {
   });
 
   it("shows the player's wishes once, even when the first try failed", async () => {
-    characterModel.push(proposal(ADAPTED, [], 'Welcome.'), { text: 'garbage' }, proposal(ALT_1, [], 'Taller now.'));
+    characterModel.push(proposal(ADAPTED, ALTS, 'Welcome.'), { text: 'garbage' }, proposal(ALT_1, [ADAPTED, ALT_2], 'Taller now.'));
     await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     await expect(clarifyCharacter(deps, 'Taller, please.')).rejects.toThrow(CharacterProposalError);
     await clarifyCharacter(deps, 'Taller, please.');
@@ -227,7 +280,7 @@ describe('session start rules', () => {
   });
 
   it('can retry the opening scene alone if it failed after the choice', async () => {
-    characterModel.push(proposal(ADAPTED, [], 'Welcome.'));
+    characterModel.push(proposal(ADAPTED, ALTS, 'Welcome.'));
     await beginSession(deps, { storyId: DEMO_STORY_ID, character: ELF });
     await expect(chooseCharacter({ ...deps, agent: agent() }, 0)).rejects.toThrow(/no step 1/); // master offline
     expect(await world.log.count('character.adapted')).toBe(1);

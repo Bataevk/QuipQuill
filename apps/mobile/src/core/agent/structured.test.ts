@@ -4,13 +4,11 @@ import { z } from 'zod';
 import { CHARACTER_RESPONSE_FORMAT, Proposal } from './character';
 import { Notes, NOTE_ENTITY_RESPONSE_FORMAT } from './entity-memory';
 import { Changes, GENERATOR_RESPONSE_FORMAT } from './generator';
-import { GUARD_RESPONSE_FORMAT, Verdict } from './middleware/guard';
 import { parseJsonAnswer, withTimeout } from './structured';
 
 const FORMATS = [
   { name: 'character', format: CHARACTER_RESPONSE_FORMAT, schema: Proposal },
   { name: 'generator', format: GENERATOR_RESPONSE_FORMAT, schema: Changes },
-  { name: 'guard', format: GUARD_RESPONSE_FORMAT, schema: Verdict },
   { name: 'noteEntity', format: NOTE_ENTITY_RESPONSE_FORMAT, schema: Notes },
 ];
 

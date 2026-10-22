@@ -254,9 +254,12 @@ export class Game {
     return this.metered(() => clarifyCharacter({ ...this.sessionDeps, signal }, wishes));
   }
 
-  async choose(index: number, signal?: AbortSignal): Promise<TurnResult> {
+  /** A card of proposal `round` (the latest by default; earlier cards stay choosable, stage T.3). */
+  async choose(index: number, round?: number, signal?: AbortSignal): Promise<TurnResult> {
     await this.settle();
-    return this.metered(() => this.touched(chooseCharacter({ ...this.sessionDeps, agent: this.agent, signal }, index)));
+    return this.metered(() =>
+      this.touched(chooseCharacter({ ...this.sessionDeps, agent: this.agent, signal }, index, round)),
+    );
   }
 
   /**

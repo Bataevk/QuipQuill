@@ -17,13 +17,19 @@ class CallParams:
 PURPOSES: dict[str, CallParams] = {
     "gm": CallParams(effort="medium", max_tokens=2000),
     "npc": CallParams(effort="low", max_tokens=800),
-    # Stage 6.2k (ADR 48): the verdict also lists the place's expected gaps (drafts).
-    "guard": CallParams(effort="low", max_tokens=400),
     "summary": CallParams(effort="low", max_tokens=1500),
     "character": CallParams(effort="low", max_tokens=1500),
     # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.
     # ADR 55: up to ten expected additions a turn, so room for a long answer.
     "generator": CallParams(effort="low", max_tokens=3000),
+}
+
+
+# Purposes answered by a decision model, not a chat model (ADR 70): typed choices with
+# probabilities, no text. Called through OpenRouter's Decisions API; no prompt cache.
+# The input check: TypeSafe Jev (owner, 2026-10-22: it does not log prompts; Luna Decisions does).
+DECISIONS: dict[str, str] = {
+    "guard": "typesafe/jev-1.14",
 }
 
 

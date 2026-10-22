@@ -49,7 +49,7 @@ graph LR
   "purpose": "gm",                 // gm | guard | npc | summary | character | generator — сервер выбирает модель/лимиты
   "messages": [ /* OpenAI-совместимые сообщения */ ],
   "tools": [ /* JSON Schema инструментов */ ],
-  "responseFormat": null,          // JSON Schema для структурного ответа (guard)
+  "responseFormat": null,          // JSON Schema для структурного ответа (character, generator, note_entity)
   "meta": { "speaker": "Innkeeper" }  // для UI: подпись говорящего
 }
 
@@ -92,7 +92,8 @@ graph LR
 - Порядок событий генерации: `status` → `delta`* → `tool_call`* (все вызовы — после текста, каждый целиком) → `done`; либо один `error`.
 - **Промпты — в облаке** ([ADR 57](decisions.md#57-промпты--в-облаке-приложение-шлёт-ссылку-на-шаблон)). В `content` сообщения (массивом частей) клиент вместо текста промпта шлёт `{"type": "prompt", "name": "gm", "vars": {"STORY_STYLE": "…"}, "cache_control": {…}}`; воркер заменяет её на `{"type": "text", "text": <шаблон с подставленными vars>, "cache_control": …}`. Шаблон — `PROMPTS_DIR/<name>.md`, `{{VAR}}` — только заглавные; vars — строки, ровно те, что есть в шаблоне (нет лишних и недостающих), подстановка в один проход. Неизвестный шаблон или неверные vars → `error` `bad_request`, до провайдера не доходит. Оценка размера запроса (~95K токенов) считает ссылку, а не подставленный текст.
 - `messages` (после подстановки промптов), `tools`, `responseFormat` передаются провайдеру как есть (формат OpenAI). Точки кэширования ставит **клиент**: `cache_control: {type: "ephemeral"}` на content-part — в конце системного промпта и на последнем сообщении истории, в том числе у ответа ассистента или результата инструмента (тогда их `content` — массив частей, ADR 46); `ttl: "1h"` — для префиксов, стабильных всю партию (системные промпты, ADR 49). Haiku 5.5 кэширует префиксы от 512 токенов.
-- Модель, `max_tokens` и effort выбирает сервер по `purpose` и тарифу ([llm/policy.py](../../cloud/src/quipquill_cloud/llm/policy.py)): `gm` — effort medium, 2000; `npc` — low, 800; `guard` — low, 200; `summary`/`character` — low, 1500; `generator` (фоновый генератор мира после хода, ADR 42) — low, 1200.
+- Модель, `max_tokens` и effort выбирает сервер по `purpose` и тарифу ([llm/policy.py](../../cloud/src/quipquill_cloud/llm/policy.py)): `gm` — effort medium, 2000; `npc` — low, 800; `summary`/`character` — low, 1500; `generator` (фоновый генератор мира после хода, ADR 42) — low, 3000.
+- **Модели решений** (`DECISIONS` в `policy.py`, [ADR 70](decisions.md#70-guard-на-модели-решений-typesafe-jev-114-без-кэша)): `guard` — `typesafe/jev-1.14` через Decisions API OpenRouter (`POST /api/alpha/decisions`), не chat completions. Системные сообщения запроса — шаблон решения: текст до первого вопроса открывает `state`, вопросы — разделы `## имя (choice|score|noul): инструкция` с пунктами `- КЛЮЧ: значение` (у `score` — `- уровень`, от меньшего к большему); остальные сообщения — продолжение `state`. Точки кэша игнорируются, `responseFormat` не нужен. Стриминга нет: `status → done`, `done.message.content` — JSON ответов модели (`{"decision": {"choice", "probabilities", "confidence"}, …}`), `usage` — только вход и стоимость. Таймаут — `DECISION_TIMEOUT_SECONDS` (15 с).
 - `statusKey` — ключ строки интерфейса (локализация на клиенте), `error.<code>`.
 
 ## Буфер активной генерации и resume

@@ -1,7 +1,7 @@
 /** Pieces of the first launch (stage D.6): a parchment page with a back link and the step dots. */
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PaperBackground } from '@/components/paper';
@@ -31,7 +31,8 @@ export function OnboardingPage({
   return (
     <PaperBackground>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={styles.safe} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* `padding` on Android too: with edge-to-edge the window does not shrink (stage T.1). */}
+        <KeyboardAvoidingView style={styles.safe} behavior="padding">
           <View style={styles.bar}>
             <View style={styles.back}>{back ? <Button title="Back" variant="ghost" onPress={onBack ?? (() => router.back())} /> : null}</View>
             {step !== undefined ? <ProgressDots count={ONBOARDING_STEPS} index={step} /> : null}

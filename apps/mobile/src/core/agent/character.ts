@@ -1,9 +1,10 @@
 /**
  * Character adaptation before the story begins (agent.md#старт-сессии, ADR 37): a chat of its
  * own with its own prompt — not the master's — that fits the player's character sheet to the
- * world rules and offers it as `propose_character`: the adapted character, up to two
- * alternatives and a short rationale. The player picks a card or asks for changes (up to three
- * proposals in all). The chat lives in `model_messages` ('character') only until the choice.
+ * world rules and offers it as `propose_character`: the adapted character, two alternatives and a
+ * short rationale — always three cards (stage T.2). The player picks a card or asks for changes
+ * (three changes, four proposals in all). The chat lives in `model_messages` ('character') only
+ * until the choice.
  */
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AIMessage, HumanMessage, type SystemMessage } from '@langchain/core/messages';
@@ -16,9 +17,16 @@ import { promptMessage, promptPart } from './cloud-prompt';
 import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
 
 export const CHARACTER_CHAT = 'character';
-/** Proposals per adaptation: the third one can only be chosen from (owner, stage 4.4). */
-export const MAX_PROPOSALS = 3;
+/**
+ * Proposals per adaptation: the first and three changes; the last can only be chosen from (owner,
+ * stage 4.4; three changes instead of two — stage T.2).
+ */
+export const MAX_PROPOSALS = 4;
+/** Every proposal has the adapted character and exactly this many alternatives (stage T.2). */
 export const MAX_ALTERNATIVES = 2;
+/** Said to the model when it offered fewer than three characters; it gets one more try. */
+const TOO_FEW = (got: number) =>
+  `You offered ${got} character${got === 1 ? '' : 's'}. Offer exactly three: the adapted character and two alternatives. Answer with the whole proposal again.`;
 
 
 const OPTION_SCHEMA = strictObject({
@@ -60,6 +68,8 @@ export interface CharacterProposal {
   rationale: string;
   /** False on the last round: only a card can be chosen. */
   canClarify: boolean;
+  /** Proposals in all (MAX_PROPOSALS): the player has `maxRounds - round` changes left. */
+  maxRounds: number;
 }
 
 /** The model answered something that is not a proposal (retry the same step). */
@@ -118,16 +128,39 @@ export async function proposeCharacter(
   if (round > MAX_PROPOSALS) throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
   const ask = new HumanMessage(playerMessage);
   const system = characterSystemMessage(deps.meta);
-  const answer = await invokeWithin(deps.model, [system, ...history, ask], { timeoutMs: deps.timeoutMs ?? 60_000, signal });
-  const proposal = parseProposal(answer.text, round);
+  const call = { timeoutMs: deps.timeoutMs ?? 60_000, signal };
+  let answer = await invokeWithin(deps.model, [system, ...history, ask], call);
+  let proposal = parseProposal(answer.text, round);
+  // Three cards, always (stage T.2): one more try with a reminder; the short answer is not kept.
+  if (proposal.options.length < 1 + MAX_ALTERNATIVES) {
+    const short = new AIMessage(answer.text);
+    answer = await invokeWithin(deps.model, [system, ...history, ask, short, new HumanMessage(TOO_FEW(proposal.options.length))], call);
+    proposal = parseProposal(answer.text, round);
+    if (proposal.options.length < 1 + MAX_ALTERNATIVES) {
+      throw new CharacterProposalError('The story could not offer three characters this time. Try again.');
+    }
+  }
   await deps.chats.append(CHARACTER_CHAT, [ask, new AIMessage(answer.text)]);
   return proposal;
 }
 
-/** The latest proposal of an unfinished adaptation (after an app restart), if any. */
+/**
+ * The latest proposal of an unfinished adaptation (after an app restart), if any. A proposal saved
+ * before stage T.2 may have fewer than three cards; it is shown as it is.
+ */
 export async function lastProposal(chats: ChatStore): Promise<CharacterProposal | undefined> {
   const answers = (await chats.load(CHARACTER_CHAT)).filter((m) => AIMessage.isInstance(m));
   return answers.length ? parseProposal(answers.at(-1)!.text, answers.length) : undefined;
+}
+
+/**
+ * Proposal `round` (1-based) of an unfinished adaptation, if there is one: earlier proposals stay
+ * on the screen and can still be chosen (stage T.3).
+ */
+export async function proposalAt(chats: ChatStore, round: number): Promise<CharacterProposal | undefined> {
+  const answers = (await chats.load(CHARACTER_CHAT)).filter((m) => AIMessage.isInstance(m));
+  const answer = answers[round - 1];
+  return answer ? parseProposal(answer.text, round) : undefined;
 }
 
 export function parseProposal(text: string, round: number): CharacterProposal {
@@ -142,5 +175,6 @@ export function parseProposal(text: string, round: number): CharacterProposal {
     options: [data.adapted, ...data.alternatives.slice(0, MAX_ALTERNATIVES)],
     rationale: data.rationale.trim(),
     canClarify: round < MAX_PROPOSALS,
+    maxRounds: MAX_PROPOSALS,
   };
 }

@@ -3,76 +3,117 @@ import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messa
 import { createMiddleware } from 'langchain';
 import { z } from 'zod';
 
-import { DRAFT_TYPES, lowerTypes } from '../../world/model';
+import type { DRAFT_TYPES } from '../../world/model';
 import type { World } from '../../world/world';
 import { promptMessage, promptPart } from '../cloud-prompt';
-import { LIKELIHOODS, SURE_LIKELIHOODS } from '../luck';
-import { actorOf, CACHE, CACHE_LONG, currentTurn, guardReply, messagesOf, sourceOf } from '../messages';
+import { LIKELIHOODS } from '../luck';
+import { actorOf, currentTurn, guardReply, messagesOf, sourceOf } from '../messages';
 import { renderWorldState } from '../prompt';
-import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from '../structured';
+import { invokeWithin, parseJsonAnswer } from '../structured';
 
-/** What the Guard may add before the master: people and fixtures of the place, never items (ADR 48). */
-const EXPECTED_TYPES = lowerTypes(DRAFT_TYPES);
-/** Gaps the Guard adds as drafts: only sure ones, at most this many a turn. */
+/** Gaps added as drafts: only sure ones, at most this many a turn. */
 export const MAX_DRAFTS = 2;
 
+/**
+ * The Guard's three questions (ADR 70), answered by a decision model in the cloud: where the input
+ * goes, how it writes the world, how serious it is. The questions themselves are in the cloud's
+ * template `guard`.
+ */
+export const DECISIONS = ['ALLOW', 'PASS_TO_GM', 'REJECT'] as const;
+export const WARNING_TYPES = ['NONE', 'STORY_HIJACKING', 'NPC_CONTROL', 'GHOST_ITEM', 'OTHER'] as const;
+export const THREAT_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
 
-/** pass; warn — pass with a warning for the master; reject — off the story, the Guard answers (ADR 56). */
-export const VERDICTS = ['pass', 'warn', 'reject'] as const;
-
-/** OpenAI-style `response_format` the cloud passes to the provider as is (protocol.md). */
-export const GUARD_RESPONSE_FORMAT = jsonSchemaFormat(
-  'guard_verdict',
-  strictObject({
-    verdict: { type: 'string', enum: [...VERDICTS] },
-    reason: { type: 'string' },
-    reply: { type: 'string' },
-    expected: {
-      type: 'array',
-      items: strictObject({
-        name: { type: 'string' },
-        type: { type: 'string', enum: [...EXPECTED_TYPES] },
-        description: { type: 'string' },
-        likelihood: { type: 'string', enum: [...LIKELIHOODS] },
-      }),
-    },
-  }),
-);
-
-export const Verdict = z.object({
-  verdict: z.enum(VERDICTS),
-  reason: z.string().default(''),
-  reply: z.string().default(''),
-  expected: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1),
-        type: z.enum(EXPECTED_TYPES),
-        description: z.string().default(''),
-        likelihood: z.enum(LIKELIHOODS),
-      }),
-    )
-    .default([]),
+const choiceOf = <T extends readonly [string, ...string[]]>(values: T) => z.object({ choice: z.enum(values) });
+/** The decision model's answers (`done.message`, JSON): a choice per question, probabilities beside. */
+export const GuardAnswers = z.object({
+  decision: choiceOf(DECISIONS),
+  warning_type: choiceOf(WARNING_TYPES),
+  threat_level: choiceOf(THREAT_LEVELS),
 });
-export type GuardVerdict = z.infer<typeof Verdict>;
-/** A gap the Guard expects in this place: a person at work there or a fixture the world does not show. */
-export type ExpectedGap = GuardVerdict['expected'][number];
+
+export interface GuardDecision {
+  decision: (typeof DECISIONS)[number];
+  warningType: (typeof WARNING_TYPES)[number];
+  threatLevel: (typeof THREAT_LEVELS)[number];
+}
+
+/** Ways of writing the world (ТЗ 4.4): an input that does one of them goes to the master flagged. */
+const WRITES_THE_WORLD: readonly GuardDecision['warningType'][] = ['STORY_HIJACKING', 'NPC_CONTROL', 'GHOST_ITEM'];
 
 /**
- * What the Guard saw in the turn it checked, reset at every input. `expected`: the sure gaps of
- * the place (ADR 54) — the master sees them in the world state and may make one real if the
- * moment needs it; the generator adds what fits after the turn. `warning`: on `warn`, why the
- * input is not allowed (ADR 56) — the master sees it in the world state and decides.
+ * The answers made consistent, on the strict side (owner: the Guard is stricter now): an input
+ * allowed although it writes the world goes to the master flagged; a flagged or rejected input
+ * always names a kind; an allowed one has none.
+ */
+export function guardDecision(answers: z.infer<typeof GuardAnswers>): GuardDecision {
+  let decision = answers.decision.choice;
+  let warningType = answers.warning_type.choice;
+  const threatLevel = answers.threat_level.choice;
+  if (decision === 'ALLOW' && WRITES_THE_WORLD.includes(warningType)) decision = 'PASS_TO_GM';
+  if (decision === 'ALLOW') warningType = 'NONE';
+  else if (warningType === 'NONE') warningType = 'OTHER';
+  return { decision, warningType, threatLevel };
+}
+
+/**
+ * What the master reads in the world state when the input is flagged (`DANGER`, this turn only):
+ * a fixed line per kind, not the model's words — the decision model writes none (ADR 70).
+ */
+export const WARNING_TEXT: Record<Exclude<GuardDecision['warningType'], 'NONE'>, string> = {
+  STORY_HIJACKING:
+    'the player declares what happens instead of attempting it. Narrate only what their character actually tries; the world decides the outcome.',
+  NPC_CONTROL:
+    'the player speaks, decides or acts for someone else. People answer for themselves: ignore what the player put in their mouths and let them react on their own.',
+  GHOST_ITEM:
+    'the player claims something the world state does not show. It is not there: narrate the attempt and that it finds nothing.',
+  OTHER: 'the input breaks the rules of play. Take only what the player character attempts.',
+};
+
+export function warningText({ warningType, threatLevel }: GuardDecision): string {
+  return warningType === 'NONE' ? '' : `${WARNING_TEXT[warningType]} (threat: ${threatLevel.toLowerCase()})`;
+}
+
+/**
+ * The answer to a rejected input until Mini-GM writes one (stage T.6): a short line in the story's
+ * voice. Picked by the input, so a retried turn says the same.
+ */
+export const REJECT_REPLIES = [
+  'The story pauses, unimpressed: that is not something your character can do here. What do they do instead?',
+  'The quill refuses to write that down. Back to the story: what does your character do?',
+  'Somewhere, a narrator raises an eyebrow. That belongs outside this tale; your character is still waiting.',
+];
+
+export function rejectReply(input: string): string {
+  let hash = 0;
+  for (const char of input) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return REJECT_REPLIES[hash % REJECT_REPLIES.length];
+}
+
+/** A gap of the place the input turns to: a person at work there or a fixture the world does not show. */
+export interface ExpectedGap {
+  name: string;
+  /** People and fixtures of the place, never items (ADR 48). */
+  type: Lowercase<(typeof DRAFT_TYPES)[number]>;
+  description: string;
+  likelihood: (typeof LIKELIHOODS)[number];
+}
+
+/**
+ * What the input check left for this turn, reset at every input. `decision`: the Guard's (ADR 70);
+ * `warning`: on a flagged input, the master's DANGER line. `expected`: the place's sure gaps — the
+ * master sees them in the world state, the generator after the turn (ADR 54); the decision model
+ * names none, so they stay empty until Before Generator fills them (stage T.8).
  */
 export interface GuardHints {
   expected: ExpectedGap[];
   warning: string;
+  decision?: GuardDecision;
 }
 
 export const createGuardHints = (): GuardHints => ({ expected: [], warning: '' });
 
 export interface GuardOptions {
-  /** A cheap model (QueueChatModel with purpose 'guard' and GUARD_RESPONSE_FORMAT). */
+  /** The decision model (QueueChatModel with purpose 'guard', ADR 70). */
   model: BaseChatModel;
   world: World;
   /** `meta.world_constraints`: era, peoples, magic and technology. */
@@ -80,27 +121,19 @@ export interface GuardOptions {
   timeoutMs?: number;
   /** Called on a failed check (the input passes anyway). */
   onError?: (error: unknown) => void;
-  /** Where the turn's recommendations go (ADR 54); without it they are dropped. */
+  /** Where the turn's decision and warning go; without it they are dropped. */
   hints?: GuardHints;
-  /**
-   * The Guard writes its gaps into the world as drafts (ADR 48). Off since ADR 54: the Guard only
-   * recommends; the code stays for a later decision.
-   */
-  drafts?: boolean;
 }
 
 /**
- * Guard (beforeAgent, after BugGuard): one cheap call checks the player's input (agent.md). It is
- * only a check (ADR 56): `pass`; `warn` — the input tries to write the world, the master gets it
- * with the Guard's reason as a DANGER warning and decides; `reject` — the input is not about the
- * story at all, the Guard's own reply is the turn's answer and the master is not called (ADR 35). System commands and summaries are not checked. A failed check — network,
- * limit, timeout, malformed answer — lets the input through: the master's tools still enforce
- * the world, and the player should not get stuck on the cheap check (owner, stage 4.2).
- *
- * On `pass` and `warn` the sure gaps it saw (a bartender in a bar the world does not show), at most
- * MAX_DRAFTS, are recommendations (ADR 54): `hints` for the master's world state and the generator.
- * With `drafts` (ADR 48, off) they become drafts in the world instead; after the turn (afterAgent)
- * a draft the turn used stays, the rest are removed.
+ * Guard (beforeAgent, after BugGuard): one decision-model call routes the player's input
+ * (agent.md, ADR 70). `ALLOW` — on to the master; `PASS_TO_GM` — the input writes the world (an
+ * outcome, someone else's words, a thing that is not there): on to the master with a DANGER line
+ * for this turn; `REJECT` — not playing the story (talking to the AI, injections, unrelated work):
+ * a short reply is the turn's answer and the master is not called (ADR 35). System commands and
+ * summaries are not checked. A failed check — network, limit, timeout, malformed answer — lets
+ * the input through as `ALLOW`: the master's tools still enforce the world (ADR 36).
+ * After the turn (afterAgent) a draft the turn used stays, the rest are removed (ADR 48).
  */
 export function guardMiddleware(options: GuardOptions) {
   return createMiddleware({
@@ -111,18 +144,12 @@ export function guardMiddleware(options: GuardOptions) {
         if (options.hints) Object.assign(options.hints, createGuardHints());
         const input = state.messages.at(-1);
         if (!input || sourceOf(input) !== 'player') return undefined;
-        const verdict = await checkInput(options, state.messages, runtime.signal);
-        if (verdict?.verdict !== 'reject' || !verdict.reply.trim()) {
-          const sure = (verdict?.expected ?? []).filter((e) => SURE_LIKELIHOODS.includes(e.likelihood)).slice(0, MAX_DRAFTS);
-          if (options.drafts) await addDrafts(options.world, sure, options.onError);
-          else if (options.hints) options.hints.expected = sure;
-          if (verdict?.verdict === 'warn' && options.hints) {
-            options.hints.warning = verdict.reason.trim() || 'the input claims more than the world allows.';
-          }
-          return undefined;
-        }
+        const decision = await checkPlayerInput(options, state.messages, runtime.signal);
+        if (!decision) return undefined;
+        if (options.hints) Object.assign(options.hints, { decision, warning: warningText(decision) });
+        if (decision.decision !== 'REJECT') return undefined;
         return {
-          messages: [guardReply(verdict.reply.trim(), verdict.reason)],
+          messages: [guardReply(rejectReply(input.text), `${decision.warningType} ${decision.threatLevel}`)],
           jumpTo: 'end' as const,
         };
       },
@@ -134,8 +161,8 @@ export function guardMiddleware(options: GuardOptions) {
   });
 }
 
-/** The Guard's sure gaps as drafts in the current location (a refused one is skipped). */
-async function addDrafts(world: World, sure: ExpectedGap[], onError?: (error: unknown) => void) {
+/** Sure gaps as drafts in the current location (a refused one is skipped); Before Generator (T.8). */
+export async function addDrafts(world: World, sure: ExpectedGap[], onError?: (error: unknown) => void) {
   await world.actingAs('guard', async () => {
     for (const e of sure) {
       const added = await world.setEntity({ name: e.name, type: e.type, description: e.description, draft: true });
@@ -192,37 +219,31 @@ function entryOf(message: BaseMessage): string[] {
   return [actor ? `${actor.name}: ${text}` : `Game Master: ${text}`];
 }
 
-/** The verdict, or undefined when the check failed (then the input passes). */
-async function checkInput(
+/**
+ * The decision on the last message (the player's input), or undefined when the check failed (then
+ * the input passes). Exported for the live check of the Guard (demo.live.test.ts).
+ */
+export async function checkPlayerInput(
   { model, world, worldConstraints, timeoutMs = 15_000, onError }: GuardOptions,
   messages: BaseMessage[],
-  signal: AbortSignal | undefined,
-): Promise<GuardVerdict | undefined> {
+  signal?: AbortSignal,
+): Promise<GuardDecision | undefined> {
   const input = messages.at(-1)!;
   const entries = guardConversation(messages.slice(0, -1));
-  // System (an hour) → each entry its own block, a breakpoint on the last → what changes now.
-  const conversation = entries.length
-    ? [
-        { type: 'text' as const, text: '# Recent conversation (oldest first)\n' },
-        ...entries.map((entry, i) => ({
-          type: 'text' as const,
-          text: `${entry}\n`,
-          ...(i === entries.length - 1 ? { cache_control: CACHE } : {}),
-        })),
-      ]
-    : [];
-  const now = `\n# Current state\n${await renderWorldState(world)}\n\n# Player input\n${input.text}`;
+  // No cache marks: the decision model is not cached (ADR 70).
+  const conversation = entries.length ? [`# Recent conversation (oldest first)\n${entries.join('\n')}`] : [];
+  const now = `# Current state\n${await renderWorldState(world)}\n\n# Player input\n${input.text}`;
   try {
     const answer = await invokeWithin(
       model,
       [
-        // The cloud's template `guard` (ADR 56, 57) with the story's world rules.
-        promptMessage(promptPart('guard', { WORLD_RULES: worldConstraints.trim() || 'none given' }, CACHE_LONG)),
-        new HumanMessage({ content: [...conversation, { type: 'text', text: now }] }),
+        // The cloud's template `guard` (ADR 57, 70): the opening, the world rules and the questions.
+        promptMessage(promptPart('guard', { WORLD_RULES: worldConstraints.trim() || 'none given' })),
+        new HumanMessage([...conversation, now].join('\n\n')),
       ],
       { timeoutMs, signal },
     );
-    return parseJsonAnswer(Verdict, answer.text);
+    return guardDecision(parseJsonAnswer(GuardAnswers, answer.text));
   } catch (error) {
     if (signal?.aborted) throw error; // the turn itself was cancelled
     onError?.(error);

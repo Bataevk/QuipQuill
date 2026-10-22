@@ -35,7 +35,8 @@ export interface GameView {
   sessionCost: string | undefined;
   send(text: string): void;
   clarify(text: string): void;
-  choose(index: number): void;
+  /** A card of proposal `round` (the latest when not given). */
+  choose(index: number, round?: number): void;
   recover(): void;
 }
 
@@ -193,7 +194,7 @@ export function useGame(saveId: string): GameView {
     sessionCost,
     send: (text) => run((g, signal) => g.send(text, signal), text),
     clarify: (text) => run((g, signal) => g.clarify(text, signal), text),
-    choose: (index) => run((g, signal) => g.choose(index, signal)),
+    choose: (index, round) => run((g, signal) => g.choose(index, round, signal)),
     recover: () => run((g, signal) => g.recover(signal)),
   };
 }
