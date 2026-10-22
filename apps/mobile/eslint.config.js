@@ -21,7 +21,7 @@ const coreBoundary = (files, ignores, allowed) => ({
 });
 
 module.exports = defineConfig([
-  globalIgnores(['dist/*']),
+  globalIgnores(['dist/*', 'public/sqlite/sqlite3.*']), // sqlite3.* are copies from node_modules
   expoConfig,
   coreBoundary(['src/core/**/*.{ts,tsx}'], ['src/core/**/*.test.ts'], []),
   // Core tests run in Node and may use the Node adapters (node:sqlite, node:fs).

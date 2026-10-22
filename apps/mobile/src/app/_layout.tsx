@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { BootScreen } from '@/components/boot-screen';
+import { StorageBusy } from '@/components/storage-busy';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
 import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
@@ -30,6 +31,11 @@ const booting = Promise.allSettled([
   new Promise((resolve) => setTimeout(resolve, MIN_BOOT_MS)),
 ]);
 void ensureBundledStory().catch(() => {});
+// Web only (ADR 69): a second tab cannot open the browser's storage; it says so instead.
+const storageBusy = getLibrary().then(
+  () => false,
+  (error: unknown) => error instanceof Error && error.name === 'StorageBusyError',
+);
 
 /**
  * True once the app's data is open: the boot screen fades away. A first launch goes to the
@@ -40,10 +46,10 @@ function useBooted(): boolean {
   useEffect(() => {
     let active = true;
     void booting
-      .then(() => onboarded)
-      .then((done) => {
+      .then(() => Promise.all([onboarded, storageBusy]))
+      .then(([done, busy]) => {
         if (!active) return;
-        if (!done) router.replace('/onboarding');
+        if (!done && !busy) router.replace('/onboarding');
         setBooted(true);
       });
     return () => {
@@ -53,19 +59,34 @@ function useBooted(): boolean {
   return booted;
 }
 
+/** Undefined until known; true in a second browser tab (ADR 69). */
+function useStorageBusy(): boolean | undefined {
+  const [busy, setBusy] = useState<boolean>();
+  useEffect(() => {
+    let active = true;
+    void storageBusy.then((value) => active && setBusy(value));
+    return () => {
+      active = false;
+    };
+  }, []);
+  return busy;
+}
+
 /**
  * No sign-in in the prototype (ADR 66): without tokens the device becomes a guest of the cloud and
  * the socket starts; when the cloud drops the session (`signed-out`), a new guest takes over.
- * Signing in with an invite is in the profile (`/login`).
+ * Signing in with an invite is in the profile (`/login`). Starts once the app's storage is known
+ * to be this tab's (`enabled`).
  */
-function useCloudSession() {
+function useCloudSession(enabled: boolean) {
   useEffect(() => {
+    if (!enabled) return;
     void ensureSignedIn().catch(() => {}); // offline: the next action tries again
     const off = getCloud().socket.onStatus((status) => {
       if (status === 'signed-out') void ensureSignedIn().catch(() => {});
     });
     return off;
-  }, []);
+  }, [enabled]);
 
   // Back from the background: the OS may have killed the socket while the app was suspended,
   // often without a close event (stage 6.2e); reconnect at once and resume (the server replays
@@ -74,6 +95,7 @@ function useCloudSession() {
   // prompts) keeps the socket alive, and a needless reconnect would replay the stream for
   // nothing. "Was in the background" survives an `inactive` on the way back.
   useEffect(() => {
+    if (!enabled) return;
     let away = AppState.currentState === 'background';
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background') away = true;
@@ -85,7 +107,7 @@ function useCloudSession() {
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [enabled]);
 }
 
 /** React Navigation's theme from the design tokens (ADR 63): headers and backgrounds match the screens. */
@@ -104,7 +126,9 @@ function useNavigationTheme(): Theme {
 export default function RootLayout() {
   const theme = useNavigationTheme();
   const booted = useBooted();
-  useCloudSession();
+  const busy = useStorageBusy();
+  // A second browser tab stays off the cloud too: the guest's tokens belong to the first tab.
+  useCloudSession(busy === false);
   return (
     <ThemeProvider value={theme}>
       <Stack
@@ -121,6 +145,7 @@ export default function RootLayout() {
         <Stack.Screen name="heroes/[id]" options={{ title: 'Hero' }} />
         <Stack.Screen name="game/[id]" options={{ title: '' }} />
       </Stack>
+      {busy ? <StorageBusy /> : null}
       <BootScreen ready={booted} />
     </ThemeProvider>
   );

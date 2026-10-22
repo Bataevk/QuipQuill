@@ -7,16 +7,14 @@ import { AuthSession } from '@/core/net/auth';
 import { CloudSocket } from '@/core/net/cloud-socket';
 import { CloudEmbeddings } from '@/core/net/embeddings';
 import { Game } from '@/core/game/game';
-import { ExpoDownloader } from './expo-downloader';
-import { ExpoFileStore } from './expo-files';
-import { OpSqliteDriver } from './op-sqlite-driver';
-import { SecureTokenStore } from './secure-token-store';
+import { getAdapters } from './adapters';
 
 let library: Promise<Library> | undefined;
 
 /** The app-wide library (app.db stays open for the app's lifetime). */
 export function getLibrary(): Promise<Library> {
-  library ??= Library.open(new OpSqliteDriver(), new ExpoFileStore()).catch((error) => {
+  const { driver, files } = getAdapters();
+  library ??= Library.open(driver, files).catch((error) => {
     library = undefined; // let the next call retry
     throw error;
   });
@@ -26,9 +24,15 @@ export function getLibrary(): Promise<Library> {
 /**
  * Cloud base URL: EXPO_PUBLIC_CLOUD_URL (e.g. http://192.168.1.10:8000 for a phone on the LAN).
  * Without it: the iOS simulator reaches the Mac's localhost directly, the Android emulator
- * reaches it as 10.0.2.2.
+ * reaches it as 10.0.2.2. A web build is served by the cloud's own host (ADR 69), so it talks to
+ * the page's origin; the web dev server (Metro) is not the cloud, so dev uses localhost:8000.
  */
-const LOCAL_CLOUD = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+const LOCAL_CLOUD =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:8000'
+    : Platform.OS === 'web' && !__DEV__
+      ? globalThis.location.origin
+      : 'http://localhost:8000';
 export const CLOUD_URL = (process.env.EXPO_PUBLIC_CLOUD_URL ?? LOCAL_CLOUD).replace(/\/+$/, '');
 
 export interface Cloud {
@@ -59,7 +63,7 @@ export function ensureSignedIn(): Promise<void> {
 /** The signed-in session and the one WebSocket (call `socket.start()` once signed in). */
 export function getCloud(): Cloud {
   if (!cloud) {
-    const auth = new AuthSession(CLOUD_URL, new SecureTokenStore());
+    const auth = new AuthSession(CLOUD_URL, getAdapters().tokens);
     const socket = new CloudSocket({ url: `${CLOUD_URL.replace(/^http/, 'ws')}/ws`, auth });
     cloud = { auth, socket };
   }
@@ -75,8 +79,8 @@ export function getCatalog(): Promise<StoryCatalog> {
       new StoryCatalog({
         baseUrl: CLOUD_URL,
         auth: getCloud().auth,
-        downloader: new ExpoDownloader(),
-        files: new ExpoFileStore(),
+        downloader: getAdapters().downloader,
+        files: getAdapters().files,
         importer: library.importer,
         repository: library.repository,
       }),
