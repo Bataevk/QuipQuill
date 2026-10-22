@@ -9,7 +9,7 @@ import { WaitlistForm } from '@/components/waitlist-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Card, ErrorText, Field } from '@/components/ui';
-import { Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import type { CharacterOption } from '@/core/agent/character';
 import { PROPOSAL_CARD } from '@/core/agent/session';
 import { isActorChannel } from '@/core/protocol/channels';
@@ -104,7 +104,7 @@ export default function GameScreen() {
   return (
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{ title }} />
-      <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <SafeAreaView style={styles.column} edges={['bottom']}>
         <KeyboardAvoidingView
           style={styles.screen}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -274,6 +274,8 @@ function useSaveTitle(saveId: string): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  // A reading column on wide screens (the web version, a tablet), as on the other pages.
+  column: { flex: 1, alignSelf: 'center', maxWidth: MaxContentWidth, width: '100%' },
   feed: { gap: Spacing.three, padding: Spacing.three },
   narration: { paddingHorizontal: Spacing.one },
   footer: { gap: Spacing.two },

@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 
@@ -24,6 +25,9 @@ from quipquill_cloud.stories import StoryCatalog
 
 logger = logging.getLogger(__name__)
 
+
+# Expo web's dev server on any local port (stage W.4): allowed only when ENV=dev.
+DEV_ORIGINS = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 
 # Retry pauses while RabbitMQ is not up yet: doubling up to this.
 MQ_RETRY_MAX_SECONDS = 30.0
@@ -136,6 +140,17 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
             response = await call_next(request)
         response.headers["X-Request-ID"] = rid[:64]
         return response
+
+    if settings.cors_origins or settings.env == "dev":
+        # Bearer tokens, no cookies: no credentials. Preflights never reach the routes.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_origin_regex=DEV_ORIGINS if settings.env == "dev" else None,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Request-ID"],
+        )
 
     app.include_router(health.router)
     app.include_router(auth.router)

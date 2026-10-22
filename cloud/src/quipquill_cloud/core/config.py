@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # team's) are not held by it. Unset = no such limit.
     guest_total_cost_limit_usd: Decimal | None = Decimal("0.10")
     max_http_body_bytes: int = 1_000_000
+    # Browser origins of the web version served elsewhere (JSON list in env). The web build is
+    # served by the cloud's own host (ADR 69), so production needs none; in dev every localhost
+    # port is allowed besides (Expo web's dev server is not the cloud).
+    cors_origins: list[str] = []
     # Rough guard (chars / 4) keeping a request under Haiku's 100K-token price step.
     max_request_tokens: int = 95_000
     max_tools: int = 32

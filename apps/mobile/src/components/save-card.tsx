@@ -1,20 +1,13 @@
 import { router } from 'expo-router';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { confirmAction as confirm } from '@/components/confirm';
 import { localTime } from '@/components/format';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { SaveRecord } from '@/core/library/app-db';
 import { getLibrary } from '@/platform/services';
-
-/** Asks before an action that cannot be undone. */
-function confirm(title: string, message: string, action: string, run: () => void) {
-  Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: action, style: 'destructive', onPress: run },
-  ]);
-}
 
 /**
  * One playthrough with its actions (stage 5.3, moved to the story page in D.7): continue,

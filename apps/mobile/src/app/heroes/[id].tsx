@@ -1,7 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 
+import { confirmAction } from '@/components/confirm';
 import { HeroForm, type HeroSheet } from '@/components/hero-form';
 import { ThemedText } from '@/components/themed-text';
 import { Button, ErrorText, Screen, errorText } from '@/components/ui';
@@ -31,18 +31,12 @@ export default function HeroScreen() {
   };
 
   const remove = () =>
-    Alert.alert('Delete this hero?', `${hero?.name ?? 'This hero'} will be deleted for good.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          void getLibrary()
-            .then((library) => library.repository.deleteCharacter(id))
-            .then(() => router.back())
-            .catch((e) => setError(errorText(e))),
-      },
-    ]);
+    confirmAction('Delete this hero?', `${hero?.name ?? 'This hero'} will be deleted for good.`, 'Delete', () =>
+      void getLibrary()
+        .then((library) => library.repository.deleteCharacter(id))
+        .then(() => router.back())
+        .catch((e) => setError(errorText(e))),
+    );
 
   return (
     <Screen>

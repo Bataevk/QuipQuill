@@ -1,17 +1,16 @@
-import { File } from 'expo-file-system';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
+import { SavesNote } from '@/components/saves-note';
+import { StoryImport } from '@/components/story-import';
 import { TermsSheet } from '@/components/terms';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Screen } from '@/components/ui';
 import { WaitlistForm } from '@/components/waitlist-form';
 import { Spacing } from '@/constants/theme';
 import type { Account } from '@/core/net/auth';
-import { StoryFormatError } from '@/core/story/story-meta';
-import { pickedFilePath, removeFile } from '@/platform/expo-files';
-import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
+import { ensureSignedIn, getCloud } from '@/platform/services';
 import { loadThemePreference, setThemePreference, type ThemePreference } from '@/platform/theme-preference';
 
 const THEMES: { value: ThemePreference; label: string }[] = [
@@ -89,6 +88,8 @@ export default function ProfileScreen() {
         )}
       </Card>
 
+      <SavesNote />
+
       <Card>
         <ThemedText type="caption" themeColor="inkMuted" style={styles.eyebrow}>
           THE FULL VERSION
@@ -131,57 +132,6 @@ export default function ProfileScreen() {
 
       {SHOW_IMPORT ? <StoryImport /> : null}
     </Screen>
-  );
-}
-
-/**
- * Import a .qqstory from a file (stage 3.2). In dev builds quipquill://profile?importPath=<absolute
- * path> imports without the system picker (simulator automation; see docs/notes/dev-setup.md).
- */
-function StoryImport() {
-  const [status, setStatus] = useState('');
-
-  const importFrom = useCallback(async (path: string) => {
-    try {
-      setStatus('Importing…');
-      const { story, replaced } = await (await getLibrary()).importer.import(path);
-      setStatus(`${replaced ? 'Updated' : 'Imported'} “${story.title}” (${story.vectorIndex})`);
-    } catch (error) {
-      setStatus(error instanceof StoryFormatError ? error.message : `Import failed: ${String(error)}`);
-    }
-  }, []);
-
-  const pickAndImport = async () => {
-    const picked = await File.pickFileAsync();
-    if (picked.canceled) return;
-    const { path, temporary } = await pickedFilePath(picked.result);
-    try {
-      await importFrom(path);
-    } finally {
-      if (temporary) removeFile(path);
-    }
-  };
-
-  const { importPath } = useLocalSearchParams<{ importPath?: string }>();
-  useEffect(() => {
-    if (!__DEV__ || !importPath) return;
-    // The tab keeps its params: clear it, or every visit to the profile imports again.
-    router.setParams({ importPath: undefined });
-    void Promise.resolve(importPath).then(importFrom);
-  }, [importPath, importFrom]);
-
-  return (
-    <Card>
-      <ThemedText type="caption" themeColor="inkMuted" style={styles.eyebrow}>
-        STORY FILES
-      </ThemedText>
-      <Button title="Import a story file" onPress={() => void pickAndImport()} />
-      {status ? (
-        <ThemedText type="caption" themeColor="inkMuted">
-          {status}
-        </ThemedText>
-      ) : null}
-    </Card>
   );
 }
 

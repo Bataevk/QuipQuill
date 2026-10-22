@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { BootScreen } from '@/components/boot-screen';
+import { HomeLink } from '@/components/home-link';
 import { StorageBusy } from '@/components/storage-busy';
 import { Colors, Fonts } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
@@ -14,6 +15,7 @@ import { ensureSignedIn, getCloud, getLibrary } from '@/platform/services';
 import { ensureBundledStory } from '@/platform/bundled-story';
 import { isOnboarded } from '@/platform/onboarding';
 import { restoreThemePreference } from '@/platform/theme-preference';
+import { loadWebFonts } from '@/platform/web-fonts';
 
 // The native splash stays until the boot screen takes over (stage D.3). The player's theme and
 // the library open behind it; the built-in story imports in the background (the Stories tab
@@ -25,6 +27,7 @@ const MIN_BOOT_MS = 1200;
 const onboarded = isOnboarded().catch(() => true);
 const booting = Promise.allSettled([
   restoreThemePreference(),
+  loadWebFonts(),
   getLibrary(),
   getCloud().auth.isSignedIn(),
   onboarded,
@@ -132,11 +135,13 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <Stack
-        screenOptions={{
+        screenOptions={({ navigation }) => ({
           headerBackTitle: 'Back',
           headerShadowVisible: false,
           headerTitleStyle: { fontFamily: Fonts.display, fontSize: 22 },
-        }}>
+          // Nothing underneath (a link or a reload in the browser): a way home instead of none.
+          headerLeft: navigation.canGoBack() ? undefined : () => <HomeLink />,
+        })}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'foolore' }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="login" options={{ title: 'Sign in' }} />
