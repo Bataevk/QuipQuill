@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 # Expo web's dev server on any local port (stage W.4): allowed only when ENV=dev.
-DEV_ORIGINS = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
+DEV_ORIGINS = r"http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?"
 
 # Retry pauses while RabbitMQ is not up yet: doubling up to this.
 MQ_RETRY_MAX_SECONDS = 30.0

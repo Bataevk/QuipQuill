@@ -23,7 +23,12 @@ def preflight(client: TestClient, origin: str) -> dict[str, str]:
 def test_dev_allows_any_localhost_port() -> None:
     client = TestClient(create_app(Settings(_env_file=None)))
 
-    for origin in ("http://localhost:8081", "http://localhost:8090", "http://127.0.0.1:3000"):
+    for origin in (
+        "http://localhost:8081",
+        "http://localhost:8090",
+        "http://127.0.0.1:3000",
+        "http://[::1]:8090",
+    ):
         headers = preflight(client, origin)
         assert headers.get("access-control-allow-origin") == origin
         assert "authorization" in headers.get("access-control-allow-headers", "").lower()
