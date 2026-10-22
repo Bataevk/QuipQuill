@@ -12,3 +12,5 @@
 | `run-node.ts` | `node spikes/run-node.ts` — проверка агента в Node |
 
 Обходы перенесены в `src/platform/` в этапе 4.1.
+
+Веб (этап W.1): `web/` — SQLite WASM + OPFS и LangChain в браузере, см. [web/README.md](web/README.md).

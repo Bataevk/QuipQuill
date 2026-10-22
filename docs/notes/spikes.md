@@ -2,6 +2,37 @@
 
 Результаты проверок рисков. Каждая запись: что проверяли, на чём (устройство, версии), результат, решение (со ссылкой на пункт в [decisions.md](../architecture/decisions.md)).
 
+## W.1 SQLite WASM + OPFS в Expo web
+**Проведена 2026-10-22.** MacBook Air M5, Expo SDK 57.0.28, `@sqlite.org/sqlite-wasm` **3.53.4-build2** (та же SQLite 3.53.4, что в op-sqlite), VFS `opfs-sahpool`, `reserveMinimumCapacity(32)`. Браузеры: Chrome 152 (built-in browser) и Safari 27.0.1 (macOS). Firefox не проверялся: его нет на Маке, проверка перенесена в W.5 (решение владельца). Код — `apps/mobile/spikes/web/`.
+
+Как устроено: worker — обычный JS-файл в `public/sqlite/`, рядом с `sqlite3.mjs` и `sqlite3.wasm`. Туда их копирует `scripts/copy-sqlite-wasm.mjs`. Страница загружает worker как `new Worker('/sqlite/…', {type: 'module'})`, Metro его не трогает. `npx expo export -p web` копирует `public/` в сборку как есть.
+
+| Проверка | Chrome 152 | Safari 27.0.1 |
+|---|---|---|
+| Init WASM + установка pool | 12 + 18 мс | 31 + 12 мс |
+| Данные после перезагрузки (`runs` 1 → 2) | ✅ | ✅ |
+| BLOB `Float32Array` туда и обратно (`Uint8Array`) | ✅ | ✅ |
+| Откат транзакции после ошибки | ✅ | ✅ |
+| copy / unlink через `exportFile` + `importDb` / `unlink` | ✅ 2 мс | ✅ 1–2 мс |
+| Импорт `brass-vault.qqstory` (1,3 МБ) в pool | 1,6 мс | ≤1 мс |
+| Перебор: загрузка 148 векторов × 1536 / скалярные произведения | 22 / 3,6 мс | 3 / 1 мс |
+| `vec_version()` | нет (перебор, ADR 26) | нет |
+| LangChain `createAgent` (`runAgentSpike`, 6 проверок) | ✅ 12 мс | ✅ 14 мс |
+| `navigator.locks`, `storage.persisted()` | есть, `false` | есть, `false` |
+
+Отдельные наблюдения:
+- **Второй экземпляр pool** (второй worker, то же, что вторая вкладка) падает через 18 мс: `createSyncAccessHandle … another open Access Handle`. Данные после этого целы: в 3.53.4 конфликт блокировки хранилище не стёр.
+- **Safari** после первого запуска показывает в `storage.estimate()` 34,6 МБ — видимо, место под 32 слота pool резервируется заранее. Chrome показывает 1,5 МБ. Квота большая (Safari ~82 ГБ, Chrome ~3,9 ГБ).
+- **Production-экспорт:** JS 4,2 МБ (0,97 МБ gzip), `sqlite3.wasm` 0,87 МБ (0,40 МБ gzip), `sqlite3.mjs` 0,64 МБ (0,18 МБ gzip). Вместе с историей первый визит весит ≈2,9 МБ в gzip. В iOS-бандле sqlite-wasm нет.
+
+Что пришлось поправить, чтобы веб-сборка вообще открылась:
+1. `polyfills.ts` перезаписывал `window.crypto`, а в браузере это свойство только для чтения: `Cannot set property crypto`. → `polyfills.web.ts` без полифилов: в браузере всё нужное уже есть.
+2. Только dev: `Cannot access 'RunTree' before initialization`. У langsmith цикл импортов `run_trees → address → utils/env → index → run_trees`, и React Refresh читает `index.RunTree` до конца загрузки `run_trees`. В production-экспорте ошибки нет. → `polyfills.web.ts` первым делом загружает корень `langsmith`, и цикл замыкается в безопасном порядке.
+3. op-sqlite 18.2.5 сам выбирает свой веб-бэкенд (`exports.browser`), и тот ломает экспорт: Metro не находит `sqlite3-worker1.mjs`. → До W.2 op-sqlite не попадает в веб-бандл, вместо него заглушки `op-sqlite-driver.web.ts` и `expo-files.web.ts` (у `expo-file-system` в браузере падает `Paths.document`).
+4. `web.output`: `"static"` → `"single"`. Модуль `_layout.tsx` при загрузке открывает библиотеку, а при статическом рендере это выполнилось бы в Node.
+
+**Вывод:** риски W.1 сняты, план ADR 69 подтверждён. Веб-бэкенд op-sqlite не подходит (подробности в [research](research.md#браузер-sqlite-wasm-и-op-sqlite-web-2026-10-22-этап-w1)), нужен свой worker.
+
 ## 3.1a op-sqlite + sqlite-vec на устройстве
 **Проведена 2026-10-15.** iPhone 17 simulator, iOS 27.0, Xcode 27.0, Expo SDK 57.0.28 / RN 0.86.3, Hermes, debug-сборка, MacBook Air M5. Код — `apps/mobile/spikes/`.
 

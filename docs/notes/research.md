@@ -74,6 +74,17 @@
 | Redis 8 — AGPLv3 / RSAL / SSPL; Valkey — BSD-3 | — |
 | LiteLLM: бюджеты и лимиты на ключ или пользователя — в open source, SSO и аудит — платные. **24.03.2026 на PyPI были опубликованы вредоносные версии 1.82.7 и 1.82.8**, которые крали ключи | [docs](https://docs.litellm.ai/docs/proxy/users), [NetSPI](https://www.netspi.com/blog/executive-blog/ai-ml-pentesting/litellm-supply-chain-compromise/) |
 
+## Браузер: SQLite WASM и op-sqlite web (2026-10-22, этап W.1)
+
+| Факт | Источник |
+|---|---|
+| `opfs-sahpool` работает только в worker. COOP/COEP ему не нужны (в отличие от VFS `opfs`). Одно соединение на pool: второй экземпляр с тем же каталогом не устанавливается. По умолчанию 6 слотов, журналы тоже занимают слоты. С 3.50 есть `pauseVfs` / `unpauseVfs` для передачи pool между вкладками | [sqlite.org/wasm persistence](https://sqlite.org/wasm/doc/trunk/persistence.md), [форум](https://sqlite.org/forum/info/fe8cdb8431c32455) |
+| При неудачной инициализации pool **по умолчанию стирает своё хранилище**. С 3.54 опция `preserveOnInitFailure` сохраняет данные. Конфликт блокировки (вторая вкладка) в 3.53.4 данные не стёр (проверено) | [persistence](https://sqlite.org/wasm/doc/trunk/persistence.md), spike W.1 |
+| `PoolUtil`: `exportFile(name)` → `Uint8Array`, `importDb(name, bytes)` (заменяет файл, имя с `/`), `unlink(name)`, `getFileNames()`, `reserveMinimumCapacity(n)`. Имена файлов в OPFS не совпадают с именами в pool | там же |
+| `@sqlite.org/sqlite-wasm` 3.53.4-build2 (2026-10-02): `dist/index.mjs` ищет `sqlite3.wasm` рядом с собой (`new URL(…, import.meta.url)`), `dist/node.mjs` работает в Node (тесты W.2). Последняя версия — 3.54.1-build1 (2026-10-19) | npm, код пакета |
+| op-sqlite 18.2.5 сам подключает веб-бэкенд (`exports.browser` → `index.web.js`: свой worker на `opfs-sahpool`, необязательная peer-зависимость `@sqlite.org/sqlite-wasm`). Для ядра он не годится: при ошибке в `transaction()` вместо ROLLBACK бросается «sync API» ошибка, pool не открыт наружу (нет export/import/unlink для `FileStore`), 6 слотов без настройки. Экспорт Metro ломается на `sqlite3-worker1.mjs` из sqlite-wasm | код `node_modules/@op-engineering/op-sqlite/lib/module/*.web.js`, `expo export -p web` |
+| У langsmith 0.10.13 цикл импортов `run_trees → address → utils/env → index`. В dev-бандле Expo web React Refresh из-за него падает на `RunTree`, если первым загружен `langsmith/run_trees`. Production этого не видит | dev-сборка W.1 |
+
 ## JEV (модель решений для NPC)
 
 Описана в блогах Seele (2026): игра отфильтровывает недопустимые действия, модель выбирает одно, вызов — по событию или таймеру; результат проверяется, при сбое — запасной вариант. Есть второй продукт с тем же названием — Jev от TypeSafe (сентябрь 2026). Независимых бенчмарков нет. Источники: [Seele JEV NPC](https://www.seeles.ai/resources/blogs/jev-npc), [Towards AI](https://pub.towardsai.net/jev-doesnt-write-it-decides-games-today-company-data-with-care-computer-vision-next-21178d277475).

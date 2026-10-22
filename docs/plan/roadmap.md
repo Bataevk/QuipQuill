@@ -80,6 +80,12 @@
 | D.6 | Онбординг | ✅ | 11 |
 | D.7 | Основной интерфейс: вкладки, страница истории, игровой экран | ✅ | 11 |
 | D.8 | Прогон на устройстве и документы | — | 11 |
+| **W** | **Веб-версия** | | |
+| W.1 | Проверка: SQLite WASM + OPFS в Expo web | ✅ | 12 |
+| W.2 | Браузерные адаптеры портов | — | 12 |
+| W.3 | Интерфейс в браузере | — | 12 |
+| W.4 | Облако и деплой веба | — | 13 |
+| W.5 | Прогон в браузерах и документы | — | 13 |
 | **7+** | **После прототипа (MVP)** | см. [backlog.md](backlog.md) | |
 
 ### Параллельные дорожки
@@ -596,3 +602,106 @@ graph LR
 ### D.8 Прогон на устройстве и документы
 - **Сделать:** полный сценарий на iOS-симуляторе и Android-эмуляторе против тестового сервера: свежая установка → онбординг → игра → сворачивание и возврат → вторая история другим героем; скриншоты обеих тем; обновить [run-guide](../notes/run-guide.md) и [demo-script](../notes/demo-script.md).
 - **Готово, когда:** демо проходит 3 раза подряд со свежей установки; найденное за рамками — в backlog.
+
+---
+
+## Фаза W. Веб-версия
+
+План владельца и Claude (2026-10-22), решение — [ADR 69](../architecture/decisions.md#69-веб-версия-всё-что-на-телефоне-кроме-импорта-sqlite-wasm-в-opfs) (уточняет ADR 39). Цель фазы — игра по ссылке, с теми же функциями, что на iOS и Android, кроме импорта `.qqstory` из файла. Сохранения хранятся в браузере (SQLite WASM, `opfs-sahpool`). Статика раздаётся с того же VPS и домена, что и облако.
+
+Общие правила для всех этапов W:
+- **`src/core/**` не меняется**, так же как промпты, протокол и схемы сохранений. Браузерные адаптеры портов лежат в `src/platform/web/`. Различия платформ оформляются файлами `.web.ts` / `.web.tsx`, а не условиями по всему коду.
+- Мобильные сборки должны работать как раньше: после каждого этапа проверять `npx tsc --noEmit`, `npx expo lint`, `npm test` и запуск на симуляторе.
+- Порядок: W.1 → W.2 → W.3; W.4 можно делать параллельно с W.3; W.5 — последним.
+
+### W.1 Проверка: SQLite WASM + OPFS в Expo web
+- **Цель:** до основной работы снять риски Metro, wasm и worker.
+- **Читать:** ADR 26, 39, 69; [spikes](../notes/spikes.md); docs Expo v57 по вебу (`apps/mobile/AGENTS.md`).
+- **Сделать:**
+  - Зависимость `npx expo install @sqlite.org/sqlite-wasm`.
+  - Скрипт `scripts/copy-sqlite-wasm.mjs`: копирует `sqlite3.mjs` и `sqlite3.wasm` в `apps/mobile/public/sqlite/`. Запускается перед `web` и `export:web`, в git файлы не идут.
+  - Worker `public/sqlite/db-worker.mjs` на чистом JS, загружается мимо Metro: `new Worker('/sqlite/db-worker.mjs', {type: 'module'})`.
+  - В `app.json` заменить `web.output: "static"` на `"single"` (SPA). Иначе статический рендер в Node выполнит побочные эффекты модуля `_layout.tsx` (`getLibrary()`, `isOnboarded()`).
+  - Проверить в Chrome, Firefox и Safari:
+    - `installOpfsSAHPoolVfs` с запасом слотов (`reserveMinimumCapacity`: app.db, истории, партии, журналы);
+    - `importDb`, `exportFile`, `unlink`;
+    - данные переживают перезагрузку;
+    - LangChain `createAgent` запускается в браузере с тем же шимом `async_hooks` из `metro.config.js`.
+- **Итог:** запись в [spikes](../notes/spikes.md); уточнение ADR 69, если что-то не подтвердится.
+- **Готово, когда:** `npx expo start --web` открывает приложение без ошибок импорта в консоли, а тестовая таблица в OPFS переживает перезагрузку во всех трёх браузерах.
+- **Итог (2026-10-22):** [spike W.1](../notes/spikes.md#w1-sqlite-wasm--opfs-в-expo-web).
+  - Проверено в Chrome 152 и Safari 27.0.1: OPFS, данные после перезагрузки, BLOB, откат, copy/unlink, импорт истории, перебор векторов, LangChain `createAgent`. Firefox перенесён в W.5 (решение владельца).
+  - Веб-бэкенд op-sqlite не подходит, нужен свой worker (ADR 69).
+  - Сделано: `@sqlite.org/sqlite-wasm` 3.53.4-build2, `scripts/copy-sqlite-wasm.mjs`, `npm run web` с копированием, `web.output: "single"`, `polyfills.web.ts`. До W.2 стоят заглушки `op-sqlite-driver.web.ts` и `expo-files.web.ts`: приложение открывается, а библиотека честно сообщает, что хранилище появится в W.2.
+  - `.claude/launch.json` — веб-сервер для built-in browser на :8090.
+  - `tsc`, линтер, 254 теста зелёные; `expo export` для web и iOS собирается.
+
+### W.2 Браузерные адаптеры портов
+- **Цель:** библиотека, истории и партии работают в браузере на том же ядре.
+- **Читать:** ADR 24, 26, 69; `src/core/storage/*`, `src/core/library/{library,save-manager,story-importer,catalog}.ts`, `src/core/net/{auth,download}.ts`, `src/platform/services.ts`.
+- **Сделать** (`src/platform/web/`):
+  - `db-worker.mjs`: RPC через `postMessage`: open, run, all, get, exec, close; export, import, unlink, list, size. Один pool, абсолютные имена файлов, BLOB передаются как `Uint8Array`.
+  - `wasm-sqlite-driver.ts` — `DbDriver`/`Db` поверх RPC:
+    - `transaction()` идёт через BEGIN / COMMIT / ROLLBACK с мьютексом на соединение: внешние запросы ждут, а `tx` идёт мимо очереди, как обещает контракт порта;
+    - `readOnly` игнорируется, как в `op-sqlite-driver.ts`.
+  - `opfs-files.ts` — `FileStore` на тех же вызовах worker:
+    - `copy` = export + import, `move` = copy + unlink;
+    - `ensureDir` ничего не делает: в pool нет каталогов;
+    - `dataDir = "/qq"`; относительные пути библиотеки работают как есть.
+  - `fetch-downloader.ts` — `Downloader` через `fetch`: прогресс по `ReadableStream`, `AbortSignal`, байты записываются в pool.
+  - `local-token-store.ts` — `TokenStore` на `localStorage`.
+  - Выбор адаптеров:
+    - сборку адаптеров вынести из `services.ts` в `platform/adapters.ts` (op-sqlite, expo) и `adapters.web.ts` (браузер);
+    - `CLOUD_URL` в вебе равен `window.location.origin`, если не задан `EXPO_PUBLIC_CLOUD_URL`.
+  - `bundled-story.web.ts`: история скачивается по URL ассета через `fetch`, байты пишутся в pool, дальше `importer.importIfChanged`.
+  - При загрузке страницы:
+    - вызвать `navigator.storage.persist()`;
+    - взять блокировку вкладки через Web Locks (`ifAvailable`); если её держит другая вкладка, показать экран «foolore is open in another tab».
+- **Тесты:** логику worker вынести в чистую функцию над экземпляром sqlite3 и проверить в vitest на Node (sqlite-wasm в памяти): контракт `Db`, откат транзакции, BLOB, copy / move / size в `FileStore`.
+- **Готово, когда:** тесты, `tsc` и линтер зелёные. В браузере открывается библиотека, встроенная история импортируется, создаётся партия, и после перезагрузки всё на месте.
+
+### W.3 Интерфейс в браузере
+- **Цель:** весь путь игрока работает в браузере на десктопе и телефоне.
+- **Читать:** ADR 63, 66, 67; `src/app/_layout.tsx`, `(tabs)/profile.tsx`, `game/[id].tsx`, `heroes/[id].tsx`, `src/components/save-card.tsx`, `src/platform/theme-preference.ts`.
+- **Сделать:**
+  - **Шрифты:** на нативе их встраивает плагин `expo-font`. В вебе загружать через `useFonts` до скрытия экрана загрузки.
+  - **Тема:** `Appearance.setColorScheme` в RN-web не работает. Нужны `theme-preference.web.ts` и подписка в `use-color-scheme.web.ts`.
+  - **Диалоги подтверждения:** `Alert.alert` в RN-web ничего не делает, а на нём держатся удаление героя и партии. Нужен общий помощник `confirm()` с веб-вариантом на `window.confirm`.
+  - **Профиль:**
+    - блок импорта `.qqstory` вынести в `components/story-import.tsx`; `.web.tsx` возвращает `null`;
+    - строка «Saves live in this browser only».
+  - **Игровой экран:**
+    - Enter отправляет, Shift+Enter переносит строку;
+    - `KeyboardAvoidingView` в вебе отключить;
+    - колонка ~680px по центру.
+  - **Фон:** `AppState` в RN-web идёт от `visibilitychange`. Проверить, что возврат во вкладку не повторяет стрим зря.
+  - Экран загрузки вместо нативного сплэша; favicon, `<title>`.
+- **Готово, когда:** в Chrome и Safari, на десктопе и на телефоне, проходит путь: онбординг → каталог → скачать историю → герой → партия → ходы со стримингом → удаление партии → смена темы.
+
+### W.4 Облако и деплой веба
+- **Цель:** игра открывается по ссылке тестового сервера.
+- **Читать:** ADR 40, 51, 65, 66; [deploy](../notes/deploy.md); `deploy/Caddyfile`, `deploy/docker-compose.yml`, `.github/workflows/*`.
+- **Сделать:**
+  - **Облако:**
+    - `CORSMiddleware` с `CORS_ORIGINS` из настроек (для локальной разработки: Expo web на :8081, облако на :8000) и тест на preflight;
+    - проверить ограничение частоты на `POST /auth/guest`: каждый новый браузер или режим инкогнито — новый гость с лимитом (ADR 66). Если ограничения по IP нет, добавить.
+  - **Caddy:**
+    - маршруты облака (`/auth/*`, `/me*`, `/ws`, `/stories*`, `/embeddings`, `/waitlist`, `/health*`) → `cloud:8000`;
+    - всё остальное → `file_server` с `try_files {path} /index.html`;
+    - длинный кэш для `/_expo/static/*`, `index.html` без кэша;
+    - MIME `application/wasm`.
+  - **Сборка:** скрипт `export:web` (копирование wasm + `npx expo export -p web`); том `./web:/srv/web:ro` у caddy в `deploy/docker-compose.yml`.
+  - **CI:**
+    - job на push в `project-131027` при изменениях `apps/mobile/**`: собрать экспорт и скопировать на VPS ключом окружения `production`;
+    - раскладка по каталогам-релизам с symlink на текущий; откат — переключить symlink на прошлый.
+- **Готово, когда:** `https://146-103-120-112.sslip.io/` открывает игру, `/health` по-прежнему отвечает облако, мобильные сборки работают против сервера без изменений, `make cloud-test` и `make cloud-lint` зелёные.
+
+### W.5 Прогон в браузерах и документы
+- **Сделать:**
+  - Сквозной прогон по [demo-script](../notes/demo-script.md) в Chrome (built-in browser) против тестового сервера. Safari на Mac и iPhone проверяет владелец. Firefox — здесь же, впервые: в W.1 его не было на Маке.
+  - Обновить документы:
+    - [run-guide](../notes/run-guide.md): запуск веба локально;
+    - [deploy](../notes/deploy.md): статика и откат;
+    - [demo-script](../notes/demo-script.md): ссылка на веб-версию.
+  - Отложенное — в [backlog](backlog.md): экспорт и импорт партии файлом, несколько вкладок (`pauseVfs` / SharedWorker), сохранения в облаке, PWA.
+- **Готово, когда:** демо в браузере проходит 3 раза подряд с чистого профиля сайта; найденное за рамками записано в backlog.

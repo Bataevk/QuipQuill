@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# SQLite WASM copied from node_modules (scripts/copy-sqlite-wasm.mjs)
+/public/sqlite/sqlite3.*

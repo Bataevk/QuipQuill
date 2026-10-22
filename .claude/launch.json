@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --port 8090"],
+      "port": 8090
+    }
+  ]
+}
