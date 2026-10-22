@@ -435,3 +435,17 @@ def test_a_decision_template_without_questions_is_a_bad_request(
     assert [e["type"] for e in events] == ["status", "error"]
     assert events[-1]["code"] == "bad_request"
     assert fake.requests == []
+
+
+def test_the_items_of_a_request_become_questions(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    """Stage T.7: the sheet's sentences, one `noul` question each."""
+    request = guard_request("# The sheet\nName: Kai. A bard.")
+    request["messages"][0]["content"] = [{"type": "prompt", "name": "guard_sheet", "vars": {}}]
+    request["items"] = ["Name: Kai.", "A bard."]
+    events = run(app_client, request)
+    assert events[-1]["type"] == "done"
+    (body,) = fake.requests
+    assert list(body["questions"]) == ["decision", "reason", "sentence_0", "sentence_1"]
+    assert body["questions"]["sentence_1"]["instructions"].endswith("\nText: A bard.")

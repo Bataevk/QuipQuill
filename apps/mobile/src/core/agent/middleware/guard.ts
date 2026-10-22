@@ -9,6 +9,7 @@ import { promptMessage, promptPart } from '../cloud-prompt';
 import { LIKELIHOODS } from '../luck';
 import { actorOf, currentTurn, guardReply, messagesOf, sourceOf } from '../messages';
 import { renderWorldState } from '../prompt';
+import { miniGmReply, type MiniGmOptions } from '../mini-gm';
 import { invokeWithin, parseJsonAnswer } from '../structured';
 
 /** Gaps added as drafts: only sure ones, at most this many a turn. */
@@ -74,8 +75,8 @@ export function warningText({ warningType, threatLevel }: GuardDecision): string
 }
 
 /**
- * The answer to a rejected input until Mini-GM writes one (stage T.6): a short line in the story's
- * voice. Picked by the input, so a retried turn says the same.
+ * The answer to a rejected input when Mini-GM cannot write one (stage T.6): a short line in the
+ * story's voice. Picked by the input, so a retried turn says the same.
  */
 export const REJECT_REPLIES = [
   'The story pauses, unimpressed: that is not something your character can do here. What do they do instead?',
@@ -108,9 +109,11 @@ export interface GuardHints {
   expected: ExpectedGap[];
   warning: string;
   decision?: GuardDecision;
+  /** Before Generator's word on the player's unsupported claims, for the master (stage T.8). */
+  checks: string[];
 }
 
-export const createGuardHints = (): GuardHints => ({ expected: [], warning: '' });
+export const createGuardHints = (): GuardHints => ({ expected: [], warning: '', checks: [] });
 
 export interface GuardOptions {
   /** The decision model (QueueChatModel with purpose 'guard', ADR 70). */
@@ -123,6 +126,8 @@ export interface GuardOptions {
   onError?: (error: unknown) => void;
   /** Where the turn's decision and warning go; without it they are dropped. */
   hints?: GuardHints;
+  /** Who answers a rejected input (stage T.6); without it, or when it fails, a fixed line. */
+  miniGm?: MiniGmOptions;
 }
 
 /**
@@ -130,7 +135,7 @@ export interface GuardOptions {
  * (agent.md, ADR 70). `ALLOW` — on to the master; `PASS_TO_GM` — the input writes the world (an
  * outcome, someone else's words, a thing that is not there): on to the master with a DANGER line
  * for this turn; `REJECT` — not playing the story (talking to the AI, injections, unrelated work):
- * a short reply is the turn's answer and the master is not called (ADR 35). System commands and
+ * Mini-GM's short line is the turn's answer and the master is not called (ADR 35, stage T.6). System commands and
  * summaries are not checked. A failed check — network, limit, timeout, malformed answer — lets
  * the input through as `ALLOW`: the master's tools still enforce the world (ADR 36).
  * After the turn (afterAgent) a draft the turn used stays, the rest are removed (ADR 48).
@@ -148,8 +153,9 @@ export function guardMiddleware(options: GuardOptions) {
         if (!decision) return undefined;
         if (options.hints) Object.assign(options.hints, { decision, warning: warningText(decision) });
         if (decision.decision !== 'REJECT') return undefined;
+        const reply = await answerRejected(options, input.text, lastNarration(state.messages.slice(0, -1)), runtime.signal);
         return {
-          messages: [guardReply(rejectReply(input.text), `${decision.warningType} ${decision.threatLevel}`)],
+          messages: [guardReply(reply, `${decision.warningType} ${decision.threatLevel}`)],
           jumpTo: 'end' as const,
         };
       },
@@ -159,6 +165,23 @@ export function guardMiddleware(options: GuardOptions) {
       await settleDrafts(options.world, narration, options.onError);
     },
   });
+}
+
+/** Mini-GM's line for a rejected input, or the fixed one when there is none (stage T.6). */
+async function answerRejected(
+  options: GuardOptions,
+  input: string,
+  narration: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!options.miniGm) return rejectReply(input);
+  try {
+    return await miniGmReply(options.miniGm, input, narration, signal);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    options.onError?.(error);
+    return rejectReply(input);
+  }
 }
 
 /** Sure gaps as drafts in the current location (a refused one is skipped); Before Generator (T.8). */
@@ -190,6 +213,12 @@ export async function settleDrafts(world: World, narration: string, onError?: (e
       if (!done.ok) onError?.(new Error(done.error));
     }
   });
+}
+
+/** The master's last words before the input (not an entity's line), for Mini-GM. */
+function lastNarration(history: BaseMessage[]): string {
+  const last = history.findLast((m) => AIMessage.isInstance(m) && !actorOf(m) && m.text.trim());
+  return last?.text ?? '';
 }
 
 /** Conversation entries the Guard reads (ADR 49): at least this many, fewer than twice as many. */

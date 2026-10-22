@@ -22,6 +22,10 @@ PURPOSES: dict[str, CallParams] = {
     # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.
     # ADR 55: up to ten expected additions a turn, so room for a long answer.
     "generator": CallParams(effort="low", max_tokens=3000),
+    # Stage T.6 (ADR 70): a short in-story answer to a rejected input; no tools, no world.
+    "mini_gm": CallParams(effort="low", max_tokens=300),
+    # Stage T.8: before the master — drafts of the place and the player's unsupported claims.
+    "pregen": CallParams(effort="low", max_tokens=800),
 }
 
 

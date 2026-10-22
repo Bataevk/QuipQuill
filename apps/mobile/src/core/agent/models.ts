@@ -4,6 +4,7 @@ import { actorChannel, GM_CHANNEL } from '../protocol/channels';
 import { CHARACTER_RESPONSE_FORMAT } from './character';
 import { NOTE_ENTITY_RESPONSE_FORMAT } from './entity-memory';
 import { GENERATOR_RESPONSE_FORMAT } from './generator';
+import { PREGEN_RESPONSE_FORMAT } from './middleware/before-generator';
 
 /**
  * The models of one playthrough over the cloud queue: one `QueueChatModel` per purpose and UI
@@ -15,6 +16,12 @@ export function queueModels(base: QueueChatModel) {
     model: base.with({ ...plain, channel: GM_CHANNEL, purpose: 'gm' }),
     /** The input check: a decision model in the cloud, answers as JSON (ADR 70). */
     guardModel: base.with({ ...plain, channel: 'guard', purpose: 'guard' }),
+    /** The input check on a sheet: each sentence asked about on its own (stage T.7, ADR 70). */
+    sheetGuardModel: (sentences: string[]) => base.with({ ...plain, channel: 'guard', purpose: 'guard', items: sentences }),
+    /** The answer to a rejected input, streamed as the master's (stage T.6). */
+    miniGmModel: base.with({ ...plain, channel: GM_CHANNEL, purpose: 'mini_gm' }),
+    /** Before the master: drafts of the place, the player's claims (stage T.8). Not a story channel. */
+    pregenModel: base.with({ ...plain, channel: 'system', purpose: 'pregen', responseFormat: PREGEN_RESPONSE_FORMAT }),
     summaryModel: base.with({ ...plain, channel: 'system', purpose: 'summary' }),
     /** Character adaptation before the story (its own chat, ADR 37). */
     characterModel: base.with({

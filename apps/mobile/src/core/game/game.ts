@@ -13,6 +13,7 @@ import { BackgroundWork } from '../agent/background';
 import { type AfterTurnOptions, startAfterTurn, turnToSettle } from '../agent/middleware/after-turn';
 import type { GeneratorResult } from '../agent/generator';
 import { createGmAgent, type GmAgent } from '../agent/gm-agent';
+import type { SheetGuardModel } from '../agent/sheet-check';
 import { queueModels } from '../agent/models';
 import type { Entity } from '../world/model';
 import { isUnfinished, retryTurn, runTurn, type TurnResult } from '../agent/run-turn';
@@ -56,6 +57,12 @@ export interface GameServices {
 export interface GameModels {
   model: BaseChatModel;
   guardModel?: BaseChatModel;
+  /** The Guard on the character sheet and wishes (stage T.7). */
+  sheetGuardModel?: SheetGuardModel;
+  /** The answer to a rejected input (stage T.6). */
+  miniGmModel?: BaseChatModel;
+  /** Before Generator: drafts and claims before the master (stage T.8). */
+  pregenModel?: BaseChatModel;
   summaryModel?: BaseChatModel;
   characterModel: BaseChatModel;
   /** The actor pack: an entity's line on its own channel (react_entity). */
@@ -149,6 +156,8 @@ export class Game {
     this.agent = createGmAgent({
       model: models.model,
       guardModel: models.guardModel,
+      miniGmModel: models.miniGmModel,
+      pregenModel: models.pregenModel,
       summaryModel: models.summaryModel,
       world: init.world,
       meta: init.meta,
@@ -162,6 +171,7 @@ export class Game {
       transcript: this.transcript,
       meta: init.meta,
       characterModel: models.characterModel,
+      sheetGuard: models.sheetGuardModel,
     };
   }
 

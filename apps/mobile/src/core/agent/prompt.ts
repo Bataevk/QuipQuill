@@ -59,7 +59,7 @@ export async function renderWorldState(world: World, hints: Partial<GuardHints> 
     const inside = await world.state.contents(thing.id);
     if (inside.length) nested.set(thing.id, inside);
   }
-  return worldStateText(scene, nested, book.known, hints.expected, hints.warning);
+  return worldStateText(scene, nested, book.known, hints.expected, hints.warning, hints.checks);
 }
 
 /** Pure part of renderWorldState, separated for tests. */
@@ -69,6 +69,7 @@ export function worldStateText(
   names: Map<string, string> = new Map(),
   expected: ExpectedGap[] = [],
   warning = '',
+  checks: string[] = [],
 ): string {
   const { player, location } = scene;
   const sheet = [player.props.race, player.props.sex, player.props.age && `age ${player.props.age}`]
@@ -99,6 +100,8 @@ export function worldStateText(
     'Recent events (oldest first):',
     ...(scene.recent.length ? scene.recent.map((e) => `- ${eventText(e, names)}`) : ['- none']),
     ...(warning ? ['', `DANGER (the input check flagged the player's input): ${warning}`] : []),
+    // Stage T.8: what the world says about the player's claims; the luck behind it stays unspoken.
+    ...(checks.length ? ['', 'The world on what the player claimed:', ...checks.map((c) => `- ${c}`)] : []),
   ];
   return lines.join('\n');
 }

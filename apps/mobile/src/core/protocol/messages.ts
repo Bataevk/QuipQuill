@@ -4,7 +4,7 @@
  */
 export const PROTOCOL_VERSION = 1;
 
-export type Purpose = 'gm' | 'guard' | 'npc' | 'summary' | 'character' | 'generator';
+export type Purpose = 'gm' | 'guard' | 'npc' | 'summary' | 'character' | 'generator' | 'mini_gm' | 'pregen';
 
 // --- OpenAI-format chat payload (passed to the provider as is) --------------------------------
 
@@ -27,7 +27,17 @@ export interface PromptPart {
   cache_control?: TextPart['cache_control'];
 }
 
-export type PromptName = 'gm' | 'actor' | 'guard' | 'generator' | 'character' | 'summary' | 'note_entity';
+export type PromptName =
+  | 'gm'
+  | 'actor'
+  | 'guard'
+  | 'guard_sheet'
+  | 'generator'
+  | 'character'
+  | 'summary'
+  | 'note_entity'
+  | 'mini_gm'
+  | 'pregen';
 
 export type ContentPart = TextPart | PromptPart;
 
@@ -72,6 +82,8 @@ export interface LlmRequest {
   messages: WireMessage[];
   tools?: WireTool[];
   responseFormat?: Record<string, unknown>;
+  /** Decision models only: the texts a `(noul each)` question is asked of (ADR 70). */
+  items?: string[];
   meta?: Record<string, unknown>;
 }
 

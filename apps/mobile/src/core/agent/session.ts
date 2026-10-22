@@ -19,6 +19,7 @@ import {
 } from './character';
 import type { ChatStore } from './chat-store';
 import type { GmAgent } from './gm-agent';
+import { checkSheet, SheetRejectedError, type SheetGuardModel } from './sheet-check';
 import { runTurn, type TurnResult } from './run-turn';
 import type { TranscriptStore } from './transcript';
 import { exclusive } from './turn-lock';
@@ -30,6 +31,10 @@ export interface SessionDeps {
   meta: StoryMeta;
   /** QueueChatModel with purpose 'character' (queueModels().characterModel). */
   characterModel: CharacterDeps['model'];
+  /** The Guard on the sheet and the wishes (stage T.7); without it they are not checked. */
+  sheetGuard?: SheetGuardModel;
+  /** A failed sheet check (the sheet passes anyway, ADR 36). */
+  onGuardError?: (error: unknown) => void;
   signal?: AbortSignal;
 }
 
@@ -47,6 +52,12 @@ export function beginSession(
 ): Promise<CharacterProposal> {
   const { world } = deps;
   return exclusive(world, async () => {
+    if (await isAdapted(world)) throw new CharacterProposalError('The character is already chosen.');
+    const pending = await lastProposal(deps.chats);
+    if (pending) return pending;
+    // The sheet is checked before anything is written (stage T.7): a refused one leaves no trace.
+    const sheet = sheetText(input.character);
+    await screen(deps, sheet);
     if ((await world.log.count('session.started')) === 0) {
       const started = await world.startSession({
         storyId: input.storyId,
@@ -55,11 +66,15 @@ export function beginSession(
       });
       if (!started.ok) throw new Error(started.error);
     }
-    if (await isAdapted(world)) throw new CharacterProposalError('The character is already chosen.');
-    const pending = await lastProposal(deps.chats);
-    if (pending) return pending;
-    return propose(deps, sheetText(input.character));
+    return propose(deps, sheet);
   });
+}
+
+/** The Guard on a sheet or wishes (stage T.7): refused → SheetRejectedError, no change is spent. */
+async function screen(deps: SessionDeps, text: string): Promise<void> {
+  if (!deps.sheetGuard) return;
+  const check = await checkSheet(deps.sheetGuard, text, { signal: deps.signal, onError: deps.onGuardError });
+  if (check && !check.allowed) throw new SheetRejectedError(check);
 }
 
 /** The player's wishes for the character: a new proposal (not on the last round). */
@@ -71,6 +86,7 @@ export function clarifyCharacter(deps: SessionDeps, wishes: string): Promise<Cha
     if (!pending.canClarify) {
       throw new CharacterProposalError('No more changes: choose one of the proposed characters.');
     }
+    await screen(deps, wishes);
     return propose(deps, wishes, wishes);
   });
 }

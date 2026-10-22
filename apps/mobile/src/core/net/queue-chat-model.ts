@@ -26,6 +26,8 @@ export interface QueueChatModelFields {
   meta?: Record<string, unknown>;
   tools?: WireTool[];
   responseFormat?: Record<string, unknown>;
+  /** Decision models only: the texts a `(noul each)` question is asked of (ADR 70). */
+  items?: string[];
 }
 
 /**
@@ -59,7 +61,7 @@ export class QueueChatModel extends BaseChatModel {
     options: this['ParsedCallOptions'] & BaseChatModelCallOptions,
     runManager?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
-    const { socket, sessionId, channel, purpose, model = 'basic', meta, tools, responseFormat } = this.fields;
+    const { socket, sessionId, channel, purpose, model = 'basic', meta, tools, responseFormat, items } = this.fields;
     const request: LlmRequest = {
       v: 1,
       type: 'llm.request',
@@ -71,6 +73,7 @@ export class QueueChatModel extends BaseChatModel {
       messages: toWireMessages(messages),
       ...(tools?.length ? { tools } : {}),
       ...(responseFormat ? { responseFormat } : {}),
+      ...(items ? { items } : {}),
       ...(meta ? { meta } : {}),
     };
     const unsubscribe = socket.onEvent((event) => {

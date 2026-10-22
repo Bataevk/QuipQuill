@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 PROTOCOL_VERSION = 1
 
 Id = Annotated[str, Field(min_length=1, max_length=128)]
-Purpose = Literal["gm", "guard", "npc", "summary", "character", "generator"]
+Purpose = Literal["gm", "guard", "npc", "summary", "character", "generator", "mini_gm", "pregen"]
+# One text a decision template asks the same question of (`## name (noul each)`, ADR 70).
+Item = Annotated[str, Field(max_length=2000)]
 
 
 class _Message(BaseModel):
@@ -32,6 +34,8 @@ class LlmRequest(_Message):
     messages: list[dict[str, Any]] = Field(min_length=1)
     tools: list[dict[str, Any]] | None = None
     response_format: dict[str, Any] | None = Field(default=None, alias="responseFormat")
+    # Decision models only: the texts a `(noul each)` question is asked of, one by one (ADR 70).
+    items: list[Item] | None = Field(default=None, max_length=32)
     meta: dict[str, Any] | None = None
 
     def address(self, user_id: str | None = None) -> "Address":

@@ -46,10 +46,11 @@ graph LR
   "sessionId": "save-uuid",        // id сохранения/партии
   "channel": "gm",                 // gm | npc:<id> | guard | system | generator — куда UI рисует поток
   "model": "basic",                // класс модели (ADR 50): модель и провайдеров выбирает облако; не задан — basic
-  "purpose": "gm",                 // gm | guard | npc | summary | character | generator — сервер выбирает модель/лимиты
+  "purpose": "gm",                 // gm | guard | npc | summary | character | generator | mini_gm | pregen — сервер выбирает модель/лимиты
   "messages": [ /* OpenAI-совместимые сообщения */ ],
   "tools": [ /* JSON Schema инструментов */ ],
-  "responseFormat": null,          // JSON Schema для структурного ответа (character, generator, note_entity)
+  "responseFormat": null,          // JSON Schema для структурного ответа (character, generator, note_entity, pregen)
+  "items": null,                   // только модели решений: тексты для вопроса `(noul each)`, ≤ 32 (ADR 70, 71)
   "meta": { "speaker": "Innkeeper" }  // для UI: подпись говорящего
 }
 

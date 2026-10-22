@@ -14,7 +14,18 @@ from pathlib import Path
 from typing import Any
 
 # Every template the app asks for; /health/prompts reports the missing ones.
-PROMPT_NAMES = ("gm", "actor", "guard", "generator", "character", "summary", "note_entity")
+PROMPT_NAMES = (
+    "gm",
+    "actor",
+    "guard",
+    "guard_sheet",
+    "generator",
+    "character",
+    "summary",
+    "note_entity",
+    "mini_gm",
+    "pregen",
+)
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _VAR = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
@@ -93,12 +104,15 @@ def _expand_part(store: PromptStore, part: Any) -> Any:
 
 # A question of a decision template (ADR 70): `## name (type): instructions`, then for `choice`
 # the options as `- KEY: what it means`, for `score` the levels as `- what it means` (lowest first).
-_QUESTION = re.compile(r"^## ([a-z][a-z0-9_]*) \((choice|score|noul)\): (.+)$")
+# `noul each`: the question is asked of every item of the request in turn (`name_0`, `name_1`…).
+_QUESTION = re.compile(r"^## ([a-z][a-z0-9_]*) \((choice|score|noul|noul each)\): (.+)$")
 _OPTION = re.compile(r"^- ([A-Z][A-Z0-9_]*): (.+)$")
 _LEVEL = re.compile(r"^- (.+)$")
 
 
-def split_decision(text: str) -> tuple[str, dict[str, dict[str, Any]]]:
+def split_decision(
+    text: str, items: list[str] | None = None
+) -> tuple[str, dict[str, dict[str, Any]]]:
     """A rendered decision template → the text that opens the model's state, and its questions
     in the Decisions API's form (ADR 70). The questions are prompt text too, so they live in the
     template, not in the app."""
@@ -124,5 +138,12 @@ def split_decision(text: str) -> tuple[str, dict[str, dict[str, Any]]]:
             question["criteria"] = [m.group(1).strip() for m in levels if m]
         elif body:
             raise PromptError(f"noul {name!r} takes no options")
+        if kind == "noul each":
+            for i, item in enumerate(items or []):
+                questions[f"{name}_{i}"] = {
+                    "type": "noul",
+                    "instructions": f"{question['instructions']}\nText: {item}",
+                }
+            continue
         questions[name] = question
     return "\n".join(lines[: starts[0]]).strip(), questions

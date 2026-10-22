@@ -190,7 +190,9 @@ class OpenRouterHandler:
         messages = self._prompts.expand(request.messages)
         system = "\n\n".join(_text(m) for m in messages if m.get("role") == "system")
         rest = "\n\n".join(_text(m) for m in messages if m.get("role") != "system")
-        opening, questions = split_decision(system)
+        opening, questions = split_decision(system, request.items)
+        if not questions:
+            raise PromptError("the decision has no questions to ask")
         return "\n\n".join(part for part in (opening, rest) if part), questions
 
     def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:

@@ -11,6 +11,7 @@ import type { World } from '../world/world';
 import { afterTurnMiddleware, type AfterTurnOptions } from './middleware/after-turn';
 import { bugGuardMiddleware } from './middleware/bug-guard';
 import { contextMiddleware, type ContextOptions } from './middleware/context';
+import { beforeGeneratorMiddleware } from './middleware/before-generator';
 import { createGuardHints, guardMiddleware, type GuardOptions } from './middleware/guard';
 import { invalidToolCallsMiddleware } from './middleware/invalid-tool-calls';
 import { packsMiddleware } from './middleware/packs';
@@ -31,6 +32,10 @@ export interface GmAgentOptions {
   actor?: ActorDeps;
   /** Cheap model for the Guard (purpose 'guard'); without it player input is not screened. */
   guardModel?: BaseChatModel;
+  /** Mini-GM: the answer to a rejected input (purpose 'mini_gm', stage T.6); else a fixed line. */
+  miniGmModel?: BaseChatModel;
+  /** Before Generator (purpose 'pregen', stage T.8): drafts and claims before the master. */
+  pregenModel?: BaseChatModel;
   /** Cheap model for history summaries (purpose 'summary'); without it old history is dropped. */
   summaryModel?: BaseChatModel;
   context?: Omit<ContextOptions, 'model'>;
@@ -58,6 +63,19 @@ export function createGmAgent(options: GmAgentOptions) {
           worldConstraints: meta.worldConstraints,
           onError: options.onGuardError,
           hints,
+          ...(options.miniGmModel ? { miniGm: { model: options.miniGmModel, storyStyle: meta.style } } : {}),
+        }),
+      ]
+    : [];
+  const beforeGenerator = options.pregenModel
+    ? [
+        beforeGeneratorMiddleware({
+          model: options.pregenModel,
+          world,
+          hints,
+          luck: meta.luck,
+          random: options.random,
+          onError: options.onGuardError,
         }),
       ]
     : [];
@@ -70,6 +88,7 @@ export function createGmAgent(options: GmAgentOptions) {
     middleware: [
       bugGuardMiddleware(),
       ...guard,
+      ...beforeGenerator,
       contextMiddleware({ ...options.context, model: options.summaryModel }),
       toolLimitMiddleware(options.toolLimit),
       invalidToolCallsMiddleware(),
