@@ -68,7 +68,8 @@ jobs:
           # so a visitor never gets half a release. The three newest stay for a rollback.
           scp -q web-build.tar.gz "$HOST:/tmp/web-$RELEASE.tar.gz"
           # shellcheck disable=SC2029 # the release id is meant to expand here, on the runner
-          ssh "$HOST" "set -e; cd /opt/quipquill/web \
+          # The folder may not exist yet: this can run before the cloud's deploy.sh made it.
+          ssh "$HOST" "set -e; install -d -m 755 /opt/quipquill/web/releases && cd /opt/quipquill/web \
             && install -d -m 755 releases/$RELEASE \
             && tar -xzf /tmp/web-$RELEASE.tar.gz -C releases/$RELEASE \
             && rm /tmp/web-$RELEASE.tar.gz \
