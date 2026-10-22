@@ -729,6 +729,16 @@ graph LR
   - CORS: `CORS_ORIGINS` (по умолчанию пусто) и в `ENV=dev` любой порт localhost (`DEV_ORIGINS`). Без cookies, `X-Request-ID` открыт; тесты в `tests/test_cors.py`.
   - Ограничение частоты `POST /auth/guest` по IP уже было (`GUEST_SIGNUP_PER_MINUTE` / `_BURST`, ADR 60), править не пришлось.
   - `make cloud-test`: 99 тестов зелёные.
+- **Деплой (2026-10-22):**
+  - `deploy/Caddyfile`:
+    - пути облака уходят в облако, остальное — статика из `/srv/web/current`;
+    - маршруты приложения получают `index.html`, отсутствующий файл сборки — 404;
+    - хешированные файлы кэшируются навсегда, остальное — `no-cache`;
+    - сжатие со своим списком типов: история `.qqstory` отдаётся как `application/vnd.sqlite3` и сжимается 1,35 МБ → 0,59 МБ.
+  - compose монтирует `./web:/srv/web:ro`. `deploy.sh` создаёт `web/releases` до `compose up` (иначе Docker сделает каталог root'а) и перезагружает конфиг Caddy.
+  - `npm run export:web` собирает в `web-build/`. `.github/workflows/web.yml`: сборка → архив → релиз `releases/<sha>` → переключение `current` через `mv`, хранятся три релиза, smoke test.
+  - Проверено локально: Caddy 2.11.7 в Docker с заглушкой облака, маршруты и заголовки через curl, production-сборка открывается в браузере через Caddy (OPFS и шрифты работают). `caddy fmt`, `actionlint`, `shellcheck` чистые.
+  - Осталось: push в `project-131027` (запустит `cloud.yml` и `web.yml`) и проверка на `https://146-103-120-112.sslip.io/`.
 
 ### W.5 Прогон в браузерах и документы
 - **Сделать:**

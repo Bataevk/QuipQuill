@@ -87,6 +87,8 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The web version's releases (ADR 69); CI switches web/current between them.
+      - ./web:/srv/web:ro
       - caddy-data:/data      # TLS certificates; losing it means re-issuing (rate-limited)
       - caddy-config:/config
     depends_on:

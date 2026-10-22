@@ -15,6 +15,11 @@
 
 - [`.github/workflows/cloud.yml`](../../.github/workflows/cloud.yml) — на каждый push и PR, затрагивающий `cloud/`, `deploy/` или `prompts/`: ruff, pytest (Postgres и RabbitMQ — сервисы job'а). На `project-131027` (или кнопкой **Run workflow**) дальше: сборка образа → GHCR → окружение `production` → копирование `deploy/*` на сервер → `deploy.sh <образ>` → проверка `/health`, `/health/db`, `/health/mq` по HTTPS.
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — builder (ruff, pytest) и мобильное ядро (`tsc`, `expo lint`, vitest).
+- [`.github/workflows/web.yml`](../../.github/workflows/web.yml) — веб-версия (ADR 69). Запускается на push в `project-131027`, если изменились `apps/mobile/` или `stories/*/*.qqstory`, или кнопкой.
+  - Сборка: `npm run export:web` (копирует sqlite-wasm в `public/sqlite/` и делает `expo export -p web`) → архив.
+  - Окружение `production`: архив распаковывается в `/opt/quipquill/web/releases/<sha>`, затем symlink `current` переключается на новый релиз одним `mv`. Хранятся три последних релиза.
+  - Smoke test проверяет `/`, маршрут приложения (`/story/any` отдаёт `index.html`), `sqlite3.wasm` с типом `application/wasm` и `/health`.
+  - Тесты и линтер приложения запускает `ci.yml`.
 - Окружение `production` разрешает деплой только из ветки `project-131027`. В нём секреты `DEPLOY_SSH_KEY` (ключ пользователя `deploy`), `DEPLOY_KNOWN_HOSTS`, **`JWT_SECRET`**, **`OPENROUTER_API_KEY`**, **`INVITE_CODES`** (ADR 65; до переноса — старый `CLOUD_SECRET_ENV`) и переменные `DEPLOY_HOST`, `DEPLOY_DOMAIN`, **`CLOUD_CONFIG_ENV`**.
 - **Настройки облака** (ADR 51, 65): переменная `CLOUD_CONFIG_ENV` — несекретные (`DAILY_COST_LIMIT_USD`, `GUEST_SIGNUP`, `PROVIDER_ORDER`, `LOG_LEVEL`…), **файл целиком** по шаблону [deploy/cloud.config.env.example](../../deploy/cloud.config.env.example). Секреты — **по одному на ключ**: `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES` (только значение, без `KEY=`; шаблон — [deploy/cloud.secret.env.example](../../deploy/cloud.secret.env.example)). Шаг **Env files** пишет `cloud.config.env` целиком, а в `cloud.secret.env` (права 600) заменяет строку каждого заданного секрета; не заданный — остаётся значением сервера. Поменять ключ OpenRouter — значит поменять один секрет, остальные копировать не нужно. Старый секрет `CLOUD_SECRET_ENV`, пока он есть, пишется первым (с предупреждением в запуске) — перенести его ключи в три секрета и удалить. compose читает оба файла, секреты — последними.
 - **Истории — из репозитория** (ADR 61): шаг **Stories** копирует каждый `stories/<id>/<id>.qqstory` в `/opt/quipquill/stories/` (через временный файл и `mv`); compose монтирует папку только для чтения (`STORIES_DIR=/app/stories`), облако пересканирует её при изменении файлов — без перезапуска. Изменение `.qqstory` в репозитории само запускает деплой. Удалённая из репозитория история остаётся на сервере, пока её не удалить руками. Smoke test проверяет `/health/stories`: пустой каталог — деплой красный.
@@ -34,6 +39,7 @@
 | `cloud.secret.env` | `JWT_SECRET`, `OPENROUTER_API_KEY`, `INVITE_CODES` | пишет CI из секрета `CLOUD_SECRET_ENV` |
 | `prompts/<name>.md` | шаблоны промптов (ADR 57) | пишет CI из переменных `PROMPT_<NAME>` |
 | `stories/<id>.qqstory` | каталог историй (ADR 61) | копирует CI из `stories/*/*.qqstory` репозитория |
+| `web/releases/<sha>/`, `web/current` | веб-версия (ADR 69): релизы и symlink на текущий; Caddy отдаёт `web/current` | пишет CI (`web.yml`); каталог создаёт `deploy.sh` |
 | `cloud.env` | до ADR 51: всё вместе | больше не читается; удалить после переноса в GitHub |
 
 Доступ: `ssh -i ~/.ssh/quipquill_vps root@146.103.120.112` (ключ администратора на Mac владельца). Вход по паролю отключён (`/etc/ssh/sshd_config.d/01-quipquill.conf`), открыты только 22, 80, 443 (ufw). Первичная настройка — [deploy/bootstrap.sh](../../deploy/bootstrap.sh) (повторный запуск безопасен).
@@ -65,6 +71,24 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 Сменить промпт: поправить оригинал в `prompts/`, затем `./deploy/push-prompts.sh gm` (без аргументов — все; нужен `gh` с правами администратора репозитория) и **Run workflow** у `cloud`. Можно и сразу в GitHub: Settings → Environments → production → переменная `PROMPT_GM`, затем **Run workflow** — но тогда оригинал в репозитории отстанет. Проверка: `curl https://146-103-120-112.sslip.io/health/prompts`.
 
 Провайдер лежит: временно задать порядок для всех маршрутов — `PROVIDER_ORDER=["amazon-bedrock"]` в `CLOUD_CONFIG_ENV` (ADR 50; без переменной — порядок маршрута: Vertex global → Bedrock, ADR 51). Какой провайдер обслужил вызов и задержка — в логе `cloud`: строки `llm … provider= ttft= total=`.
+
+## Веб-версия
+
+Тот же домен, что у облака (ADR 69). [deploy/Caddyfile](../../deploy/Caddyfile) отправляет в облако его пути: `/auth/*`, `/me*`, `/ws`, `/stories*`, `/embeddings`, `/waitlist`, `/health*`. Остальное — статика из `web/current`:
+- маршруты приложения (`/story/<id>`, `/game/<id>`…) получают `index.html`;
+- отсутствующий файл сборки (`/_expo/*`, `/assets/*`, `/sqlite/*`) — 404;
+- хешированные `/_expo/static/*` и `/assets/*` кэшируются навсегда, остальное — `no-cache`;
+- сжатие zstd/gzip, включая историю `.qqstory` (1,3 → 0,6 МБ).
+
+`deploy.sh` после `compose up` перезагружает конфиг Caddy: правка `Caddyfile` контейнер не пересоздаёт.
+
+Откат на прошлый релиз (на сервере):
+
+```bash
+cd /opt/quipquill/web && ls -1t releases && ln -sfn releases/<sha> .current.tmp && mv -T .current.tmp current
+```
+
+Сборку можно проверить локально: `npm run export:web` в `apps/mobile`, затем Caddy в Docker с `DOMAIN=:80`, папкой `web/current` → `web-build` и заглушкой на `cloud:8000` (так проверялся этап W.4).
 
 ## Приложение против сервера
 

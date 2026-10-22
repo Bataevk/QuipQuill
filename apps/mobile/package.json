@@ -50,6 +50,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "node scripts/copy-sqlite-wasm.mjs && expo start --web",
+    "export:web": "node scripts/copy-sqlite-wasm.mjs && expo export -p web --output-dir web-build",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

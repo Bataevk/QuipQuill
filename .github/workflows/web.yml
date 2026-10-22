@@ -1,0 +1,84 @@
+# The web version (ADR 69): on project-131027 (or by hand) build the static export and put it on
+# the VPS next to the cloud, which Caddy serves (deploy/Caddyfile). Tests and lint of the app run
+# in ci.yml. Server layout and rollback: docs/notes/deploy.md.
+name: web
+
+on:
+  push:
+    branches: [project-131027]
+    paths: ["apps/mobile/**", "stories/*/*.qqstory", ".github/workflows/web.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: false # never interrupt a half-done deploy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - run: npm run export:web
+      - run: tar -czf ../../web-build.tar.gz -C web-build .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-build
+          path: web-build.tar.gz
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/project-131027'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://${{ vars.DEPLOY_DOMAIN }}
+    permissions:
+      contents: read
+    env:
+      HOST: deploy@${{ vars.DEPLOY_HOST }}
+      RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-build
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Release
+        run: |
+          # Unpacked beside the live one, then `current` switches in one step (ln + mv is atomic),
+          # so a visitor never gets half a release. The three newest stay for a rollback.
+          scp -q web-build.tar.gz "$HOST:/tmp/web-$RELEASE.tar.gz"
+          # shellcheck disable=SC2029 # the release id is meant to expand here, on the runner
+          ssh "$HOST" "set -e; cd /opt/quipquill/web \
+            && install -d -m 755 releases/$RELEASE \
+            && tar -xzf /tmp/web-$RELEASE.tar.gz -C releases/$RELEASE \
+            && rm /tmp/web-$RELEASE.tar.gz \
+            && ln -sfn releases/$RELEASE .current.tmp && mv -T .current.tmp current \
+            && ls -1t releases | tail -n +4 | sed 's|^|releases/|' | xargs -r rm -rf"
+      - name: Smoke test
+        run: |
+          base="https://${{ vars.DEPLOY_DOMAIN }}"
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/" | grep -q '<title>foolore</title>'
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/story/any" | grep -q '<div id="root">'
+          type=$(curl -fsS -o /dev/null -w '%{content_type}' "$base/sqlite/sqlite3.wasm")
+          [ "$type" = "application/wasm" ] || { echo "sqlite3.wasm served as $type"; exit 1; }
+          curl -fsS "$base/health"; echo
