@@ -1,0 +1,75 @@
+# Manual fixes for the extracted graph of Re:Zero (volume 1).
+# Tied to the committed graph.json; re-extraction will rename entities and `curate` lists stale rules.
+# Apply (from builder/):
+#   uv run builder curate ../stories/rezero/graph.json ../stories/rezero/curation.toml -o ../stories/rezero/graph.curated.json
+
+# --- Playable map: Main road → alley → Slums → Felt's shack / loot cellar -----------------------
+[merge]
+"Main road" = ["main street", "street", "Street Near the Main Road", "the road", "crowded shopping district"]
+"fruit stand" = ["fruit shop", "fruit store", "shop owner's store", "stall"]
+"alley" = ["Alley off the main road", "Alley Entrance", "narrow alley", "dead end", "Back Alley", "empty alley", "alleyways", "maze of alleyways", "winding alleys"]
+"Slums" = ["Slums Entrance", "slum area", "Deepest Part of the Slums"]
+"Emilia" = ["Satella", "Not-Satella", "Lady Emilia", "silver-haired girl", "silver-haired voice", "silver-haired half-elf"]
+"Emilia's badge" = ["Satella's badge", "Satella's stolen badge", "badge", "stolen badge", "badge with embedded jewel", "badge with a jewel", "jeweled badge", "dragon badge", "dragon-adorned badge", "Felt's badge"]
+"Felt's shack" = ["Felt's living place", "Felt's place", "dilapidated shack"]
+"loot cellar" = ["cellar", "building interior", "cellar entrance", "entryway", "The Fight Room", "bar counter", "creaking door"]
+
+# --- Noise: world-level places, scenery, backstory ----------------------------------------------
+[drop]
+entities = [
+    "Carpet of Blood", "Earth", "Japan", "fantasy world", "convenience store", "end wall",
+    "roof of a surrounding building", "That Wall", "Rooftops", "Three Streets Down", "the ground",
+    "girl's silver hair", "capital", "Town", "holy ground", "Lugunica", "Zipang", "Capital City",
+    "King's Castle", "buildings across the street", "nearest wall", "Lugunica's capital city",
+    "street corner", "Shop", "market somewhere else", "tall defensive wall", "city", "castle",
+    "red carpet of fresh blood", "wall", "table", "floor", "earthen floor", "Another World", "mines",
+    "store", "nearby wall", "Lugunica Capital", "Grand Cascade", "guard station", "wall holes",
+    "the road over there", "puddles", "darkness", "entrance", "exit", "white smoke", "frozen ground",
+    "northern countries", "battlefield", "open space in front of the building", "collapsing building",
+    "roof", "ruins", "Emilia's residence", "Dragonfriend Kingdom of Lugunica", "Moon",
+    "Nobleman's mansion", "Bookstores", "Building",
+    # the player is Subaru (a hero in meta.toml), not an NPC
+    "Subaru", "Subaru Natsuki", "Natsuki Subaru",
+    # deaths from earlier loops: backstory the player has not lived
+    "Satella's fight with Elsa", "Satella's death", "Elsa and Satella fight",
+]
+
+[[add_relation]]
+source = "Main road"
+target = "alley"
+type = "LEADS_TO"
+description = "A narrow alley branches off the busy main road."
+
+[[add_relation]]
+source = "alley"
+target = "Slums"
+type = "LEADS_TO"
+description = "The alleys wind deeper into the slums."
+
+[[add_relation]]
+source = "Slums"
+target = "loot cellar"
+type = "LEADS_TO"
+description = "Deep in the slums stands the loot cellar."
+
+# Emilia gave Subaru the false name "Satella"; the extractor split her into several people.
+[describe]
+"Emilia" = """Emilia, a silver-haired half-elf girl of about seventeen or eighteen with violet, amethyst-colored eyes and striking beauty. She wears a white robe embroidered with a hawk. Her voice is like silver bells; her small hand is warm.
+
+Personality:
+- Kind and earnest, but hides it behind a cool, stern manner and insists she helps people only for her own sake.
+- Wary of strangers; serious, a little naive about the city's tricks.
+
+Wants:
+- To recover her stolen badge, a dragon emblem with a red jewel, taken by the thief Felt.
+
+Knows:
+- Spirit magic and ice magic; her contracted spirit is Puck, a small gray cat spirit who can appear from her hair.
+- The badge was stolen on the main road and is likely being sold in the slums.
+
+Secret:
+- At first she gives her name as "Satella" (the name of the feared Witch of Envy) to push people away. Her true name is Emilia.
+- The badge is no ordinary trinket: it matters to her standing in the kingdom.
+
+Speech:
+- Polite, slightly formal, sometimes scolding; softens when someone is honest with her."""

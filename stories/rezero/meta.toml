@@ -1,0 +1,29 @@
+# Story identity and authored texts (ADR 24). `builder export --meta` reads this file;
+# `builder meta --meta` writes drafts and edits here. Keep story_id stable: saves use it.
+
+story_id = "79df9485-1efb-4294-8603-5f809967e770"
+title = "Re:Zero — Starting Life in Another World"
+language = "en"
+world_summary = """
+Lugunica is a fantasy kingdom of magic, spirits and half-human peoples. In its capital, a boy from modern Japan, Subaru Natsuki, has just been pulled into this world with no money, no magic and no idea why. On the main road he meets a silver-haired half-elf who calls herself Satella; her true name is Emilia. A dragon-adorned badge with a red jewel has been stolen from her by Felt, a quick slum thief, who plans to sell it at Old Man Rom's loot cellar deep in the slums. Elsa, a smiling assassin, wants the badge too, and anyone who holds it. The player helps Emilia get the badge back before it is sold and before the night ends in blood. Failure means death, and death here may not be the end."""
+world_constraints = """
+- Era and technology: a pre-industrial fantasy setting with carts, oxcarts, and lizard-drawn carriages on paved main roads; no modern technology beyond Subaru's own items.
+- Currency: gold, silver, and copper coins; 'blessed gold coins' are rarer and more valuable. Subaru's Japanese cash and coins are not usable here.
+- Magic: spirit magic and ice magic exist; spirit mages communicate with lesser spirits. Metia are magic items that store slices of time and are rare, mostly given as gifts. Magic is powerful and dangerous, not casually available to ordinary people.
+- Written language: local writing and road signs are illegible to Subaru, so he cannot read them.
+- Peoples: humans and half-humans (beast-ears, cat-ears, lizardman-like features) are common and ignored by most people. Half-elves exist. Giants and spirit cats also exist.
+- Authority: guards operate like a police force. Slums are poor, often lawless, and handle stolen goods.
+- Newly created player characters must fit a fantasy world where Subaru's modern items (phone, sneakers, tracksuit) are unusual and attract stares; they should not assume knowledge of the local language, customs, or legends.
+- Creatures such as dragons and great white whales are referenced as real in-world possibilities but are not established as present."""
+style = "Dark fantasy with a grounded, gritty street-level feel and sudden moments of brutal violence. Narration should be close and personal, with Subaru's anxious, self-deprecating internal voice, quick dialogue, and tension that builds through small, consequential choices. Lean into dread and the fear of death, letting danger feel immediate and real."
+
+tagline = "A stolen badge, a silver-haired girl, and a death that won't stay final."
+
+[[heroes]]
+key = "subaru"
+name = "Subaru Natsuki"
+sex = "male"
+age = 17
+race = "human"
+blurb = "Shut-in summoned from modern Japan"
+description = "A seventeen-year-old high school truant from Japan, pulled into Lugunica outside a convenience store. Short black hair, sharp eyes, a cheap gray tracksuit and worn sneakers. Talkative, theatrical, quick with jokes and slow to admit fear; he works out but has never really fought. Carries a cell phone, a bag of instant noodles and a pack of corn chips from the convenience store."
