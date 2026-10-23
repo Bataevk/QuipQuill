@@ -1,20 +1,38 @@
 """What the server sends to the model. The client names a route ("basic") and a purpose; the
 server chooses model, providers, effort and max_tokens."""
 
+import math
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Literal
 
 HAIKU = "anthropic/claude-haiku-5.5"
 
 
+Effort = Literal["minimal", "low", "medium", "high"]
+
+
 @dataclass(frozen=True)
 class CallParams:
-    effort: str
+    effort: Effort
+    # Tokens for the answer itself; the call adds room for reasoning (`call_max_tokens`).
     max_tokens: int
 
 
+# Share of max_tokens OpenRouter gives to reasoning at each effort (its Anthropic mapping);
+# what is left is the answer (ADR 75).
+REASONING_SHARE: dict[str, float] = {"minimal": 0.1, "low": 0.2, "medium": 0.5, "high": 0.8}
+
+
+def call_max_tokens(answer_tokens: int, effort: str) -> int:
+    """max_tokens for the call, so that `answer_tokens` stay for the answer after reasoning."""
+    # round() first: 2000 / 0.2 is 10000.000000000002 in floats.
+    return math.ceil(round(answer_tokens / (1 - REASONING_SHARE[effort]), 6))
+
+
 # Owner's decision (2026-10-14, raised 2026-10-24, ADR 74): the game master thinks at "high",
-# the actor (npc) and the generator at "medium", everything else at "low".
+# the actor (npc) and the generator at "medium", everything else at "low". The config may
+# override effort per purpose (LLM_EFFORT, LLM_FALLBACK_EFFORT; ADR 75).
 PURPOSES: dict[str, CallParams] = {
     "gm": CallParams(effort="high", max_tokens=2000),
     "npc": CallParams(effort="medium", max_tokens=800),

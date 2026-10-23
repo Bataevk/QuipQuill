@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from quipquill_cloud.llm.policy import Route
+from quipquill_cloud.llm.policy import PURPOSES, Effort, Route
 
 # The repository's prompts/ (development); production sets PROMPTS_DIR (ADR 57).
 REPO_PROMPTS_DIR = Path(__file__).resolve().parents[4] / "prompts"
@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     # empty = no spare. Its providers: unset = the route's own from the code, [] = any.
     llm_fallback_model: str = ""
     llm_fallback_providers: list[str] | None = None
+    # Reasoning effort per purpose (JSON object in env, e.g. {"gm": "high"}); a purpose not
+    # listed keeps the code's (llm/policy.py). The spare's: unset = the same as the main model's.
+    llm_effort: dict[str, Effort] = {}
+    llm_fallback_effort: dict[str, Effort] | None = None
     embed_model: str = "openai/text-embedding-3-small"
     # The LLM prompt templates `<name>.md` (llm/prompts.py, ADR 57).
     prompts_dir: Path = REPO_PROMPTS_DIR
@@ -106,6 +110,13 @@ class Settings(BaseSettings):
             if self.provider_order is None
             else tuple(self.provider_order),
         )
+
+    def effort(self, purpose: str, *, spare: bool = False) -> Effort:
+        """Reasoning effort of a purpose for the main model or the spare (ADR 75)."""
+        main = self.llm_effort.get(purpose, PURPOSES[purpose].effort)
+        if spare and self.llm_fallback_effort is not None:
+            return self.llm_fallback_effort.get(purpose, main)
+        return main
 
     def fallback(self, chosen: Route) -> Route | None:
         """The spare route for `chosen` (as in the code, before `override`), if one is set."""

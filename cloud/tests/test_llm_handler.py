@@ -112,7 +112,7 @@ def test_server_chooses_model_params_and_providers(
     (body,) = fake.requests
 
     assert body["model"] == "anthropic/claude-haiku-5.5"
-    assert body["max_tokens"] == 2000
+    assert body["max_tokens"] == 10000  # 2000 for the answer after 80% reasoning (ADR 75)
     assert body["stream"] is True
     assert body["stream_options"] == {"include_usage": True}
     assert body["tools"] == TOOLS
@@ -174,6 +174,25 @@ def test_spare_model_answers_when_the_main_one_is_down(
     assert db_run("SELECT model FROM usage_events")[0]["model"] == "anthropic/claude-haiku-5.5"
 
 
+def test_config_sets_effort_for_main_and_spare(settings: Settings, fake: FakeOpenRouter) -> None:
+    live = settings.model_copy(
+        update={
+            "llm_handler": "openrouter",
+            "llm_model": "inception/mercury-3",
+            "llm_effort": {"gm": "medium"},
+            "llm_fallback_model": "anthropic/claude-haiku-5.5",
+            "llm_fallback_effort": {"gm": "low"},
+        }
+    )
+    fake.down_models = {"inception/mercury-3"}
+    with TestClient(create_app(live, llm_client=fake)) as client:
+        run(client, gm_request())
+    main, spare = fake.requests
+
+    assert (main["extra_body"]["reasoning"], main["max_tokens"]) == ({"effort": "medium"}, 4000)
+    assert (spare["extra_body"]["reasoning"], spare["max_tokens"]) == ({"effort": "low"}, 2500)
+
+
 def test_without_a_spare_a_failure_is_an_error(
     app_client: TestClient, fake: FakeOpenRouter
 ) -> None:
@@ -197,14 +216,14 @@ def test_npc_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter)
     run(app_client, gm_request(purpose="npc"))
     (body,) = fake.requests
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}
-    assert body["max_tokens"] == 800
+    assert body["max_tokens"] == 1600  # 800 for the answer
 
 
 def test_generator_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
     run(app_client, gm_request(purpose="generator"))
     (body,) = fake.requests
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}
-    assert body["max_tokens"] == 3000
+    assert body["max_tokens"] == 6000  # 3000 for the answer
 
 
 def test_tool_calls_are_assembled(app_client: TestClient, fake: FakeOpenRouter) -> None:

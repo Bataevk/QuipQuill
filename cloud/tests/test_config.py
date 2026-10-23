@@ -54,3 +54,24 @@ def test_fallback_keeps_route_providers_unless_set() -> None:
     assert spare == Route(model="h/model", providers=("p1", "p2"))
     anywhere = Settings(_env_file=None, llm_fallback_model="h/model", llm_fallback_providers=[])
     assert anywhere.fallback(basic) == Route(model="h/model", providers=())
+
+
+def test_effort_from_config_per_purpose() -> None:
+    plain = Settings(_env_file=None)
+    assert (plain.effort("gm"), plain.effort("npc"), plain.effort("pregen")) == (
+        "high",
+        "medium",
+        "low",
+    )
+    assert plain.effort("gm", spare=True) == "high"  # the spare thinks like the main model
+
+    tuned = Settings(
+        _env_file=None, llm_effort={"gm": "medium"}, llm_fallback_effort={"npc": "low"}
+    )
+    assert (tuned.effort("gm"), tuned.effort("gm", spare=True)) == ("medium", "medium")
+    assert (tuned.effort("npc"), tuned.effort("npc", spare=True)) == ("medium", "low")
+
+
+def test_unknown_effort_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_effort={"gm": "max"})

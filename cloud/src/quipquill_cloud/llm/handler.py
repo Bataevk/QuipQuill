@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
-from quipquill_cloud.llm.policy import DECISIONS, PURPOSES, Route, route
+from quipquill_cloud.llm.policy import DECISIONS, PURPOSES, Route, call_max_tokens, route
 from quipquill_cloud.llm.prompts import PromptError, PromptStore, split_decision
 from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usage, error_event
 
@@ -101,7 +101,8 @@ class OpenRouterHandler:
 
         for number, attempt in enumerate(attempts, start=1):
             try:
-                body = self._body(request, attempt)
+                effort = self._settings.effort(request.purpose, spare=number > 1)
+                body = self._body(request, attempt, effort)
             except PromptError as error:
                 logger.warning("Bad prompt in %s: %s", request.request_id, error)
                 yield error_event("bad_request", **common)
@@ -214,11 +215,11 @@ class OpenRouterHandler:
             raise PromptError("the decision has no questions to ask")
         return "\n\n".join(part for part in (opening, rest) if part), questions
 
-    def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:
+    def _body(self, request: LlmRequest, chosen: Route, effort: str) -> dict[str, Any]:
         """The OpenRouter call: the route's model and providers, the purpose's effort and limit;
         the prompts the messages name, filled in (ADR 57)."""
         params = PURPOSES[request.purpose]
-        extra: dict[str, Any] = {"reasoning": {"effort": params.effort}}
+        extra: dict[str, Any] = {"reasoning": {"effort": effort}}
         if chosen.providers:
             # Tried in this order, only these: the next one when one is unavailable.
             providers = list(chosen.providers)
@@ -226,7 +227,7 @@ class OpenRouterHandler:
         body: dict[str, Any] = {
             "model": chosen.model,
             "messages": self._prompts.expand(request.messages),
-            "max_tokens": params.max_tokens,
+            "max_tokens": call_max_tokens(params.max_tokens, effort),
             "stream": True,
             "stream_options": {"include_usage": True},
             "extra_body": extra,
