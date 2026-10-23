@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
+from quipquill_cloud.llm.policy import PURPOSES
 from quipquill_cloud.main import create_app
 
 TOOLS = [
@@ -112,7 +113,7 @@ def test_server_chooses_model_params_and_providers(
     (body,) = fake.requests
 
     assert body["model"] == "anthropic/claude-haiku-5.5"
-    assert body["max_tokens"] == 10000  # 2000 for the answer after 80% reasoning (ADR 75)
+    assert body["max_tokens"] == PURPOSES["gm"].max_tokens
     assert body["stream"] is True
     assert body["stream_options"] == {"include_usage": True}
     assert body["tools"] == TOOLS
@@ -189,8 +190,8 @@ def test_config_sets_effort_for_main_and_spare(settings: Settings, fake: FakeOpe
         run(client, gm_request())
     main, spare = fake.requests
 
-    assert (main["extra_body"]["reasoning"], main["max_tokens"]) == ({"effort": "medium"}, 4000)
-    assert (spare["extra_body"]["reasoning"], spare["max_tokens"]) == ({"effort": "low"}, 2500)
+    assert main["extra_body"]["reasoning"] == {"effort": "medium"}
+    assert spare["extra_body"]["reasoning"] == {"effort": "low"}
 
 
 def test_without_a_spare_a_failure_is_an_error(
@@ -216,14 +217,14 @@ def test_npc_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter)
     run(app_client, gm_request(purpose="npc"))
     (body,) = fake.requests
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}
-    assert body["max_tokens"] == 1600  # 800 for the answer
+    assert body["max_tokens"] == PURPOSES["npc"].max_tokens
 
 
 def test_generator_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
     run(app_client, gm_request(purpose="generator"))
     (body,) = fake.requests
     assert body["extra_body"]["reasoning"] == {"effort": "medium"}
-    assert body["max_tokens"] == 6000  # 3000 for the answer
+    assert body["max_tokens"] == PURPOSES["generator"].max_tokens
 
 
 def test_tool_calls_are_assembled(app_client: TestClient, fake: FakeOpenRouter) -> None:

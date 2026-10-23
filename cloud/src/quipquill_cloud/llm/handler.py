@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from quipquill_cloud.core.config import Settings
 from quipquill_cloud.llm import usage
-from quipquill_cloud.llm.policy import DECISIONS, PURPOSES, Route, call_max_tokens, route
+from quipquill_cloud.llm.policy import DECISIONS, PURPOSES, Route, route
 from quipquill_cloud.llm.prompts import PromptError, PromptStore, split_decision
 from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usage, error_event
 
@@ -227,7 +227,7 @@ class OpenRouterHandler:
         body: dict[str, Any] = {
             "model": chosen.model,
             "messages": self._prompts.expand(request.messages),
-            "max_tokens": call_max_tokens(params.max_tokens, effort),
+            "max_tokens": params.max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},
             "extra_body": extra,

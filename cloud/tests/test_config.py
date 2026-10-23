@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from quipquill_cloud.core.config import Settings
-from quipquill_cloud.llm.policy import Route
+from quipquill_cloud.llm.policy import PURPOSES, Route
 
 
 def test_dev_defaults_load_without_env_file() -> None:
@@ -75,3 +75,9 @@ def test_effort_from_config_per_purpose() -> None:
 def test_unknown_effort_is_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, llm_effort={"gm": "max"})
+
+
+@pytest.mark.parametrize("purpose", sorted(PURPOSES))
+def test_every_purpose_has_a_sane_max_tokens(purpose: str) -> None:
+    # Reasoning and the answer share it; Haiku 5.5 answers with at most 64K tokens.
+    assert 0 < PURPOSES[purpose].max_tokens <= 64_000
