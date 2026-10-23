@@ -3,6 +3,8 @@
 import asyncio
 from typing import Any
 
+import httpx2
+import openai
 from openai.types import CreateEmbeddingResponse
 from openai.types.chat import ChatCompletionChunk
 
@@ -122,6 +124,8 @@ class _Completions:
         self._owner.requests.append(body)
         if self._owner.error is not None:
             raise self._owner.error
+        if body["model"] in self._owner.down_models:
+            raise openai.APIConnectionError(request=httpx2.Request("POST", "http://x"))
         return _Stream(self._owner.chunks, self._owner.delay)
 
 
@@ -154,6 +158,8 @@ class FakeOpenRouter:
         self.chunks: list = text_stream("Hello", " there")
         self.delay = 0.0
         self.error: Exception | None = None
+        # Models whose calls fail as if the provider were unreachable.
+        self.down_models: set[str] = set()
         self.requests: list[dict[str, Any]] = []
         self.chat = _Chat(self)
         self.embeddings = _Embeddings(self)

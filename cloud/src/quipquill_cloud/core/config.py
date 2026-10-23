@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # Overrides the providers of every route (JSON list in env), e.g. while one is down;
     # unset = each route's own order (ADR 50); [] = no restriction, OpenRouter picks.
     provider_order: list[str] | None = None
+    # A spare model when the main one fails before its first token (error or timeout);
+    # empty = no spare. Its providers: unset = the route's own from the code, [] = any.
+    llm_fallback_model: str = ""
+    llm_fallback_providers: list[str] | None = None
     embed_model: str = "openai/text-embedding-3-small"
     # The LLM prompt templates `<name>.md` (llm/prompts.py, ADR 57).
     prompts_dir: Path = REPO_PROMPTS_DIR
@@ -101,6 +105,16 @@ class Settings(BaseSettings):
             providers=chosen.providers
             if self.provider_order is None
             else tuple(self.provider_order),
+        )
+
+    def fallback(self, chosen: Route) -> Route | None:
+        """The spare route for `chosen` (as in the code, before `override`), if one is set."""
+        if not self.llm_fallback_model:
+            return None
+        providers = self.llm_fallback_providers
+        return Route(
+            model=self.llm_fallback_model,
+            providers=chosen.providers if providers is None else tuple(providers),
         )
 
     @model_validator(mode="after")

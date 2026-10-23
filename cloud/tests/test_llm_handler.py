@@ -146,6 +146,44 @@ def test_config_overrides_model_and_lifts_providers(
     assert "provider" not in body["extra_body"]  # [] = OpenRouter picks the provider
 
 
+def test_spare_model_answers_when_the_main_one_is_down(
+    settings: Settings, fake: FakeOpenRouter
+) -> None:
+    live = settings.model_copy(
+        update={
+            "llm_handler": "openrouter",
+            "llm_model": "inception/mercury-3",
+            "provider_order": [],
+            "llm_fallback_model": "anthropic/claude-haiku-5.5",
+        }
+    )
+    fake.down_models = {"inception/mercury-3"}
+    with TestClient(create_app(live, llm_client=fake)) as client:
+        events = run(client, gm_request())
+
+    assert [r["model"] for r in fake.requests] == [
+        "inception/mercury-3",
+        "anthropic/claude-haiku-5.5",
+    ]
+    # The spare keeps the route's own providers from the code (ADR 51).
+    assert fake.requests[1]["extra_body"]["provider"]["only"] == [
+        "google-vertex/global",
+        "amazon-bedrock",
+    ]
+    assert events[-1]["type"] == "done"
+    assert db_run("SELECT model FROM usage_events")[0]["model"] == "anthropic/claude-haiku-5.5"
+
+
+def test_without_a_spare_a_failure_is_an_error(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    fake.down_models = {"anthropic/claude-haiku-5.5"}
+    events = run(app_client, gm_request())
+
+    assert len(fake.requests) == 1
+    assert (events[-1]["type"], events[-1]["code"]) == ("error", "provider_error")
+
+
 def test_route_is_named_by_the_client_and_chosen_by_the_server(
     app_client: TestClient, fake: FakeOpenRouter
 ) -> None:

@@ -44,3 +44,13 @@ def test_config_overrides_route_model_and_providers() -> None:
         basic
     ) == Route(model="b/model", providers=())
     assert Settings(_env_file=None, provider_order=["p2"]).override(basic).providers == ("p2",)
+
+
+def test_fallback_keeps_route_providers_unless_set() -> None:
+    basic = Route(model="a/model", providers=("p1", "p2"))
+
+    assert Settings(_env_file=None).fallback(basic) is None
+    spare = Settings(_env_file=None, llm_fallback_model="h/model").fallback(basic)
+    assert spare == Route(model="h/model", providers=("p1", "p2"))
+    anywhere = Settings(_env_file=None, llm_fallback_model="h/model", llm_fallback_providers=[])
+    assert anywhere.fallback(basic) == Route(model="h/model", providers=())

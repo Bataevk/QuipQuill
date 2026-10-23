@@ -94,34 +94,52 @@ class OpenRouterHandler:
             logger.warning("Unknown route %r in %s", request.model, request.request_id)
             yield error_event("bad_request", **common)
             return
-        chosen = self._settings.override(chosen)
+        attempts = [self._settings.override(chosen)]
+        spare = self._settings.fallback(chosen)
+        if spare is not None and spare != attempts[0]:
+            attempts.append(spare)
 
-        try:
-            body = self._body(request, chosen)
-        except PromptError as error:
-            logger.warning("Bad prompt in %s: %s", request.request_id, error)
-            yield error_event("bad_request", **common)
-            return
+        for number, attempt in enumerate(attempts, start=1):
+            try:
+                body = self._body(request, attempt)
+            except PromptError as error:
+                logger.warning("Bad prompt in %s: %s", request.request_id, error)
+                yield error_event("bad_request", **common)
+                return
 
-        answer = _Answer()
-        try:
-            async with asyncio.timeout(self._settings.llm_timeout_seconds):
-                async for event in self._stream(body, answer, is_cancelled):
-                    yield Event(**event, **common)
-        except (TimeoutError, openai.APITimeoutError):
-            yield error_event("timeout", retryable=True, **common)
-            return
-        except openai.BadRequestError as error:
-            logger.warning("Provider rejected request %s: %s", request.request_id, error)
-            yield error_event("bad_request", **common)
-            return
-        except openai.APIError as error:
-            logger.warning("Provider error for %s: %s", request.request_id, error)
-            yield error_event("provider_error", retryable=True, **common)
-            return
+            answer = _Answer()
+            failure: str | None = None
+            try:
+                async with asyncio.timeout(self._settings.llm_timeout_seconds):
+                    async for event in self._stream(body, answer, is_cancelled):
+                        yield Event(**event, **common)
+            except (TimeoutError, openai.APITimeoutError):
+                failure = "timeout"
+            except openai.BadRequestError as error:
+                logger.warning(
+                    "%s rejected request %s: %s", attempt.model, request.request_id, error
+                )
+                failure = "bad_request"
+            except openai.APIError as error:
+                logger.warning("%s error for %s: %s", attempt.model, request.request_id, error)
+                failure = "provider_error"
 
-        async for event in self._finish(command, chosen.model, answer):
-            yield event
+            if failure is None:
+                async for event in self._finish(command, attempt.model, answer):
+                    yield event
+                return
+            # The spare model only while the player has seen nothing of this answer.
+            if number < len(attempts) and not answer.streamed:
+                logger.warning(
+                    "%s failed (%s) for %s; trying %s",
+                    attempt.model,
+                    failure,
+                    request.request_id,
+                    attempts[number].model,
+                )
+                continue
+            yield error_event(failure, retryable=failure != "bad_request", **common)
+            return
 
     async def _decide(self, command: Command, model: str) -> AsyncIterator[Event]:
         """A decision model (ADR 70): the template's opening text and the messages become the
@@ -241,6 +259,7 @@ class OpenRouterHandler:
             if answer.first is None and (delta.content or delta.tool_calls):
                 answer.first = time.monotonic()
             if delta.content:
+                answer.streamed = True
                 answer.text += delta.content
                 yield {"type": "delta", "seq": seq, "text": delta.content}
                 seq += 1
@@ -263,9 +282,11 @@ class OpenRouterHandler:
         # Which provider served each purpose and what it cached (ADR 49): cache misses show here.
         done_at = time.monotonic()
         logger.info(
-            "llm %s purpose=%s provider=%s ttft=%.2f total=%.2f in=%s cached=%s written=%s cost=%s",
+            "llm %s purpose=%s model=%s provider=%s ttft=%.2f total=%.2f in=%s cached=%s "
+            "written=%s cost=%s",
             request.request_id,
             request.purpose,
+            model,
             answer.provider,
             (answer.first or done_at) - answer.started,
             done_at - answer.started,
@@ -329,6 +350,8 @@ class _Answer:
     finish: str = "stop"
     reported: Any = None
     provider: str | None = None
+    # A delta reached the player: too late to switch to the spare model.
+    streamed: bool = False
     started: float = field(default_factory=time.monotonic)
     # When the first text or tool call arrived (time to first token).
     first: float | None = None
