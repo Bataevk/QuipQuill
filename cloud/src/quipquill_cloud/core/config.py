@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from quipquill_cloud.llm.policy import Route
+
 # The repository's prompts/ (development); production sets PROMPTS_DIR (ADR 57).
 REPO_PROMPTS_DIR = Path(__file__).resolve().parents[4] / "prompts"
 # The repository's stories/ (development); production sets STORIES_DIR (ADR 61).
@@ -80,14 +82,26 @@ class Settings(BaseSettings):
     openrouter_decisions_url: str = "https://openrouter.ai/api/alpha/decisions"
     # A decision is a short call without streaming: a tighter limit than the chat models'.
     decision_timeout_seconds: float = 15.0
+    # Overrides the chat model of every route, e.g. to try another model; empty = each route's
+    # own model (llm/policy.py, ADR 50).
+    llm_model: str = ""
     # Overrides the providers of every route (JSON list in env), e.g. while one is down;
-    # empty = each route's own order (llm/policy.py, ADR 50).
-    provider_order: list[str] = []
+    # unset = each route's own order (ADR 50); [] = no restriction, OpenRouter picks.
+    provider_order: list[str] | None = None
     embed_model: str = "openai/text-embedding-3-small"
     # The LLM prompt templates `<name>.md` (llm/prompts.py, ADR 57).
     prompts_dir: Path = REPO_PROMPTS_DIR
     # The story catalogue: every `*.qqstory` under this folder (stories.py, ADR 61).
     stories_dir: Path = REPO_STORIES_DIR
+
+    def override(self, chosen: Route) -> Route:
+        """The route with the model and providers from the config, where they are set."""
+        return Route(
+            model=self.llm_model or chosen.model,
+            providers=chosen.providers
+            if self.provider_order is None
+            else tuple(self.provider_order),
+        )
 
     @model_validator(mode="after")
     def _require_real_secrets_in_prod(self) -> "Settings":

@@ -128,6 +128,24 @@ def test_server_chooses_model_params_and_providers(
     assert body["messages"][0]["content"][0]["cache_control"] == {"type": "ephemeral"}
 
 
+def test_config_overrides_model_and_lifts_providers(
+    settings: Settings, fake: FakeOpenRouter
+) -> None:
+    live = settings.model_copy(
+        update={
+            "llm_handler": "openrouter",
+            "llm_model": "inception/mercury-3",
+            "provider_order": [],
+        }
+    )
+    with TestClient(create_app(live, llm_client=fake)) as client:
+        run(client, gm_request())
+    (body,) = fake.requests
+
+    assert body["model"] == "inception/mercury-3"
+    assert "provider" not in body["extra_body"]  # [] = OpenRouter picks the provider
+
+
 def test_route_is_named_by_the_client_and_chosen_by_the_server(
     app_client: TestClient, fake: FakeOpenRouter
 ) -> None:

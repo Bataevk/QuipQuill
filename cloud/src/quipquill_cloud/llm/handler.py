@@ -94,6 +94,7 @@ class OpenRouterHandler:
             logger.warning("Unknown route %r in %s", request.model, request.request_id)
             yield error_event("bad_request", **common)
             return
+        chosen = self._settings.override(chosen)
 
         try:
             body = self._body(request, chosen)
@@ -198,19 +199,19 @@ class OpenRouterHandler:
     def _body(self, request: LlmRequest, chosen: Route) -> dict[str, Any]:
         """The OpenRouter call: the route's model and providers, the purpose's effort and limit;
         the prompts the messages name, filled in (ADR 57)."""
-        providers = self._settings.provider_order or list(chosen.providers)
         params = PURPOSES[request.purpose]
+        extra: dict[str, Any] = {"reasoning": {"effort": params.effort}}
+        if chosen.providers:
+            # Tried in this order, only these: the next one when one is unavailable.
+            providers = list(chosen.providers)
+            extra["provider"] = {"order": providers, "only": providers, "allow_fallbacks": False}
         body: dict[str, Any] = {
             "model": chosen.model,
             "messages": self._prompts.expand(request.messages),
             "max_tokens": params.max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},
-            "extra_body": {
-                "reasoning": {"effort": params.effort},
-                # Tried in this order, only these: the next one when one is unavailable.
-                "provider": {"order": providers, "only": providers, "allow_fallbacks": False},
-            },
+            "extra_body": extra,
         }
         if request.tools:
             body["tools"] = request.tools
