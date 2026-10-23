@@ -34,13 +34,13 @@ def call_max_tokens(answer_tokens: int, effort: str) -> int:
 # the actor (npc) and the generator at "medium", everything else at "low". The config may
 # override effort per purpose (LLM_EFFORT, LLM_FALLBACK_EFFORT; ADR 75).
 PURPOSES: dict[str, CallParams] = {
-    "gm": CallParams(effort="high", max_tokens=2000),
-    "npc": CallParams(effort="medium", max_tokens=800),
-    "summary": CallParams(effort="low", max_tokens=1500),
-    "character": CallParams(effort="low", max_tokens=1500),
+    "gm": CallParams(effort="high", max_tokens=6000),
+    "npc": CallParams(effort="medium", max_tokens=1600),
+    "summary": CallParams(effort="low", max_tokens=3000),
+    "character": CallParams(effort="low", max_tokens=3000),
     # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.
     # ADR 55: up to ten expected additions a turn, so room for a long answer.
-    "generator": CallParams(effort="medium", max_tokens=3000),
+    "generator": CallParams(effort="medium", max_tokens=6000),
     # Stage T.6 (ADR 70): a short in-story answer to a rejected input; no tools, no world.
     "mini_gm": CallParams(effort="low", max_tokens=300),
     # Stage T.8: before the master — drafts of the place and the player's unsupported claims.
