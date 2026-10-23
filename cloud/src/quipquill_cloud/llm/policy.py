@@ -13,15 +13,16 @@ class CallParams:
     max_tokens: int
 
 
-# Owner's decision (2026-10-14): the game master thinks at "medium", everything else at "low".
+# Owner's decision (2026-10-14, raised 2026-10-24, ADR 74): the game master thinks at "high",
+# the actor (npc) and the generator at "medium", everything else at "low".
 PURPOSES: dict[str, CallParams] = {
-    "gm": CallParams(effort="medium", max_tokens=2000),
-    "npc": CallParams(effort="low", max_tokens=800),
+    "gm": CallParams(effort="high", max_tokens=2000),
+    "npc": CallParams(effort="medium", max_tokens=800),
     "summary": CallParams(effort="low", max_tokens=1500),
     "character": CallParams(effort="low", max_tokens=1500),
     # Stage 6.2d (ADR 42): the background world generator after each turn, a JSON list of changes.
     # ADR 55: up to ten expected additions a turn, so room for a long answer.
-    "generator": CallParams(effort="low", max_tokens=3000),
+    "generator": CallParams(effort="medium", max_tokens=3000),
     # Stage T.6 (ADR 70): a short in-story answer to a rejected input; no tools, no world.
     "mini_gm": CallParams(effort="low", max_tokens=300),
     # Stage T.8: before the master — drafts of the place and the player's unsupported claims.

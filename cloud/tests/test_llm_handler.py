@@ -116,7 +116,7 @@ def test_server_chooses_model_params_and_providers(
     assert body["stream"] is True
     assert body["stream_options"] == {"include_usage": True}
     assert body["tools"] == TOOLS
-    assert body["extra_body"]["reasoning"] == {"effort": "medium"}  # gm thinks at medium
+    assert body["extra_body"]["reasoning"] == {"effort": "high"}  # gm thinks at high (ADR 74)
     # Route "basic" (the default): Vertex global, then Bedrock (ADR 51).
     providers = ["google-vertex/global", "amazon-bedrock"]
     assert body["extra_body"]["provider"] == {
@@ -193,17 +193,17 @@ def test_route_is_named_by_the_client_and_chosen_by_the_server(
     assert fake.requests == []  # an unknown route never reaches the provider
 
 
-def test_npc_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
+def test_npc_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
     run(app_client, gm_request(purpose="npc"))
     (body,) = fake.requests
-    assert body["extra_body"]["reasoning"] == {"effort": "low"}
+    assert body["extra_body"]["reasoning"] == {"effort": "medium"}
     assert body["max_tokens"] == 800
 
 
-def test_generator_runs_at_low_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
+def test_generator_runs_at_medium_effort(app_client: TestClient, fake: FakeOpenRouter) -> None:
     run(app_client, gm_request(purpose="generator"))
     (body,) = fake.requests
-    assert body["extra_body"]["reasoning"] == {"effort": "low"}
+    assert body["extra_body"]["reasoning"] == {"effort": "medium"}
     assert body["max_tokens"] == 3000
 
 
