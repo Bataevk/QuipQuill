@@ -111,7 +111,7 @@ class OpenRouterHandler:
             logger.warning("Unknown route %r in %s", request.model, request.request_id)
             yield error_event("bad_request", **common)
             return
-        attempts = [self._settings.override(chosen)]
+        attempts = [self._settings.override(chosen, request.purpose)]
         spare = self._settings.fallback(chosen)
         if spare is not None and spare != attempts[0]:
             attempts.append(spare)

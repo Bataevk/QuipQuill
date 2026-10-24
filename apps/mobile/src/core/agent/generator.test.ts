@@ -8,7 +8,7 @@ import { World } from '@/core/world/world';
 import { DEMO_STORY, DEMO_STORY_ID, makeTestEnv, type TestEnv } from '@/platform/node/test-env';
 import { renderedParts, renderedText } from '@/platform/node/prompts';
 
-import { generate, GeneratorAnswerError, generatorMessages, MAX_EXPECTED, type WorldChangesInput } from './generator';
+import { generate, GeneratorAnswerError, generatorMessages, MAX_EXPECTED, parseChanges, type WorldChangesInput } from './generator';
 import { ScriptedChatModel } from './testing/scripted-model';
 import { TurnInProgressError, exclusive } from './turn-lock';
 
@@ -65,13 +65,13 @@ describe('generator', () => {
     expect(people.text).toMatch(/^# People involved\n/);
     expect(people.cache_control).toEqual({ type: 'ephemeral' });
     expect(rest.text).toMatch(/^# World state\n/);
-    expect(stable.text).toMatch(/^You keep the world of an interactive story true to what happens in it\./);
+    expect(stable.text).toMatch(/^You keep the world of an interactive story true to what happened in it\./);
     expect(stable.text).toContain(`Title: ${meta.title}`);
     expect(context.text).toContain('# World state\nPlayer: Aria [player].');
     expect(context.text).toContain('# People involved\n- Mags Holloway [npc:mags-holloway] (npc), in The Rusty Gear');
     expect(context.text).toContain('  - Pip Quillon [npc:pip-quillon]: leader of the crew');
     expect(context.text).toContain('  Remembers:\n  - The stranger turned me down; I plan alone now.');
-    expect(stable.text).toContain('What a person remembers (their notes) is their own view');
+    expect(stable.text).toContain('A person\'s notes are their own view');
     expect(context.text).toContain(`Player: ${TURN.input}`);
     expect(context.text).toContain(`Game Master: ${TURN.reply}`);
     expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Suit yourself."');
@@ -118,8 +118,8 @@ describe('generator', () => {
       }),
     );
     const [system, context] = await generatorMessages({ world, meta }, TURN);
-    expect(renderedText(system)).toContain('basis:\n  - narrated: the turn made it real');
-    expect(renderedText(system)).toContain('Finds and strokes of luck are never yours to invent');
+    expect(renderedText(system)).toContain('- basis "narrated": the turn made it real');
+    expect(renderedText(system)).toContain('Finds and luck come only from the Game Master');
     expect(context.text).toContain('What people said and did:\n- Mags Holloway: "Lamplight Row. Service door');
 
     const model = scripted(
@@ -246,3 +246,24 @@ function expectOk<T>(outcome: { ok: true; value: T } | { ok: false; error: strin
   if (!outcome.ok) throw new Error(outcome.error);
   return outcome.value;
 }
+
+describe('parseChanges: answers that break the schema', () => {
+  it('merges an array of objects holding the lists (Mercury 3, stage L.5)', () => {
+    const wrapped = parseChanges(JSON.stringify([{ moves: [{ who: 'npc:pip', to: 'loc:alley' }] }]));
+    expect(wrapped.moves).toEqual([{ who: 'npc:pip', to: 'loc:alley' }]);
+    const split = parseChanges(
+      JSON.stringify([{ relations: [{ a: 'npc:pip', b: 'player', description: 'Owes a favour.' }] }, { edits: [] }]),
+    );
+    expect(split.relations).toHaveLength(1);
+    expect(split.edits).toEqual([]);
+  });
+
+  it('refuses any other array, with the answer in the cause', () => {
+    expect(() => parseChanges('[1, 2]')).toThrow(GeneratorAnswerError);
+    try {
+      parseChanges('[{"who": "npc:pip"}]');
+    } catch (error) {
+      expect(String((error as Error).cause)).toContain('answer: [{"who": "npc:pip"}]');
+    }
+  });
+});

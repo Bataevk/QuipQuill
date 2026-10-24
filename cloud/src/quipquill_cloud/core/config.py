@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # Overrides the chat model of every route, e.g. to try another model; empty = each route's
     # own model (llm/policy.py, ADR 50).
     llm_model: str = ""
+    # The chat model of single purposes (JSON object in env), over llm_model, e.g.
+    # {"generator": "anthropic/claude-haiku-5.5"} (ADR 82). Such a model keeps the route's
+    # providers from the code whatever provider_order says: a model chosen for one purpose
+    # is chosen with its providers.
+    llm_model_by_purpose: dict[str, str] = {}
     # Overrides the providers of every route (JSON list in env), e.g. while one is down;
     # unset = each route's own order (ADR 50); [] = no restriction, OpenRouter picks.
     provider_order: list[str] | None = None
@@ -106,8 +111,11 @@ class Settings(BaseSettings):
     # The story catalogue: every `*.qqstory` under this folder (stories.py, ADR 61).
     stories_dir: Path = REPO_STORIES_DIR
 
-    def override(self, chosen: Route) -> Route:
+    def override(self, chosen: Route, purpose: str = "") -> Route:
         """The route with the model and providers from the config, where they are set."""
+        own = self.llm_model_by_purpose.get(purpose)
+        if own:
+            return Route(model=own, providers=chosen.providers)
         return Route(
             model=self.llm_model or chosen.model,
             providers=chosen.providers

@@ -81,3 +81,17 @@ def test_unknown_effort_is_rejected() -> None:
 def test_every_purpose_has_a_sane_max_tokens(purpose: str) -> None:
     # Reasoning and the answer share it; Haiku 5.5 answers with at most 64K tokens.
     assert 0 < PURPOSES[purpose].max_tokens <= 64_000
+
+
+def test_a_purpose_can_have_its_own_model_with_the_code_providers() -> None:
+    basic = Route(model="a/model", providers=("p1",))
+    settings = Settings(
+        _env_file=None,
+        llm_model="b/model",
+        provider_order=[],
+        llm_model_by_purpose={"generator": "anthropic/claude-haiku-5.5"},
+    )
+    assert settings.override(basic, "generator") == Route(
+        model="anthropic/claude-haiku-5.5", providers=("p1",)
+    )
+    assert settings.override(basic, "gm") == Route(model="b/model", providers=())

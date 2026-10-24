@@ -29,7 +29,7 @@ import { LIKELIHOODS, SURE_LIKELIHOODS } from './luck';
 import { promptMessage, promptPart } from './cloud-prompt';
 import { CACHE, CACHE_LONG } from './messages';
 import { brief, eventText, renderStoryStyle, renderWorldState } from './prompt';
-import { invokeWithin, jsonSchemaFormat, parseJsonAnswer, strictObject } from './structured';
+import { invokeWithin, jsonSchemaFormat, strictObject } from './structured';
 import type { ExpectedGap } from './middleware/guard';
 import { exclusive } from './turn-lock';
 
@@ -200,11 +200,33 @@ export async function generatorMessages(
 
 export function parseChanges(answer: string): WorldChanges {
   try {
-    return parseJsonAnswer(Changes, answer);
+    return Changes.parse(mergeParts(JSON.parse(stripFence(answer))));
   } catch (error) {
-    throw new GeneratorAnswerError('The world changes could not be read.', { cause: error });
+    // The answer's head goes with the cause, so a log tells what the model sent instead.
+    const head = answer.trim().slice(0, 200);
+    throw new GeneratorAnswerError('The world changes could not be read.', { cause: `${String(error)} — answer: ${head}` });
   }
 }
+
+const LISTS = ['relations', 'cancelled', 'moves', 'edits', 'additions'] as const;
+
+/**
+ * Mercury 3 now and then answers with an array instead of the schema's object (stage L.5): one
+ * object in it, or the lists split over several. Objects holding our lists are merged; anything
+ * else is left for the schema to refuse.
+ */
+function mergeParts(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const parts = value.filter((v): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v));
+  if (parts.length !== value.length || !parts.every((part) => LISTS.some((key) => key in part))) return value;
+  const merged: Record<string, unknown[]> = {};
+  for (const part of parts) {
+    for (const key of LISTS) if (Array.isArray(part[key])) merged[key] = [...(merged[key] ?? []), ...(part[key] as unknown[])];
+  }
+  return merged;
+}
+
+const stripFence = (text: string) => text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 
 /** Applies the changes in a fixed order: ties first, then places, descriptions, new things. */
 export async function applyChanges(world: World, changes: WorldChanges): Promise<GeneratorResult> {

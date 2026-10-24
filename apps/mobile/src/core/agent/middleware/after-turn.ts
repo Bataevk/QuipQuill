@@ -90,7 +90,9 @@ export function startAfterTurn(options: AfterTurnOptions, { turn, input, reply, 
         onGenerated?.(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[generator] turn ${turn} failed: ${message}`);
+        // The cause (a JSON or schema error) tells a broken answer from a cut-off one.
+        const cause = error instanceof Error && error.cause ? ` (${String(error.cause).replace(/\s+/g, ' ').slice(0, 400)})` : '';
+        console.warn(`[generator] turn ${turn} failed: ${message}${cause}`);
         onGenerated?.({ error: message });
       }
     }

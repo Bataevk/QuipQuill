@@ -581,3 +581,30 @@ def test_an_empty_answer_is_logged_with_its_finish_reason(
     text = caplog.text
     assert "reasoning=80 finish=length text=0 tools=0" in text
     assert "answered req-1 with nothing (finish=length)" in text
+
+
+def test_the_generator_can_run_on_its_own_model(settings: Settings, fake: FakeOpenRouter) -> None:
+    live = settings.model_copy(
+        update={
+            "llm_handler": "openrouter",
+            "llm_model": "inception/mercury-3",
+            "provider_order": [],
+            "llm_model_by_purpose": {"generator": "anthropic/claude-haiku-5.5"},
+            "llm_effort": {"gm": "high", "generator": "low"},
+        }
+    )
+    with (
+        TestClient(create_app(live, llm_client=fake)) as client,
+        ws_connect(client, token_for(client)) as ws,
+    ):
+        for request in (gm_request("generator", "g"), gm_request("gm", "m")):
+            ws.send_json(request)
+            while ws.receive_json()["type"] not in ("done", "error"):
+                pass
+    generator, gm = fake.requests
+
+    assert generator["model"] == "anthropic/claude-haiku-5.5"
+    assert generator["extra_body"]["provider"]["only"] == ["google-vertex/global", "amazon-bedrock"]
+    assert generator["extra_body"]["reasoning"] == {"effort": "low"}
+    assert gm["model"] == "inception/mercury-3"
+    assert "provider" not in gm["extra_body"]
