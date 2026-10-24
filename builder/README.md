@@ -51,7 +51,7 @@ uv run pytest && uv run ruff check   # тесты без сети
 
 ## Ручные правки: `curate`
 
-Файл `stories/<id>/curation.toml` (формат — docstring `curation.py`): `[merge]` дубликатов, `[drop]` мусора, `[retype]`, `[describe]`, `[props]` (например `{ fixed = true }` — нельзя взять), `[[drop_relation]]`, `[[add_relation]]`. Строгий режим: правило, не нашедшее сущность или связь, — ошибка (так видно, что после повторного извлечения имена поменялись). Пример — [stories/brass-vault/curation.toml](../stories/brass-vault/curation.toml).
+Файл `stories/<id>/curation.toml` (формат — docstring `curation.py`): `[merge]` дубликатов, `[drop]` мусора, `[rename]` (имя, которое видят игрок и мастер), `[retype]`, `[describe]`, `[props]` (например `{ fixed = true }` — нельзя взять), `[[drop_relation]]`, `[[add_relation]]`. Строгий режим: правило, не нашедшее сущность или связь, — ошибка (так видно, что после повторного извлечения имена поменялись). Пример — [stories/brass-vault/curation.toml](../stories/brass-vault/curation.toml).
 
 Формат `graph.json`: `{version: 1, meta, entities: [{name, type, description}], relationships: [{source, target, type, description}]}`. Связи ссылаются на сущности по `name`; стабильные ID появляются при экспорте.
 

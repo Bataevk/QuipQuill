@@ -93,8 +93,8 @@ def test_drop_relation_that_does_not_exist_is_an_error(tmp_path: Path) -> None:
 
 
 def test_unknown_section_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(curation.CurationError, match="rename"):
-        rules(tmp_path, '[rename]\n"a" = "b"\n')
+    with pytest.raises(curation.CurationError, match="regroup"):
+        rules(tmp_path, '[regroup]\n"a" = "b"\n')
 
 
 def test_cli_curate(tmp_path: Path) -> None:
@@ -107,3 +107,31 @@ def test_cli_curate(tmp_path: Path) -> None:
         cli.main(["curate", str(source), str(tmp_path / "curation.toml"), "-o", str(output)]) == 0
     )
     assert len(json.loads(output.read_text())["entities"]) == 4
+
+
+def test_rename_moves_relations_and_later_rules_use_the_new_name(tmp_path: Path) -> None:
+    text = """
+[merge]
+"Grand Hall" = ["Ballroom"]
+
+[rename]
+"Grand Hall" = "The Ballroom"
+
+[describe]
+"The Ballroom" = "Renamed."
+"""
+    result = curation.apply(graph(), rules(tmp_path, text))
+    entities = {e.name: e for e in result.entities}
+    assert "Grand Hall" not in entities
+    assert entities["The Ballroom"].description == "Renamed."
+    assert all("Grand Hall" not in (r.source, r.target) for r in result.relationships)
+    assert any("The Ballroom" in (r.source, r.target) for r in result.relationships)
+
+
+def test_rename_to_a_taken_name_is_an_error(tmp_path: Path) -> None:
+    text = """
+[rename]
+"Cellar" = "Grand Hall"
+"""
+    with pytest.raises(curation.CurationError, match="taken"):
+        curation.apply(graph(), rules(tmp_path, text))

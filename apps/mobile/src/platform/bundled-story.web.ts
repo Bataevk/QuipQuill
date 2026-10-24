@@ -9,10 +9,10 @@ import { getAdapters } from './adapters.web';
 import { getLibrary } from './services';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const DEMO_STORY = require('../../../../stories/brass-vault/brass-vault.qqstory');
+const DEMO_STORY = require('../../../../stories/alice/alice.qqstory');
 
 /** Per launch: the pool has no directories, only names. */
-const STAGING = '/qq/bundled/brass-vault.qqstory';
+const STAGING = '/qq/bundled/alice.qqstory';
 const FETCH_TIMEOUT_MS = 30_000;
 
 let ready: Promise<void> | undefined;

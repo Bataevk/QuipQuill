@@ -3,6 +3,7 @@
 Applied in this order (names in later steps refer to entities after the merges):
   [merge]            "Canonical" = ["alias", ...]  — aliases' relations move to the canonical
   [drop]             entities = [...]               — removed together with their relations
+  [rename]           "old name" = "New Name"        — the name players and the master see
   [retype]           "name" = "Tool"                — extractor type (prompts.ENTITY_TYPES)
   [describe]         "name" = "new description"
   [props]            "name" = { fixed = true }      — merged into the entity's props
@@ -20,7 +21,16 @@ from typing import Any
 
 from quipquill_builder.models import Graph, Relationship
 
-KNOWN_SECTIONS = {"merge", "drop", "retype", "describe", "props", "drop_relation", "add_relation"}
+KNOWN_SECTIONS = {
+    "merge",
+    "drop",
+    "rename",
+    "retype",
+    "describe",
+    "props",
+    "drop_relation",
+    "add_relation",
+}
 
 
 class CurationError(ValueError):
@@ -74,6 +84,23 @@ def apply(graph: Graph, rules: dict[str, Any]) -> Graph:
             dropped.add(name)
     relationships = [
         r for r in relationships if r.source not in dropped and r.target not in dropped
+    ]
+
+    # rename: later steps use the new names
+    renamed: dict[str, str] = {}
+    for old, new in rules.get("rename", {}).items():
+        if not require(old, "rename"):
+            continue
+        if new in entities:
+            missing.append(f"[rename] {old!r} → {new!r}: the new name is taken")
+            continue
+        entity = entities.pop(old)
+        entity.name = new
+        entities[new] = entity
+        renamed[old] = new
+    relationships = [
+        replace(r, source=renamed.get(r.source, r.source), target=renamed.get(r.target, r.target))
+        for r in relationships
     ]
 
     # retype / describe / props

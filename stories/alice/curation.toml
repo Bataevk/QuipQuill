@@ -1,0 +1,1279 @@
+# Manual fixes for the extracted graph of Alice's Adventures in Wonderland (Lewis Carroll, 1865;
+# public domain). Tied to the committed graph.json. The [drop] list is generated: everything outside
+# the playable map, the cast and the props kept below.
+# Apply (from builder/):
+#   uv run builder curate ../stories/alice/graph.json ../stories/alice/curation.toml -o ../stories/alice/graph.curated.json
+
+[merge]
+"bank" = ["field", "hedge"]
+"rabbit-hole" = ["deep well", "The Well", "Centre of the Earth"]
+"Long Hall" = ["dark hall", "the hall", "great hall", "Long Passage"]
+"pool of tears" = ["large pool of tears", "The Pool"]
+"shore" = ["race-course"]
+"neat little house" = ["house"]
+"wood" = ["the thick wood", "trees"]
+"little house" = ["open place"]
+"The Queen's Croquet-Ground" = ["Croquet-ground", "garden", "lovely garden", "beautiful garden"]
+"sea-shore" = ["ledge of rock", "shingle"]
+"court of justice" = ["court"]
+"White Rabbit" = ["Rabbit"]
+"Bill the Lizard" = ["Bill", "Lizard"]
+"Cheshire cat" = ["Cat's head", "grin"]
+"Queen of Hearts" = ["Queen"]
+"King of Hearts" = ["King"]
+"Knave of Hearts" = ["Knave"]
+"Frog-Footman" = ["Footman", "other footman"]
+"Baby" = ["pig-baby"]
+"Cook" = ["Duchess's cook"]
+"Alice's sister" = ["sister"]
+"little golden key" = ["tiny golden key", "key"]
+"little bottle" = ["bottle", "little magic bottle"]
+"white kid gloves" = ["Rabbit's little white kid gloves", "pair of white kid gloves", "pair of gloves", "gloves"]
+"glass table" = ["three-legged table", "Little glass table"]
+"mushroom" = ["right-hand bit", "lefthand bit", "pieces of mushroom", "lefthand bit of mushroom"]
+"comfits" = ["box of comfits"]
+"pepper-box" = ["pepper"]
+"cauldron of soup" = ["Soup"]
+"tea-things" = ["tea", "clean cup", "milk-jug", "teacup", "tea spoon"]
+"bread-and-butter" = ["piece of bread-and-butter", "butter"]
+"Live flamingoes" = ["flamingo"]
+"Live hedgehogs" = ["hedgehog", "other hedgehog"]
+"King's crown" = ["crown"]
+"dish of tarts" = ["tarts"]
+"scroll of parchment" = ["parchment scroll"]
+"cupboards" = ["book-shelves"]
+
+# The player is Alice (a hero in meta.toml) or their own hero; the rest is backstory, verse and scenery.
+[drop]
+entities = [
+    "'Tis the voice of the sluggard",
+    "A Mad Tea-Party",
+    "Ada",
+    "Alice",
+    "Alice's Right Foot, Esq., Hearthrug, near the Fender",
+    "Alice's feet",
+    "Alice's house",
+    "Antipathies",
+    "Arithmetic",
+    "Australia",
+    "Beautiful Soup",
+    "Canary",
+    "Cats",
+    "Caucus-Race and a Long Tale",
+    "Caucus-race",
+    "Christmas",
+    "Classics master",
+    "Croquet game",
+    "DRINK ME label",
+    "Dinah",
+    "Drawling",
+    "Drawling-master",
+    "Edgar Atheling",
+    "Edwin",
+    "Elsie",
+    "England",
+    "English",
+    "Fainting in Coils",
+    "Father William",
+    "France",
+    "French",
+    "French lesson-book",
+    "Fury",
+    "Game of croquet",
+    "How doth the little crocodile",
+    "Juryman who asked about handwriting",
+    "Juryman who asked to whom it was directed",
+    "King and Queen of Hearts",
+    "Lacie",
+    "Large rose-tree",
+    "Latin Grammar",
+    "Laughing and Grief",
+    "List of the singers in the last concert",
+    "Little passage",
+    "Lobster Quadrille",
+    "Lobster verse",
+    "Lullaby",
+    "Ma'am",
+    "Mabel",
+    "Magpie",
+    "Mary Ann",
+    "Mock Turtle Soup",
+    "Mock Turtle's Story",
+    "Morcar",
+    "Mouse's history",
+    "Multiplication Table",
+    "Mystery",
+    "Nest",
+    "New Zealand",
+    "Normans",
+    "Officer of the court",
+    "Owl",
+    "Où est ma chatte?",
+    "Panther",
+    "Party",
+    "Party of birds",
+    "Pat",
+    "Reeling and Writhing",
+    "Rule Forty-two",
+    "Schoolroom",
+    "Seaography",
+    "Shark",
+    "Shoes",
+    "Stigand",
+    "Stretching",
+    "The Room",
+    "The Tea-Party",
+    "Three gardeners",
+    "Three-legged stool",
+    "Tillie",
+    "Time",
+    "Tortoise",
+    "Turtle Soup",
+    "Twinkle, twinkle, little bat song",
+    "Twinkling of the tea",
+    "Uglification",
+    "William the Conqueror",
+    "Witness",
+    "Wonderland",
+    "You Are Old, Father William",
+    "accident",
+    "another shore",
+    "arch",
+    "arm",
+    "bat",
+    "blacking",
+    "blowing three blasts on the trumpet",
+    "boots and shoes",
+    "bottom of the sea",
+    "bough of a tree",
+    "branch of a tree",
+    "brandy",
+    "bright brass plate",
+    "brush",
+    "buttercup",
+    "canvas bag",
+    "cattle",
+    "ceiling",
+    "chains",
+    "chimney",
+    "clock",
+    "clubs",
+    "courtiers",
+    "crimson velvet cushion",
+    "croquet",
+    "crowd",
+    "cucumber-frame",
+    "curious dream",
+    "dance",
+    "darkness",
+    "day-school",
+    "dishes",
+    "dispute",
+    "door",
+    "doubled-up soldiers",
+    "down here",
+    "earth",
+    "eating the comfits",
+    "eels",
+    "fairy-tales",
+    "farm-yard",
+    "farmer",
+    "fire",
+    "fire-irons",
+    "game",
+    "garden door",
+    "glass",
+    "goldfish",
+    "grass",
+    "great concert",
+    "great letter",
+    "great thistle",
+    "green leaves",
+    "guests",
+    "guinea-pigs",
+    "hall doors",
+    "happy summer days",
+    "heap of sticks and dry leaves",
+    "highest tree in the wood",
+    "history of the accident",
+    "history passage",
+    "ink",
+    "inkstand",
+    "jelly-fish",
+    "jury",
+    "jury-box",
+    "jurymen",
+    "ladders",
+    "lamps",
+    "large birds",
+    "large flower-pot",
+    "large plate",
+    "lesson-books",
+    "list",
+    "little animals and birds",
+    "little birds and beasts",
+    "little creature",
+    "little door",
+    "little sister",
+    "lobster",
+    "looking-glass",
+    "loose slate",
+    "low curtain",
+    "maps and pictures",
+    "music",
+    "mustard",
+    "mustard-mine",
+    "newspapers",
+    "note-book",
+    "officer",
+    "ointment",
+    "old Crab",
+    "open air",
+    "other birds",
+    "other guests",
+    "other little children",
+    "pack of cards",
+    "paper letter",
+    "passage",
+    "pebbles",
+    "plates",
+    "players",
+    "poky little house",
+    "porpoise",
+    "prison",
+    "procession",
+    "puppy",
+    "railway",
+    "riddle",
+    "riddle: Why is a raven like a writing-desk?",
+    "roof",
+    "rope",
+    "rose-tree",
+    "royal children",
+    "saucepans",
+    "scaly friend",
+    "school in the sea",
+    "sea",
+    "seals, turtles, salmon",
+    "serpents",
+    "setting sun",
+    "shade",
+    "sheep-bells",
+    "shepherd boy",
+    "shrimp",
+    "sixpence",
+    "slates",
+    "slates and pencils",
+    "small birds",
+    "snail",
+    "soldiers",
+    "soles",
+    "song",
+    "song about the whiting",
+    "spectacles",
+    "squeaking pencil",
+    "stairs",
+    "stick",
+    "suppression of applause",
+    "table",
+    "terrier",
+    "the ground",
+    "three little sisters",
+    "three soldiers",
+    "throne",
+    "tops of the trees",
+    "treacle",
+    "treacle-well",
+    "trial",
+    "tulip-roots",
+    "turtles",
+    "twelve jurors",
+    "unusually large saucepan",
+    "verses",
+    "washing",
+    "water-well",
+    "whiting",
+    "wig",
+    "window",
+    "witness trial",
+    "young Crab",
+    "youth",
+]
+
+[rename]
+"bank" = "Riverbank"
+"rabbit-hole" = "The Rabbit-Hole"
+"Long Hall" = "Hall of Doors"
+"pool of tears" = "Pool of Tears"
+"shore" = "Shore of the Pool"
+"neat little house" = "White Rabbit's House"
+"wood" = "The Wood"
+"large mushroom" = "Caterpillar's Mushroom"
+"little house" = "Duchess's House"
+"Kitchen" = "Duchess's Kitchen"
+"house of the March Hare" = "March Hare's House"
+"Tree with door" = "Tree with a Door"
+"The Queen's Croquet-Ground" = "The Queen's Garden"
+"sea-shore" = "Sea-Shore"
+"court of justice" = "Court of Justice"
+"Cheshire cat" = "Cheshire Cat"
+"cupboards" = "cupboards and book-shelves"
+"little bottle" = "DRINK ME bottle"
+"cake" = "EAT ME cake"
+
+# --- Playable map ---
+
+[[add_relation]]
+source = "Riverbank"
+target = "The Rabbit-Hole"
+type = "LEADS_TO"
+description = "A large rabbit-hole under the hedge; it dips suddenly down into a very deep well."
+
+[[add_relation]]
+source = "The Rabbit-Hole"
+target = "Hall of Doors"
+type = "LEADS_TO"
+description = "The long fall ends on a heap of sticks and dry leaves, and a passage leads to a long, low hall."
+
+[[add_relation]]
+source = "Hall of Doors"
+target = "Pool of Tears"
+type = "LEADS_TO"
+description = "Past the far end of the hall the floor slopes down into a wide salt pool: the Pool of Tears, deep enough to swim in."
+
+[[add_relation]]
+source = "Pool of Tears"
+target = "Shore of the Pool"
+type = "LEADS_TO"
+description = "The pool's bank, crowded with dripping birds and animals."
+
+[[add_relation]]
+source = "Shore of the Pool"
+target = "The Wood"
+type = "LEADS_TO"
+description = "Past the bank, a thick wood begins."
+
+[[add_relation]]
+source = "The Wood"
+target = "White Rabbit's House"
+type = "LEADS_TO"
+description = "A neat little house with a brass plate: W. RABBIT."
+
+[[add_relation]]
+source = "The Wood"
+target = "Caterpillar's Mushroom"
+type = "LEADS_TO"
+description = "Among the flowers and grass stands a mushroom as tall as a little girl."
+
+[[add_relation]]
+source = "The Wood"
+target = "Duchess's House"
+type = "LEADS_TO"
+description = "An open place with a little house about four feet high."
+
+[[add_relation]]
+source = "The Wood"
+target = "March Hare's House"
+type = "LEADS_TO"
+description = "A house with chimneys shaped like ears and a roof thatched with fur."
+
+[[add_relation]]
+source = "The Wood"
+target = "Tree with a Door"
+type = "LEADS_TO"
+description = "One of the trees has a door leading right into it."
+
+[[add_relation]]
+source = "Tree with a Door"
+target = "Hall of Doors"
+type = "LEADS_TO"
+description = "Through the door in the tree: the long hall again, close to the little glass table."
+
+[[add_relation]]
+source = "Hall of Doors"
+target = "The Queen's Garden"
+type = "LEADS_TO"
+description = "The little door, fifteen inches high, opens with the golden key — for someone small enough."
+
+[[add_relation]]
+source = "The Queen's Garden"
+target = "Sea-Shore"
+type = "LEADS_TO"
+description = "The Gryphon knows the way to the Mock Turtle's ledge by the sea."
+
+[[add_relation]]
+source = "The Queen's Garden"
+target = "Court of Justice"
+type = "LEADS_TO"
+description = "The trial is beginning: everyone hurries to the court."
+
+[[add_relation]]
+source = "Tidy Little Room"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+description = "Upstairs in the Rabbit's house."
+
+[[add_relation]]
+source = "Duchess's Kitchen"
+target = "Duchess's House"
+type = "LOCATED_IN"
+description = "The door leads right into a large kitchen, full of smoke."
+
+# --- Extracted placements replaced by the ones below ---
+
+[[drop_relation]]
+source = "Alice's sister"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Baby"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Bill the Lizard"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Caterpillar"
+target = "Caterpillar's Mushroom"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Caterpillar"
+target = "hookah"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Caterpillar's Mushroom"
+target = "Caterpillar"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Cheshire Cat"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Cook"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Cook"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Cook"
+target = "cauldron of soup"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Cook"
+target = "pepper-box"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "Cook"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "Dormouse"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "Hatter"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "King of Hearts"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "Knave of Hearts"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "March Hare"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "Queen of Hearts"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Court of Justice"
+target = "White Rabbit"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "DRINK ME bottle"
+target = "Tidy Little Room"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Dodo"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Dodo"
+target = "thimble"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Dormouse"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Dormouse"
+target = "table under tree"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Duchess"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Duchess's Kitchen"
+target = "Baby"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Duchess's Kitchen"
+target = "Cheshire Cat"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Duchess's Kitchen"
+target = "Cook"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Duchess's Kitchen"
+target = "Duchess"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Duchess's Kitchen"
+target = "cauldron of soup"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Duck"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "EAT ME cake"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "EAT ME cake"
+target = "little glass box"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Eaglet"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Fish-Footman"
+target = "The Wood"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Fish-Footman"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Five"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Frog-Footman"
+target = "Duchess's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Frog-Footman"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Frog-Footman"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Hall of Doors"
+target = "Pool of Tears"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Hall of Doors"
+target = "glass table"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Hatter"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Hatter"
+target = "bread-and-butter"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Hatter"
+target = "hat"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Hatter"
+target = "tea-things"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Hatter"
+target = "watch"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "King of Hearts"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "King of Hearts"
+target = "King's crown"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Knave of Hearts"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Knave of Hearts"
+target = "King's crown"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Live flamingoes"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Lory"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "March Hare"
+target = "watch"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "March Hare's House"
+target = "Hatter"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "March Hare's House"
+target = "March Hare"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Mock Turtle"
+target = "Sea-Shore"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Mouse"
+target = "Pool of Tears"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Mouse"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "ORANGE MARMALADE jar"
+target = "cupboards and book-shelves"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Pool of Tears"
+target = "Dodo"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Pool of Tears"
+target = "Duck"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Pool of Tears"
+target = "Eaglet"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Pool of Tears"
+target = "Lory"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Pool of Tears"
+target = "Mouse"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Queen of Hearts"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Queen of Hearts"
+target = "Live hedgehogs"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Riverbank"
+target = "Alice's sister"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Riverbank"
+target = "The Rabbit-Hole"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Riverbank"
+target = "White Rabbit"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Seven"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "Shore of the Pool"
+target = "Dodo"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "The Queen's Garden"
+target = "Live flamingoes"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "The Queen's Garden"
+target = "Live hedgehogs"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "The Queen's Garden"
+target = "Two"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "The Rabbit-Hole"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "The Wood"
+target = "Fish-Footman"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "Tidy Little Room"
+target = "DRINK ME bottle"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Tidy Little Room"
+target = "fan"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Tidy Little Room"
+target = "white kid gloves"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "Two"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "White Rabbit's House"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "fan"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "scroll of parchment"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "watch"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "White Rabbit"
+target = "white kid gloves"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "White Rabbit's House"
+target = "EAT ME cake"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "book"
+target = "Alice's sister"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "cauldron of soup"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "cupboards and book-shelves"
+target = "ORANGE MARMALADE jar"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "cupboards and book-shelves"
+target = "The Rabbit-Hole"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "daisies"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "fan"
+target = "Tidy Little Room"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "glass table"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "glass table"
+target = "little golden key"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "large arm-chair"
+target = "table under tree"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "little golden key"
+target = "glass table"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "pepper-box"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "table under tree"
+target = "Hatter"
+type = "HAS_AGENT"
+
+[[drop_relation]]
+source = "table under tree"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[drop_relation]]
+source = "table under tree"
+target = "tea-things"
+type = "HAS_ITEM"
+
+[[drop_relation]]
+source = "white kid gloves"
+target = "Tidy Little Room"
+type = "LOCATED_IN"
+
+# --- Where everyone and everything starts ---
+
+[[add_relation]]
+source = "Alice's sister"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "White Rabbit"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "daisies"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "book"
+target = "Riverbank"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "cupboards and book-shelves"
+target = "The Rabbit-Hole"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "glass table"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "little golden key"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "DRINK ME bottle"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "little glass box"
+target = "Hall of Doors"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Mouse"
+target = "Pool of Tears"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Dodo"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Duck"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Lory"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Eaglet"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "comfits"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "thimble"
+target = "Shore of the Pool"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Bill the Lizard"
+target = "White Rabbit's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "fan"
+target = "Tidy Little Room"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "white kid gloves"
+target = "Tidy Little Room"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Pigeon"
+target = "The Wood"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Cheshire Cat"
+target = "The Wood"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Caterpillar"
+target = "Caterpillar's Mushroom"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "mushroom"
+target = "Caterpillar's Mushroom"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Frog-Footman"
+target = "Duchess's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Fish-Footman"
+target = "Duchess's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Duchess"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Cook"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Baby"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "pepper-box"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "cauldron of soup"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Frying-pan"
+target = "Duchess's Kitchen"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Hatter"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "March Hare"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Dormouse"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "table under tree"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "tea-things"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "bread-and-butter"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "large arm-chair"
+target = "March Hare's House"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Queen of Hearts"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "King of Hearts"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Knave of Hearts"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Two"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Five"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Seven"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "executioner"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Gryphon"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "White roses"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Live flamingoes"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Live hedgehogs"
+target = "The Queen's Garden"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "Mock Turtle"
+target = "Sea-Shore"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "dish of tarts"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "scroll of parchment"
+target = "Court of Justice"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "ORANGE MARMALADE jar"
+target = "cupboards and book-shelves"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "EAT ME cake"
+target = "little glass box"
+type = "LOCATED_IN"
+
+[[add_relation]]
+source = "White Rabbit"
+target = "watch"
+type = "HAS_ITEM"
+
+[[add_relation]]
+source = "Caterpillar"
+target = "hookah"
+type = "HAS_ITEM"
+
+[[add_relation]]
+source = "Hatter"
+target = "hat"
+type = "HAS_ITEM"
+
+[[add_relation]]
+source = "King of Hearts"
+target = "King's crown"
+type = "HAS_ITEM"
+
+[describe]
+"Riverbank" = "A grassy bank by a lazy river on a hot summer afternoon. Daisies grow in the grass, a hedge runs along the field, and under the hedge is a large rabbit-hole. Alice's sister sits here reading a book with no pictures or conversations in it."
+"The Rabbit-Hole" = "The rabbit-hole goes straight on like a tunnel, then dips into a very deep well. The fall is so slow there is time to look around: the sides are lined with cupboards and book-shelves, maps and pictures hung upon pegs. At the bottom: a heap of sticks and dry leaves, and a long passage."
+"Hall of Doors" = "A long, low hall lit by a row of lamps hanging from the roof. Doors all round the hall, all locked. In the middle stands a little three-legged table of solid glass. Behind a low curtain is a little door about fifteen inches high, which leads into the loveliest garden — if only one were small enough to get through."
+"Pool of Tears" = "A salt-water pool of tears, wept by a giant Alice when she was nine feet high. Now it is deep enough to swim in, and a Mouse and many strange birds and animals have fallen into it."
+"Shore of the Pool" = "The bank of the pool of tears, where a queer-looking party of dripping birds and animals gathers to get dry: a Duck, a Dodo, a Lory, an Eaglet and others. The Dodo proposes a Caucus-race, which everybody wins."
+"The Wood" = "A thick wood of tall trees, flowers and blades of grass, with paths that lead to many odd places. The Cheshire Cat may be sitting on a bough here, grinning; a Pigeon guards her nest high in the trees."
+"White Rabbit's House" = "A neat little house with a bright brass plate on the door engraved W. RABBIT. Upstairs is a tidy little room; there is a window, a chimney, and a cucumber-frame in the garden below."
+"Tidy Little Room" = "A tidy little room upstairs in the White Rabbit's house, with a table in the window. On it lie a fan and two or three pairs of tiny white kid gloves; a little bottle stands near the looking-glass."
+"Caterpillar's Mushroom" = "A large mushroom about the same height as a little girl, among tall flowers and blades of grass. On top sits a large blue Caterpillar, arms folded, quietly smoking a long hookah. One side of the mushroom makes you grow taller, the other side shorter."
+"Duchess's House" = "A little house about four feet high, standing in an open place in the wood. A Frog-Footman sits on the ground near the door, staring stupidly up into the sky. A most extraordinary noise is going on within — howling and sneezing, and a great crash."
+"Duchess's Kitchen" = "A large kitchen full of smoke and far too much pepper. The Duchess sits on a three-legged stool nursing a sneezing baby; the cook leans over the fire, stirring a large cauldron of soup and throwing pans and dishes about. A large Cheshire cat sometimes lies on the hearth, grinning from ear to ear."
+"March Hare's House" = "A house with chimneys shaped like ears and a roof thatched with fur. In front of it, under a tree, a large table is set out for tea, and the March Hare, the Hatter and a sleeping Dormouse are crowded together at one corner of it. It is always six o'clock here, always tea-time."
+"Tree with a Door" = "One of the trees in the wood has a door leading right into it. Through it is the long hall again, close to the little glass table."
+"The Queen's Garden" = "The beautiful garden behind the little door: bright flower-beds and cool fountains. A large rose-tree near the entrance bears white roses, which three gardeners shaped like playing cards are busily painting red. Here the Queen of Hearts plays croquet with live flamingoes for mallets and live hedgehogs for balls, and orders heads off at every turn."
+"Sea-Shore" = "The sea-shore, reached with the Gryphon's help. On a little ledge of rock sits the Mock Turtle, sad and lonely, sighing as if his heart would break."
+"Court of Justice" = "The court where the King and Queen of Hearts sit on their throne, with a great crowd of little birds and beasts and the whole pack of cards. In the middle of the court is a table with a large dish of tarts. The jury-box holds twelve creatures with slates; the White Rabbit is herald, with a trumpet and a scroll of parchment."
+"little golden key" = "A tiny golden key lying on the glass table in the hall of doors. It fits the little door behind the curtain, which leads into the loveliest garden."
+"DRINK ME bottle" = "A little bottle on the glass table, with a paper label round its neck: DRINK ME, beautifully printed in large letters. It is not marked poison. It tastes of cherry-tart, custard, pine-apple, roast turkey, toffee and hot buttered toast — and whoever drinks it shuts up like a telescope, down to ten inches high."
+"little glass box" = "A little glass box lying under the glass table in the hall of doors."
+"EAT ME cake" = "A very small cake inside the little glass box, with the words EAT ME beautifully marked in currants. Whoever eats it opens out like the largest telescope that ever was — grows enormously tall."
+"cupboards and book-shelves" = "Cupboards and book-shelves lining the sides of the rabbit-hole, with maps and pictures hung upon pegs. Things can be taken from them while falling, and put back."
+"Queen of Hearts" = "The Queen of Hearts, a playing card with a crown — the ruler of Wonderland's court, small, fierce and very loud.\n\nPersonality:\n- Quick to rage at the smallest thing; her one way of settling every difficulty is \"Off with his head!\"\n- Loves croquet and must always win; cheats without noticing.\n- Her orders are rarely carried out: the King quietly pardons the condemned.\n\nWants:\n- Obedience, red roses, and her tarts back.\n- Everyone to play croquet with her, at once.\n\nKnows:\n- The gardeners planted a white rose-tree by mistake.\n- Someone has stolen the tarts she made, all on a summer day.\n\nSpeech:\n- Shouts in short commands, stamps, turns crimson with fury; \"Sentence first — verdict afterwards!\""
+"White Rabbit" = "The White Rabbit: a rabbit with pink eyes, splendidly dressed in a waistcoat, who takes a watch out of his waistcoat-pocket and is always late. He is the Queen's herald and the Duchess's acquaintance, and he lives in a neat little house in the wood.\n\nPersonality:\n- Nervous, fussy and hurried; trots along muttering to himself.\n- Timid with the great (the Duchess, the Queen), bossy with servants — he takes Alice for his housemaid, Mary Ann.\n\nWants:\n- Not to be late: \"Oh my ears and whiskers, how late it's getting!\"\n- His fan and his white kid gloves, which he keeps dropping.\n\nKnows:\n- The way to his own house, to the Duchess, and to the Queen's croquet-ground and court.\n- The Duchess is under sentence of execution for boxing the Queen's ears.\n\nSpeech:\n- Anxious exclamations: \"Oh dear! Oh dear! I shall be too late!\", \"The Duchess! Oh my dear paws! She'll get me executed, as sure as ferrets are ferrets!\""
+"Alice's sister" = "Alice's older sister, sitting on the riverbank on a hot afternoon, reading a book that has no pictures or conversations in it.\n\nPersonality:\n- Calm, patient and a little absorbed in her reading; fond of Alice.\n\nWants:\n- To finish her chapter in peace; she does not see the White Rabbit run by.\n\nKnows:\n- Tea will be ready at home soon; their cat Dinah is waiting there.\n\nSpeech:\n- Gentle, grown-up, a touch amused at Alice's questions."
+"ORANGE MARMALADE jar" = "A jar labelled ORANGE MARMALADE, taken from one of the shelves in the rabbit-hole — to great disappointment, it is empty."
+
+[props]
+"glass table" = { fixed = true }
+"cupboards and book-shelves" = { fixed = true }
+"table under tree" = { fixed = true }
+"cauldron of soup" = { fixed = true }
+"large arm-chair" = { fixed = true }
+"White roses" = { fixed = true }

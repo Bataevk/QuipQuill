@@ -90,16 +90,18 @@ if (!reducedMotion && matchMedia("(pointer: fine)").matches) {
 
 /* ---------- The live demo chat ---------- */
 
-// One scene of The Brass Vault, played again and again: the player types, the master answers.
+// Verbatim from a real playthrough (apps/mobile/.live-runs/alice-people1.json, docs/notes/site-content.md);
+// lines may hold <em> and <br>.
 const SCRIPT = [
-  { gm: "Rain drums on the skylight of the Copper Kettle’s back room. Mags Holloway slides a brass key across the table — and doesn’t let go of it." },
-  { you: "I ask Mags what exactly she needs from me tonight." },
-  { npc: "Mags Holloway", text: "“The Clockheart. At noon the Admiralty buys it — tonight it’s still in the vault. You open doors, I open mouths.”" },
-  { you: "I take the brass lantern from above the table." },
-  { gm: "The lantern is warm and heavier than it looks. Mags watches it go into your coat and says nothing — which, with Mags, is a price you will pay later." },
-  { you: "I go up the stairs to Lamplight Row." },
-  { gm: "Lamplight Row hisses with gas and wet cobbles. A boy in a too-big cap — Pip — falls into step beside you, as if he had been waiting all evening." },
-  { npc: "Pip", text: "“Bank tubes run right under us, guv. Wide enough for a cat. Or a very small thief.”" },
+  { you: "I ask the Dodo how I could possibly get dry." },
+  { npc: "Dodo", text: "<em>Dodo rises gravely to its feet and raises one finger.</em><br>\"The fitting remedy for our present dampness is a Caucus-race.\"" },
+  { gm: "The word hangs in the damp air like a hat on a peg: <em>Caucus-race.</em> The Duck stops wringing out its feathers and looks at the Dodo; the Lory, who was about to be offended at something, forgets what it was offended about; the Eaglet’s beak twitches, halfway between a sneer and a smile. Nobody says a word, because nobody is quite sure what a Caucus-race is." },
+  { you: "I walk into the wood." },
+  { gm: "It is a thick wood, and dim, and very still. The trees stand tall and close, their branches tangled overhead so that the light falls in green patches, like coins spilled on the moss. The grass grows high, taller than you in places, and the flowers — oh, the flowers are the odd thing. They do not wilt as you pass. They turn, very slowly, to watch you. A violet, a rose, a tall sunflower with a face like a clock, all of them openly staring, as if you were the curiosity, and not they." },
+  { you: "I ask the Cheshire Cat which way I ought to go from here." },
+  { npc: "Cheshire Cat", text: "<em>Cheshire Cat grins wider and settles more comfortably on the bough.</em><br>\"That depends a good deal on where you want to get to.\"" },
+  { you: "I go to the March Hare’s house." },
+  { gm: "The path winds on, and the wood thins, and then the trees step aside altogether — and there, in a clearing, stands the strangest house you have ever seen.<br><br>The March Hare and the Hatter are looking at each other across the sleeping Dormouse, and neither of them has noticed you yet. The teapot is in mid-air, frozen between two hands. The tea-things are everywhere, and it is always six o'clock here, always tea-time." },
 ];
 
 const chat = document.querySelector("[data-hero-chat]");

@@ -1445,3 +1445,70 @@ h3 {
     transform: none;
   }
 }
+
+/* ---------- Content pass (L.6) ---------- */
+
+/* "Already working": short claims, five in a row on wide screens. */
+.features-now {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.features-now .feature {
+  padding: 22px;
+}
+
+.features-now .feature h3 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.features-now .i-lg {
+  margin-bottom: 14px;
+}
+
+.feature .fine {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.price-text span {
+  font-size: 48px;
+}
+
+.plan > p:not(.price) {
+  margin-top: 14px;
+}
+
+#pricing > .fine {
+  margin-top: 26px;
+}
+
+@media (max-width: 980px) {
+  .features-now {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .features-now {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The player's hero sheet in the "Your hero, fitted" example. */
+.hero-sheet {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 12px 14px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 15px;
+  animation: rise 0.5s var(--ease) both;
+}
+
+.hero-sheet b {
+  color: var(--text);
+  font-weight: 600;
+}

@@ -1,0 +1,28 @@
+# Story identity and authored texts (ADR 24). `builder export --meta` reads this file;
+# `builder meta --meta` writes drafts and edits here. Keep story_id stable: saves use it.
+
+story_id = "4e175307-6efb-45d1-90f3-1b8aac02aa51"
+title = "Alice's Adventures in Wonderland"
+language = "en"
+world_summary = """
+Wonderland lies at the bottom of a very deep rabbit-hole under a hedge in the English countryside, on a hot summer afternoon. It is a dream-world of talking animals, playing cards and nonsense, where everyone is a little mad and very sure of themselves. A White Rabbit in a waistcoat, checking his watch and fretting that he is late, runs past the riverbank where the player sits beside a sister reading a dull book. Down the hole is a hall of locked doors, a golden key, a bottle marked DRINK ME and a cake marked EAT ME, and behind the smallest door, the loveliest garden — where the Queen of Hearts plays croquet with flamingoes and orders heads off at every turn. On the way lie a pool of tears, a Caucus-race, a Caterpillar on a mushroom, a Duchess's peppery kitchen, a grinning Cheshire Cat and a mad tea-party that never ends. The player's goal is their own: reach the garden, survive the Queen, and find a way home before the dream ends."""
+world_constraints = """
+- Era: Victorian England, about 1865. Beyond the rabbit-hole everything follows dream-logic, but objects are only what Wonderland already holds: no weapons, swords, guns, phones or modern things appear because someone wishes for them.
+- Size changes: eating or drinking things in Wonderland makes you grow or shrink (the DRINK ME bottle shrinks, the EAT ME cake makes you grow, one side of the Caterpillar's mushroom makes you taller and the other shorter). Size decides which doors, rooms and holes you can pass.
+- The little door to the garden is fifteen inches high and locked; the little golden key opens it.
+- Animals, birds and playing cards talk, argue and take offence; they follow their own odd rules of politeness, and contradicting them is risky.
+- The Queen of Hearts orders executions constantly, but in practice the King pardons people and nobody is really beheaded.
+- At the March Hare's house it is always six o'clock, always tea-time.
+- Magic is never cast by people: it lives in food, drink, doors and the place itself.
+- Newly created player characters arrive the way Alice did — by falling down the rabbit-hole — and must fit a Victorian dream: ordinary people, children or talking creatures, without powers, weapons or modern gadgets."""
+style = "Whimsical Victorian nonsense in the voice of Lewis Carroll: playful, curious and gently ironic, with polite absurd dialogue, puns, riddles without answers and sudden shifts of size and logic. Keep it light and safe for all ages; the danger is comic, the Queen's threats are loud but never gory. Short vivid scenes, characters who speak in their own manner, and a narrator who enjoys the madness."
+tagline = "Follow the White Rabbit down the hole — and mind your size."
+
+[[heroes]]
+key = "alice"
+name = "Alice"
+sex = "female"
+age = 7
+race = "human"
+blurb = "A curious girl who follows the White Rabbit"
+description = "A curious, well-mannered, talkative girl of seven from a comfortable Victorian home, with long hair and a pinafore dress. She is bored on the riverbank beside her sister's dull book, loves to recite lessons (and gets them wrong), and talks to herself when no one else will listen. Brave in an ordinary way: she follows the White Rabbit without once considering how in the world she is to get out again. Carries nothing at all, and misses her cat Dinah."

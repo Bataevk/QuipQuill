@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>foolore — stories that answer back</title>
-  <meta name="description" content="foolore is an interactive book with an AI game master. Say what your hero does — the world, its places and its people respond, and remember. Play the prototype free in your browser.">
+  <title>foolore — travel through your favorite fandoms</title>
+  <meta name="description" content="Step into any adventure or book you love. Say what you do in your own words — the world and its characters answer, and remember. Try foolore free in your browser.">
   <meta name="theme-color" content="#141215">
-  <meta property="og:title" content="foolore — stories that answer back">
-  <meta property="og:description" content="An interactive book with an AI game master. Play the prototype free in your browser.">
+  <meta property="og:title" content="foolore — travel through your favorite fandoms">
+  <meta property="og:description" content="Play any adventure or book you love — a world that remembers everything you do. Try it free in your browser.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/emblem.svg" type="image/svg+xml">
   <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -19,8 +19,8 @@
 
   <div class="announce" role="note">
     <span class="pulse" aria-hidden="true"></span>
-    <span><strong>We are building foolore.</strong> The early prototype is live — play it free in your browser.</span>
-    <a href="/play/">Try it <svg class="i"><use href="img/icons.svg#i-arrow-right"/></svg></a>
+    <span><strong>We are building foolore.</strong> The early prototype is live in your browser.</span>
+    <a href="/play/">Try it free <svg class="i"><use href="img/icons.svg#i-arrow-right"/></svg></a>
   </div>
 
   <header class="nav" data-nav>
@@ -29,12 +29,12 @@
       <span>foolore</span>
     </a>
     <nav class="nav-links" aria-label="Sections">
-      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
       <a href="#examples">Examples</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#pricing">Pricing</a>
     </nav>
-    <a class="btn btn-small btn-accent" href="/play/">Play now</a>
+    <a class="btn btn-small btn-accent" href="/play/">Try it free</a>
   </header>
 
   <main id="main">
@@ -47,28 +47,28 @@
       </div>
 
       <div class="hero-copy">
-        <p class="eyebrow reveal"><svg class="i"><use href="img/icons.svg#i-sparkles"/></svg> An interactive book with an AI game master</p>
-        <h1 class="reveal">Stories that <em>answer&nbsp;back.</em></h1>
-        <p class="lead reveal">Say what your hero does — in your own words. The world, its places, its things and its people respond, and they <em>remember</em>. No scripts, no choice menus: a living book that plays fair.</p>
+        <p class="eyebrow reveal"><svg class="i"><use href="img/icons.svg#i-sparkles"/></svg> Interactive stories with an AI master</p>
+        <h1 class="reveal">Travel through your favorite <em>fandoms.</em></h1>
+        <p class="lead reveal">Step into any adventure or book you love. Say what you do in your own words — the world and its characters answer, and they <em>remember</em>.</p>
         <div class="cta-row reveal">
-          <a class="btn btn-accent" href="/play/"><svg class="i"><use href="img/icons.svg#i-play"/></svg> Play in your browser</a>
+          <a class="btn btn-accent" href="/play/"><svg class="i"><use href="img/icons.svg#i-play"/></svg> Try it free</a>
           <a class="btn btn-ghost" href="#waitlist">Join the waitlist</a>
         </div>
-        <p class="fine reveal">Free prototype · no sign-up · English</p>
+        <p class="fine reveal">In your browser · no sign-up · English</p>
       </div>
 
       <div class="hero-chat reveal" aria-label="An example game">
         <div class="window">
           <div class="window-bar">
             <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="window-title">The Brass Vault</span>
+            <span class="window-title">Alice’s Adventures in Wonderland</span>
             <span class="live"><span class="pulse" aria-hidden="true"></span>live</span>
           </div>
           <div class="chat" data-hero-chat aria-live="off">
             <!-- Filled by main.js from the script below; without JS the static lines stay. -->
-            <div class="msg gm">Rain drums on the skylight of the Copper Kettle’s back room. Mags Holloway slides a brass key across the table and doesn’t let go of it.</div>
-            <div class="msg you">I ask Mags what exactly she needs from me tonight.</div>
-            <div class="msg npc"><b>Mags Holloway</b>“The Clockheart. Noon tomorrow the Admiralty buys it — tonight it’s still in the vault. You open doors, I open mouths.”</div>
+            <div class="msg you">I ask the Dodo how I could possibly get dry.</div>
+            <div class="msg npc"><b>Dodo</b><em>Dodo rises gravely to its feet and raises one finger.</em><br>"The fitting remedy for our present dampness is a Caucus-race."</div>
+            <div class="msg gm">The word hangs in the damp air like a hat on a peg: <em>Caucus-race.</em> The Duck stops wringing out its feathers and looks at the Dodo; the Lory, who was about to be offended at something, forgets what it was offended about; the Eaglet’s beak twitches, halfway between a sneer and a smile. Nobody says a word, because nobody is quite sure what a Caucus-race is.</div>
           </div>
           <div class="composer" aria-hidden="true">
             <span data-typing>What do you do?</span>
@@ -81,93 +81,109 @@
     <!-- Genres marquee -->
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
-        <span>Steampunk heists</span><i>✦</i><span>Haunted manors</span><i>✦</i><span>Fairy-tale courts</span><i>✦</i><span>Noir cities</span><i>✦</i><span>Space operas</span><i>✦</i><span>Classroom classics</span><i>✦</i><span>Your own worlds</span><i>✦</i>
-        <span>Steampunk heists</span><i>✦</i><span>Haunted manors</span><i>✦</i><span>Fairy-tale courts</span><i>✦</i><span>Noir cities</span><i>✦</i><span>Space operas</span><i>✦</i><span>Classroom classics</span><i>✦</i><span>Your own worlds</span><i>✦</i>
+        <span>Books</span><i>✦</i><span>Anime</span><i>✦</i><span>Light novels</span><i>✦</i><span>Game fandoms</span><i>✦</i><span>D&amp;D adventures</span><i>✦</i><span>Fairy tales</span><i>✦</i>
+        <span>Books</span><i>✦</i><span>Anime</span><i>✦</i><span>Light novels</span><i>✦</i><span>Game fandoms</span><i>✦</i><span>D&amp;D adventures</span><i>✦</i><span>Fairy tales</span><i>✦</i>
+        <span>Books</span><i>✦</i><span>Anime</span><i>✦</i><span>Light novels</span><i>✦</i><span>Game fandoms</span><i>✦</i><span>D&amp;D adventures</span><i>✦</i><span>Fairy tales</span><i>✦</i>
       </div>
     </div>
 
     <!-- How it works -->
-    <section class="section" id="how">
+    <section class="section" id="features">
       <div class="section-head reveal">
-        <p class="kicker">How it works</p>
-        <h2>A book that plays <em>with</em> you</h2>
-        <p class="sub">Every story is built from its lore into a real world — places, things and people linked together. The game master is an AI that can change that world only through fair moves, so it cannot cheat for you, or against you.</p>
+        <p class="kicker">The idea</p>
+        <h2>Any story. <em>Your</em> moves.</h2>
+        <p class="sub">Not a choose-your-path book and not a plain chatbot: a world that listens, answers and keeps every promise — and every grudge.</p>
       </div>
-      <ol class="steps">
-        <li class="card step reveal">
-          <span class="step-n">01</span>
-          <svg class="i i-lg"><use href="img/icons.svg#i-user-round-plus"/></svg>
-          <h3>Bring a hero</h3>
-          <p>Describe anyone — an elven archivist, a retired soldier, a broke actor. The story fits them into its world and offers three versions to choose from.</p>
-        </li>
-        <li class="card step reveal">
-          <span class="step-n">02</span>
-          <svg class="i i-lg"><use href="img/icons.svg#i-message-circle"/></svg>
-          <h3>Say anything</h3>
-          <p>Type what you do, as you would tell a friend. Talk, sneak, bargain, lie. The master narrates; the people you meet answer in their own voice.</p>
-        </li>
-        <li class="card step reveal">
-          <span class="step-n">03</span>
-          <svg class="i i-lg"><use href="img/icons.svg#i-globe"/></svg>
-          <h3>The world remembers</h3>
-          <p>Take the lantern and it is in your pocket tomorrow. Anger a guard and he will not forget. Your save is the world itself, not a summary.</p>
-        </li>
-      </ol>
+      <div class="features">
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-library"/></svg>
+          <h3>Any adventure or book</h3>
+          <p>Fall down the rabbit-hole with Alice today. Tomorrow — the books, anime and game worlds you love.</p>
+        </article>
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-brain"/></svg>
+          <h3>A world that remembers</h3>
+          <p>Places and characters remember what you did. And no, you can’t just pull a magic super-sword out of thin air — the world won’t be fooled.</p>
+        </article>
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-infinity"/></svg>
+          <h3>Endless choice</h3>
+          <p>No scripted options. Talk, sneak, bargain, do something ridiculous — the story follows you.</p>
+        </article>
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-drama"/></svg>
+          <h3>Characters with character</h3>
+          <p>Everyone acts on their own personality: the Hatter is mad, the Queen is furious, the Cat only grins.</p>
+        </article>
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-dices"/></svg>
+          <h3>Try your luck</h3>
+          <p>Open the chest, search the shelves, take the risky leap. Sometimes luck is on your side — sometimes the jar is empty.</p>
+        </article>
+        <article class="card feature reveal">
+          <svg class="i i-lg"><use href="img/icons.svg#i-lock"/></svg>
+          <h3>Private by design</h3>
+          <p>Your saves live only on your device. We never store or log your chats — your turns pass to the AI and are gone.</p>
+          <p class="fine">Unless you choose to send us a report.</p>
+        </article>
+      </div>
     </section>
 
     <!-- Examples -->
     <section class="section examples" id="examples">
       <div class="section-head reveal">
-        <p class="kicker">Example turns</p>
+        <p class="kicker">From real games</p>
         <h2>What a turn looks like</h2>
-        <p class="sub">Moments like these from <em>The Brass Vault</em>, a steampunk heist in the city of Vellmoor, 1887.</p>
+        <p class="sub">Every line below was written live by foolore while we played <em>Alice’s Adventures in Wonderland</em>. Only trimmed, never edited.</p>
       </div>
 
       <div class="tabs reveal" role="tablist" aria-label="Examples">
         <button role="tab" id="tab-hero" aria-controls="ex-hero" aria-selected="true">Your hero, fitted</button>
-        <button role="tab" id="tab-people" aria-controls="ex-people" aria-selected="false" tabindex="-1">People with minds</button>
-        <button role="tab" id="tab-rules" aria-controls="ex-rules" aria-selected="false" tabindex="-1">A world with rules</button>
-        <button role="tab" id="tab-luck" aria-controls="ex-luck" aria-selected="false" tabindex="-1">Luck &amp; consequences</button>
+        <button role="tab" id="tab-people" aria-controls="ex-people" aria-selected="false" tabindex="-1">Characters with character</button>
+        <button role="tab" id="tab-rules" aria-controls="ex-rules" aria-selected="false" tabindex="-1">No cheating</button>
+        <button role="tab" id="tab-memory" aria-controls="ex-memory" aria-selected="false" tabindex="-1">It remembers</button>
+        <button role="tab" id="tab-luck" aria-controls="ex-luck" aria-selected="false" tabindex="-1">Try your luck</button>
       </div>
 
       <div class="example-stage reveal">
         <div class="example" role="tabpanel" id="ex-hero" aria-labelledby="tab-hero">
           <div class="chat">
-            <div class="msg you">Lirael. An elf, 140 years old — a wandering archivist who reads the stars.</div>
-            <div class="msg gm">There are no elves in Vellmoor — but there are people the city never quite explains. Here are three ways you could belong:</div>
-            <div class="cards">
-              <div class="mini-card is-picked"><b>The Star-Reader</b><span>Human, 28. An archivist from a far island who charts the sky for the Observatory.</span></div>
-              <div class="mini-card"><b>The Old Clerk</b><span>Human, 61. Keeps the Admiralty’s star charts — and its secrets.</span></div>
-              <div class="mini-card"><b>The Foundling</b><span>Pale, ageless, nobody’s. Rumours call you fae.</span></div>
-            </div>
+            <div class="hero-sheet"><b>Max, 17</b> — “A gamer from Berlin in a hoodie, who never puts his phone down and is sure every world has a speedrun.”</div>
+            <div class="msg gm">Your Max could not keep his Berlin street-clothes or his humming little machine in this older dream, but the heart of him — the boy who believes every world is a game with a faster way through — fits Wonderland like a glove. So he arrives as a lad with a worn cap and a notebook of shortcuts, ready to speedrun the rabbit-hole itself. I've given him two other trades, a clockmaker and a messenger-boy, each still chasing the same bright idea: there is always a quicker way.</div>
+            <div class="msg you">I take out my phone and call an Uber home.</div>
+            <div class="msg gm">You pat your coat pockets — the right one, the left one, the little one you keep for farthings — and find the usual London apprentice's cargo: a stub of pencil, a spent match, a breadcrumb of heroic age, and the crumpled notebook. No phone. It seems you left it at the shop, or in another century, or possibly back in the world where machines work as advertised.<br><br>Your pocket watch, consulted by force of habit, offers the time of half past "somewhere else" — which is not, you must admit, a pickup location.</div>
           </div>
-          <p class="note"><svg class="i"><use href="img/icons.svg#i-wand-sparkles"/></svg> The story keeps your idea and fits it to its world. Three changes allowed, then you pick.</p>
+          <p class="note"><svg class="i"><use href="img/icons.svg#i-wand-sparkles"/></svg> Bring anyone. The story keeps who they are and fits them into its world — here, a gamer from Berlin falls into a Victorian dream.</p>
         </div>
-
         <div class="example" role="tabpanel" id="ex-people" aria-labelledby="tab-people" hidden>
           <div class="chat">
-            <div class="msg you">I ask Pip what he knows about the bank’s pneumatic tubes.</div>
-            <div class="msg npc"><b>Pip</b>“Tubes? Every message in that bank goes through ’em. Main line runs under Lamplight Row and comes up in the sorting room. Wide enough for a cat. Or a very small thief.” He grins and looks at you sideways.</div>
-            <div class="msg gm">Pip pockets the coin you didn’t offer yet, as if it were already his.</div>
+            <div class="msg you">I pour a little hot tea on the Dormouse’s nose to wake him up.</div>
+            <div class="msg npc"><b>Dormouse</b><em>Dormouse twitches, rubs its nose, and squints up at Alice.</em><br>"Of course, of course—just what I was going to remark myself. Though a drop less tea would have been civil."</div>
+            <div class="msg npc"><b>March Hare</b>March Hare grins and nudges the Hatter, pointing at the sputtering Dormouse.<br>"There! That's the way to wake a Dormouse!"</div>
+            <div class="msg gm">The Dormouse sits up as far as a Dormouse can sit up — which is not very far — and blinks at the world with the injured dignity of one who has been woken by tea, and not by a gentle whisper, or a poem, or anything civil. It rubs its nose with both paws, and its nose, being a nose, remains damp and slightly offended.</div>
           </div>
-          <p class="note"><svg class="i"><use href="img/icons.svg#i-brain"/></svg> Each character has their own persona, memory and knowledge. Pip knows the sewers; Mags knows people.</p>
+          <p class="note"><svg class="i"><use href="img/icons.svg#i-drama"/></svg> Everyone speaks for themselves: the Dormouse is offended, the March Hare is delighted.</p>
         </div>
-
         <div class="example" role="tabpanel" id="ex-rules" aria-labelledby="tab-rules" hidden>
           <div class="chat">
-            <div class="msg you">I pull out my smartphone and call the police.</div>
-            <div class="msg gm">Your hand closes on the brass lantern — the only thing you carry. In 1887 the nearest constable is reached by shouting, and Mags gives you a look that says shouting would be the last mistake you make tonight.</div>
+            <div class="msg you">I pull out my magic super sword.</div>
+            <div class="msg gm">You reach with great confidence into the folds of your pinafore — the way heroes in storybooks do — and your fingers close on… nothing. The pocket is quite, quite empty. There is no sword, magic or otherwise; there is not even a pencil, or a button, or a crumb.<br><br>You consider this for a moment, and it occurs to you that a magic super sword is a very fine thing to wish for, but that wishes and waistcoat-pockets are much alike: both are often empty. Your only weapon, as far as you can tell, is your own two feet — and a very strong curiosity, which has served you better than any blade so far.</div>
           </div>
-          <p class="note"><svg class="i"><use href="img/icons.svg#i-shield-check"/></svg> Things that do not exist in the world do not appear. A gentle no, in the voice of the story.</p>
+          <p class="note"><svg class="i"><use href="img/icons.svg#i-shield-check"/></svg> Things that are not in the world do not appear — however nicely you ask.</p>
         </div>
-
+        <div class="example" role="tabpanel" id="ex-memory" aria-labelledby="tab-memory" hidden>
+          <div class="chat">
+            <div class="msg you">I check what I am carrying.</div>
+            <div class="msg gm">What you are carrying is this:<br><br>- The little golden key, bright as a star, which is now so large in your small hands that it might almost be a walking-stick. It is the same key, of course; it is only that you are smaller.<br>- A pinafore pocket containing nothing at all, though you polish it with your thumb to be sure.<br>- Your two feet, which are still attached, and your curiosity, which is as strong as ever.<br><br>The little glass box with its EAT ME cake still lies where you found it, under the glass table, with its lid slipped off — and the DRINK ME bottle stands empty on the table above, looking quite pleased with itself.</div>
+          </div>
+          <p class="note"><svg class="i"><use href="img/icons.svg#i-brain"/></svg> A few turns earlier Alice took the key and drank from the bottle. The world kept count.</p>
+        </div>
         <div class="example" role="tabpanel" id="ex-luck" aria-labelledby="tab-luck" hidden>
           <div class="chat">
-            <div class="msg you">I quickly snatch the calling card from Pip’s fingers.</div>
-            <div class="msg gm"><span class="roll"><svg class="i"><use href="img/icons.svg#i-dices"/></svg> Luck: 4 of 20 — not tonight</span>Pip’s hand is quicker than it looks. The card vanishes up his sleeve, and your fingers close on air.</div>
-            <div class="msg npc"><b>Pip</b>“Manners, guv. That’ll cost you double now.”</div>
+            <div class="msg you">While I fall, I grab a jar from one of the shelves.</div>
+            <div class="msg gm"><span class="roll"><svg class="i"><use href="img/icons.svg#i-dices"/></svg> Luck roll</span>Your fingers close around the jar just as it drifts within reach — a fine, round, orange-labelled thing, the very picture of breakfast. You pluck it from its shelf with the ease of a boy born to grab things in mid-air, which you are not, but you carry it off anyway.<br><br>It is, as these things always are, empty. Not a scrap of marmalade within — only the faint, distant scent of oranges, like a memory of a breakfast that already happened. The label reads, in a careful hand: ORANGE MARMALADE, and beneath, smaller: <em>For best results, open before falling.</em></div>
           </div>
-          <p class="note"><svg class="i"><use href="img/icons.svg#i-dices"/></svg> Bold moves roll for luck. The master does not give in to the player — people have their own will.</p>
+          <p class="note"><svg class="i"><use href="img/icons.svg#i-dices"/></svg> Daring moves roll for luck. This time the shelf gave up a jar — and a joke.</p>
         </div>
       </div>
     </section>
@@ -176,44 +192,33 @@
     <section class="section" id="now">
       <div class="section-head reveal">
         <p class="kicker">In the prototype today</p>
-        <h2>What already works</h2>
+        <h2>Already working</h2>
       </div>
-      <div class="features">
+      <div class="features features-now">
         <article class="card feature reveal">
           <svg class="i i-lg"><use href="img/icons.svg#i-feather"/></svg>
-          <h3>AI game master</h3>
-          <p>Narrates every turn, streams as it writes, and plays by the world’s rules.</p>
+          <h3>An AI master who remembers everything</h3>
         </article>
         <article class="card feature reveal">
-          <svg class="i i-lg"><use href="img/icons.svg#i-map-pin"/></svg>
-          <h3>A living world</h3>
-          <p>Places, passages, things and people form a graph that changes as you play.</p>
+          <svg class="i i-lg"><use href="img/icons.svg#i-globe"/></svg>
+          <h3>A living world that reacts and changes</h3>
         </article>
         <article class="card feature reveal">
           <svg class="i i-lg"><use href="img/icons.svg#i-users"/></svg>
           <h3>Characters with memory</h3>
-          <p>Everyone you meet keeps their own conversation with you and their own notes.</p>
         </article>
         <article class="card feature reveal">
-          <svg class="i i-lg"><use href="img/icons.svg#i-wand-sparkles"/></svg>
-          <h3>Heroes that fit</h3>
-          <p>Bring any hero; the story adapts them, or play one of the story’s own.</p>
-        </article>
-        <article class="card feature reveal">
-          <svg class="i i-lg"><use href="img/icons.svg#i-dices"/></svg>
-          <h3>Luck and finds</h3>
-          <p>Daring moves roll for luck; searching can turn up what the world hides.</p>
+          <svg class="i i-lg"><use href="img/icons.svg#i-user-round-plus"/></svg>
+          <h3>Create your hero — or play the story’s own</h3>
         </article>
         <article class="card feature reveal">
           <svg class="i i-lg"><use href="img/icons.svg#i-save"/></svg>
-          <h3>Saves that are worlds</h3>
-          <p>Close the book for a week and come back to exactly where you were.</p>
+          <h3>Saves: come back right where you left</h3>
         </article>
       </div>
       <p class="platforms reveal">
         <span><svg class="i"><use href="img/icons.svg#i-globe"/></svg> Browser — live</span>
         <span><svg class="i"><use href="img/icons.svg#i-smartphone"/></svg> iOS &amp; Android — in testing</span>
-        <span><svg class="i"><use href="img/icons.svg#i-monitor"/></svg> Desktop — planned</span>
       </p>
     </section>
 
@@ -228,28 +233,30 @@
           <span class="when">Now · Autumn 2026</span>
           <h3>The prototype</h3>
           <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> AI game master and a living world</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Your own hero, fitted to each story</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Play in the browser, free</li>
+            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Try it free in your browser</li>
+            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Alice’s Adventures in Wonderland and more stories</li>
+            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> An AI master, a living world, characters with memory</li>
           </ul>
         </li>
         <li class="milestone is-next reveal">
-          <span class="when">Soon</span>
-          <h3>Sharper and wider</h3>
+          <span class="when">Soon · Release, around Winter 2027</span>
+          <h3>foolore 1.0</h3>
           <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-library"/></svg> More stories in the library</li>
-            <li><svg class="i"><use href="img/icons.svg#i-smartphone"/></svg> iOS and Android apps</li>
-            <li><svg class="i"><use href="img/icons.svg#i-user-round-plus"/></svg> Sign in with Google or Apple, saves kept</li>
+            <li><svg class="i"><use href="img/icons.svg#i-upload"/></svg> Bring any book and publish your own adventures from it (paid plans)</li>
+            <li><svg class="i"><use href="img/icons.svg#i-log-in"/></svg> Sign in with Apple, Google and more</li>
+            <li><svg class="i"><use href="img/icons.svg#i-route"/></svg> A story engine that keeps the whole plot moving</li>
+            <li><svg class="i"><use href="img/icons.svg#i-users-round"/></svg> Around 100 characters acting at the same time</li>
           </ul>
         </li>
         <li class="milestone reveal">
-          <span class="when">Winter 2027 · Release</span>
-          <h3>foolore 1.0</h3>
+          <span class="when">Later</span>
+          <h3>More ways to play</h3>
           <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-users"/></svg> Co-op: play one story with friends, turn by turn</li>
-            <li><svg class="i"><use href="img/icons.svg#i-pen-tool"/></svg> Write your own stories and share them</li>
-            <li><svg class="i"><use href="img/icons.svg#i-graduation-cap"/></svg> Plans for schools and classrooms</li>
-            <li><svg class="i"><use href="img/icons.svg#i-monitor"/></svg> Desktop app</li>
+            <li><svg class="i"><use href="img/icons.svg#i-palette"/></svg> Customize how your chats look</li>
+            <li><svg class="i"><use href="img/icons.svg#i-volume-2"/></svg> Sound and music</li>
+            <li><svg class="i"><use href="img/icons.svg#i-image"/></svg> Illustrations and visual effects in the story</li>
+            <li><svg class="i"><use href="img/icons.svg#i-users"/></svg> Co-op: play one story with friends</li>
+            <li><svg class="i"><use href="img/icons.svg#i-book-open"/></svg> Adventures from comics, manga, manhwa and more</li>
           </ul>
         </li>
       </ol>
@@ -260,36 +267,27 @@
       <div class="section-head reveal">
         <p class="kicker">Pricing, promised</p>
         <h2>Fair prices for long stories</h2>
-        <p class="sub">The prototype is free. When foolore is released, we will keep it affordable — plans are planned, not final.</p>
+        <p class="sub">Try it free now, no card needed. When foolore is released, plans will look like this — planned, not final.</p>
       </div>
       <div class="plans">
-        <article class="card plan reveal">
-          <h3>Free</h3>
-          <p class="price"><span>$0</span></p>
-          <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Try every story</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> A daily number of turns</li>
-          </ul>
-        </article>
         <article class="card plan plan-main reveal">
-          <span class="badge">Main plan</span>
+          <span class="badge">Standard</span>
           <h3>Storyteller</h3>
           <p class="price"><small>about</small><span>$10</span><small>/ month</small></p>
-          <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Plenty of turns every day</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Smarter master model</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Co-op with friends</li>
-          </ul>
+          <p>Comfortable for playing every day.</p>
         </article>
         <article class="card plan reveal">
           <h3>Schools</h3>
-          <p class="price"><small>less than</small><span>$10</span><small>/ seat</small></p>
-          <ul>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Cheaper plans for classes</li>
-            <li><svg class="i"><use href="img/icons.svg#i-check"/></svg> Stories for reading and writing lessons</li>
-          </ul>
+          <p class="price price-text"><span>2–3×</span><small>cheaper than Standard</small></p>
+          <p>For classrooms and students.</p>
+        </article>
+        <article class="card plan reveal">
+          <h3>Extended</h3>
+          <p class="price price-text"><span>More</span><small>turns</small></p>
+          <p>Higher limits for long campaigns.</p>
         </article>
       </div>
+      <p class="fine reveal">There is no free plan after release — but you can always try a story for free first.</p>
     </section>
 
     <!-- Waitlist -->
@@ -304,7 +302,7 @@
           <button class="btn btn-accent" type="submit"><svg class="i"><use href="img/icons.svg#i-mail"/></svg> Notify me</button>
         </form>
         <p class="form-status" data-status role="status" aria-live="polite"></p>
-        <p class="fine">Or skip the wait: <a href="/play/">play the prototype now</a>.</p>
+        <p class="fine">Or skip the wait: <a href="/play/">try the prototype free</a>.</p>
       </div>
     </section>
   </main>
@@ -325,7 +323,7 @@
     </nav>
     <div class="footer-links">
       <a href="#" data-link="email"><svg class="i"><use href="img/icons.svg#i-mail"/></svg> <span data-email>Contact us</span></a>
-      <a href="/play/">Play the prototype</a>
+      <a href="/play/">Try it free</a>
     </div>
   </footer>
 

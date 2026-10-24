@@ -10,7 +10,7 @@ import { toPath } from './expo-files';
 import { getLibrary } from './services';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const DEMO_STORY = require('../../../../stories/brass-vault/brass-vault.qqstory');
+const DEMO_STORY = require('../../../../stories/alice/alice.qqstory');
 
 let ready: Promise<void> | undefined;
 

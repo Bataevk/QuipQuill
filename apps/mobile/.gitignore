@@ -44,3 +44,4 @@ example
 
 # SQLite WASM copied from node_modules (scripts/copy-sqlite-wasm.mjs)
 /public/sqlite/sqlite3.*
+.live-runs/
