@@ -72,7 +72,7 @@ def test_the_site_joins_the_waitlist_without_an_account(client: TestClient) -> N
 
 
 def test_the_site_form_is_limited_per_address(settings: Settings) -> None:
-    with open_client(settings, rate_limit_burst=2, rate_limit_per_minute=0.001) as client:
+    with open_client(settings, form_rate_limit_burst=2, form_rate_limit_per_minute=0.001) as client:
         codes = [
             client.post("/waitlist/site", json={"email": f"v{i}@example.com"}).status_code
             for i in range(3)

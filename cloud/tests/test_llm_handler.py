@@ -1,6 +1,7 @@
 """OpenRouter worker over the real queue and WebSocket, with a scripted model."""
 
 import json
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -10,7 +11,7 @@ import httpx2
 import openai
 import pytest
 from conftest import INVITE, db_run, ws_connect
-from fake_openrouter import FakeOpenRouter, text_stream, tool_stream
+from fake_openrouter import USAGE, FakeOpenRouter, chunk, text_stream, tool_stream
 from fastapi.testclient import TestClient
 
 from quipquill_cloud.core.config import Settings
@@ -567,3 +568,16 @@ def test_a_spent_key_stops_decisions_and_embeddings(
         while (event := ws.receive_json())["type"] != "error":
             pass
     assert (event["code"], event["retryable"]) == ("budget_exhausted", False)
+
+
+def test_an_empty_answer_is_logged_with_its_finish_reason(
+    app_client: TestClient, fake: FakeOpenRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    usage = {**USAGE, "completion_tokens_details": {"reasoning_tokens": 80}}
+    fake.chunks = [chunk("", finish="length", usage=usage)]
+    with caplog.at_level(logging.INFO, logger="quipquill_cloud.llm.handler"):
+        events = run(app_client, gm_request())
+    assert events[-1]["type"] == "done"
+    text = caplog.text
+    assert "reasoning=80 finish=length text=0 tools=0" in text
+    assert "answered req-1 with nothing (finish=length)" in text

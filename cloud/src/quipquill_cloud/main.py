@@ -99,6 +99,9 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
             sessionmaker=make_sessionmaker(engine),
             llm_client=llm_client or _llm_client(settings),
             rate_limiter=RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst),
+            form_limiter=RateLimiter(
+                settings.form_rate_limit_per_minute, settings.form_rate_limit_burst
+            ),
             dispatcher=EventDispatcher(settings.generation_ttl_seconds),
             cancels=CancelRegistry(settings.generation_ttl_seconds),
             prompts=PromptStore(settings.prompts_dir),

@@ -8,6 +8,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { AIMessage } from '@langchain/core/messages';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { AuthSession, MemoryTokenStore } from '@/core/net/auth';
@@ -90,7 +91,14 @@ async function play(game: Game, moves: readonly string[], log: Move[]): Promise<
     const events = (await game.world.log.ofTurn(turn.turn)).map((e) => (e.actor === 'generator' ? `gen:${e.kind}` : e.kind));
     log.push({ move, seconds: Math.round((Date.now() - t0) / 100) / 10, events });
     // An empty reply is logged, not fatal: the rest of the run is still worth having.
-    if (!turn.reply) console.log(`Empty reply to "${move}"`);
+    if (!turn.reply) {
+      console.log(`Empty reply to "${move}" (cutShort ${turn.cutShort}, rejected ${turn.rejected}):`);
+      for (const m of turn.messages) {
+        const calls = AIMessage.isInstance(m) ? (m.tool_calls ?? []).map((c) => `${c.name}(${JSON.stringify(c.args)})`) : [];
+        const meta = AIMessage.isInstance(m) ? JSON.stringify(m.response_metadata ?? {}).slice(0, 300) : '';
+        console.log(`  ${m.getType()}: ${m.text.slice(0, 300)} ${calls.join(' ')} ${meta}`);
+      }
+    }
   }
 }
 

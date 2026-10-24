@@ -12,7 +12,7 @@ class _Bucket:
 
 
 class RateLimiter:
-    """`per_minute` requests on average, at most `burst` in a row."""
+    """`per_minute` requests on average, at most `burst` in a row; `per_minute` <= 0 allows all."""
 
     def __init__(
         self, per_minute: float, burst: int, clock: Callable[[], float] = time.monotonic
@@ -23,6 +23,8 @@ class RateLimiter:
         self._buckets: dict[str, _Bucket] = {}
 
     def allow(self, key: str) -> bool:
+        if self._rate <= 0:
+            return True
         now = self._clock()
         bucket = self._buckets.get(key)
         if bucket is None:

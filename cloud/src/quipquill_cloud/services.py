@@ -23,6 +23,8 @@ class Services:
     sessionmaker: async_sessionmaker[AsyncSession]
     llm_client: AsyncOpenAI
     rate_limiter: RateLimiter
+    # The site's waitlist form and reports.
+    form_limiter: RateLimiter
     dispatcher: EventDispatcher
     cancels: CancelRegistry
     prompts: PromptStore

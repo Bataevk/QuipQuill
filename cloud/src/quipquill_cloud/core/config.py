@@ -28,9 +28,13 @@ class Settings(BaseSettings):
     # "text" reads well in a terminal; containers use "json" (docker-compose.yml).
     log_format: Literal["text", "json"] = "text"
 
-    # Abuse limits on top of the daily spend cap (owner, 2026-10-14).
-    rate_limit_per_minute: float = 30
+    # Requests to the models per user (chat over /ws, /embeddings); 0 = no limit, the default
+    # (owner, 2026-10-24): one turn is many calls, and the spend caps already hold the cost.
+    rate_limit_per_minute: float = 0
     rate_limit_burst: int = 10
+    # Forms without a model behind them: the site's waitlist (per IP) and reports (per user).
+    form_rate_limit_per_minute: float = 10
+    form_rate_limit_burst: int = 5
     # Overrides the tier's spend cap per UTC day for everyone (local test runs, demos);
     # unset = each tier's own cap (llm/policy.py). The product cap stays in code.
     daily_cost_limit_usd: Decimal | None = None

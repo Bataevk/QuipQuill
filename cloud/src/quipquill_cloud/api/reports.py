@@ -62,7 +62,7 @@ async def send_report(
         body = ReportIn.model_validate_json(raw)
     except ValidationError as error:
         raise RequestValidationError(error.errors()) from error
-    if not services.rate_limiter.allow(f"report:{user.id}"):
+    if not services.form_limiter.allow(f"report:{user.id}"):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited")
     report = Report(
         user_id=user.id,

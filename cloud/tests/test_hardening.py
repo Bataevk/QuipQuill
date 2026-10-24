@@ -211,3 +211,9 @@ def test_json_log_lines_carry_request_context() -> None:
     assert line["level"] == "error"
     assert line["requestId"] == "req-42"
     assert "ValueError: bad" in line["exc"]
+
+
+def test_no_rate_limit_by_default() -> None:
+    limiter = RateLimiter(per_minute=0, burst=1)
+    assert all(limiter.allow("u") for _ in range(100))
+    assert Settings.model_fields["rate_limit_per_minute"].default == 0

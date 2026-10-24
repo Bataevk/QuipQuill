@@ -332,6 +332,35 @@ describe('a draft the Guard added can react (ADR 48, drafts off since ADR 54)', 
   });
 });
 
+describe('an empty answer from the master', () => {
+  it('is asked once more, and the player sees the second answer', async () => {
+    const result = await play('I ask the Hatter a riddle.', { text: '' }, { text: 'The Hatter has no idea.' });
+    expect(result.reply).toBe('The Hatter has no idea.');
+    const saved = await chats.load(GM_CHAT);
+    expect(saved.filter((m) => AIMessage.isInstance(m) && !m.text.trim())).toHaveLength(0);
+    expect(isUnfinished(saved)).toBe(false);
+    expect((await transcript.lines()).map((l) => l.speaker)).toEqual(['player', 'gm']);
+  });
+
+  it('twice: the turn stays unfinished, and retryTurn finishes it without the empty answer', async () => {
+    const result = await play('I ask the Hatter a riddle.', { text: '' }, { text: '  ' });
+    expect(result.reply).toBe('');
+    expect(isUnfinished(await chats.load(GM_CHAT))).toBe(true);
+
+    master.push((messages) => ({ text: AIMessage.isInstance(messages.at(-1)) ? 'empty answer sent back' : 'No idea at all.' }));
+    const retried = await retryTurn({ agent: agentFor(), world, chats, transcript });
+    expect(retried.reply).toBe('No idea at all.');
+    expect(isUnfinished(await chats.load(GM_CHAT))).toBe(false);
+  });
+
+  it('a turn where someone spoke but the master then said nothing is finished', async () => {
+    says(MAGS, '"Shove off."');
+    const result = await play('Hi, Mags.', react(MAGS, 'The recruit says hi.'), { text: '' });
+    expect(result.reply).toBe('');
+    expect(isUnfinished(await chats.load(GM_CHAT))).toBe(false);
+  });
+});
+
 describe('a turn cut in the middle (retryTurn)', () => {
   const retry = () => retryTurn({ agent: agentFor(), world, chats, transcript });
 

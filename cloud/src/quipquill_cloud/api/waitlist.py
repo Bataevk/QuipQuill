@@ -49,7 +49,7 @@ async def join_waitlist_from_site(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> None:
     """The landing page's form: no account, so limited per client address. Idempotent too."""
-    if not services.rate_limiter.allow(f"waitlist:{client_ip(request)}"):
+    if not services.form_limiter.allow(f"waitlist:{client_ip(request)}"):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited")
     await session.execute(
         insert(WaitlistEntry)

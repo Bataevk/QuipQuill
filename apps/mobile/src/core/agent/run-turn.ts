@@ -74,8 +74,27 @@ export function runTurn({ input, source = 'player', ...deps }: TurnInput): Promi
     const turn = deps.world.beginTurn({ player: source === 'player' });
     const history = await deps.chats.load(GM_CHAT);
     if (source === 'player') await deps.transcript.append('player', input);
-    return play(deps, turn, history, [...history, inputMessage(input, source, turn)]);
+    return askAgainIfEmpty(deps, turn, await play(deps, turn, history, [...history, inputMessage(input, source, turn)]));
   });
+}
+
+/**
+ * The model sometimes ends a turn with nothing at all — no text, no tool call, no line (seen
+ * with Mercury 3, stage L.5): the player would get silence. The master is asked once more
+ * without the empty answer; if it is empty again, the turn stays unfinished (`isUnfinished`),
+ * so the game offers to continue it.
+ */
+async function askAgainIfEmpty(deps: TurnDeps, turn: number, result: TurnResult): Promise<TurnResult> {
+  if (!isEmptyAnswer(result.messages)) return result;
+  const history = await deps.chats.load(GM_CHAT);
+  return play(deps, turn, history, history.slice(0, -1));
+}
+
+/** The turn ended on an answer with no text, and nobody spoke in it. */
+function isEmptyAnswer(own: BaseMessage[]): boolean {
+  const last = own.at(-1);
+  if (!AIMessage.isInstance(last) || last.tool_calls?.length || actorOf(last) || last.text.trim()) return false;
+  return !own.some((m) => AIMessage.isInstance(m) && m.text.trim());
 }
 
 /**
@@ -90,7 +109,9 @@ export function retryTurn(deps: TurnDeps): Promise<TurnResult> {
     const known = turnOf(history[start]);
     const player = sourceOf(history[start]) === 'player';
     const turn = known === undefined ? deps.world.beginTurn({ player }) : deps.world.continueTurn(known, { player });
-    return play(deps, turn, history, history);
+    // An empty final answer is not something to continue from: the master answers again.
+    const resume = isEmptyAnswer(currentTurn(history)) ? history.slice(0, -1) : history;
+    return play(deps, turn, history, resume);
   });
 }
 
@@ -98,7 +119,9 @@ export function retryTurn(deps: TurnDeps): Promise<TurnResult> {
 export function isUnfinished(history: BaseMessage[]): boolean {
   const last = history.at(-1);
   if (turnStart(history) < 0 || !last) return false;
-  // An entity's line is not the end: the master answers after it (packs, ADR 43).
+  // An entity's line is not the end: the master answers after it (packs, ADR 43); nor is an
+  // empty answer in a turn where nothing was said.
+  if (isEmptyAnswer(currentTurn(history))) return true;
   return !(AIMessage.isInstance(last) && !last.tool_calls?.length && !actorOf(last));
 }
 

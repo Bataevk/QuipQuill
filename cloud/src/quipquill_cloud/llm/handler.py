@@ -294,9 +294,11 @@ class OpenRouterHandler:
         spent = _usage(answer.reported)
         # Which provider served each purpose and what it cached (ADR 49): cache misses show here.
         done_at = time.monotonic()
+        # finish= and reasoning= tell an empty answer apart: `length` with all `out` spent on
+        # reasoning means the limit was eaten before any text (stage L.5).
         logger.info(
             "llm %s purpose=%s model=%s provider=%s ttft=%.2f total=%.2f in=%s cached=%s "
-            "written=%s cost=%s",
+            "written=%s out=%s reasoning=%s finish=%s text=%s tools=%s cost=%s",
             request.request_id,
             request.purpose,
             model,
@@ -306,8 +308,17 @@ class OpenRouterHandler:
             spent["input"],
             spent["cacheRead"],
             spent["cacheWrite"],
+            spent["output"],
+            _reasoning_tokens(answer.reported),
+            answer.finish,
+            len(answer.text),
+            len(calls),
             spent["costUsd"],
         )
+        if not answer.text and not calls and answer.finish != "cancelled":
+            logger.warning(
+                "%s answered %s with nothing (finish=%s)", model, request.request_id, answer.finish
+            )
         await self._record(command, model, spent)
         message: dict[str, Any] = {"role": "assistant", "content": answer.text or None}
         if calls:
@@ -368,6 +379,14 @@ class _Answer:
     started: float = field(default_factory=time.monotonic)
     # When the first text or tool call arrived (time to first token).
     first: float | None = None
+
+
+def _reasoning_tokens(reported: Any) -> int:
+    """Reasoning tokens from OpenRouter's final chunk (0 when the model does not report them)."""
+    if reported is None:
+        return 0
+    details = reported.model_dump().get("completion_tokens_details") or {}
+    return details.get("reasoning_tokens") or 0
 
 
 def _usage(reported: Any) -> Usage:
