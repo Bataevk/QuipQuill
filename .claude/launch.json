@@ -4,14 +4,52 @@
     {
       "name": "web",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --port 8090"],
+      "runtimeArgs": [
+        "-c",
+        "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --port 8090"
+      ],
       "port": 8090
     },
     {
       "name": "web-alt",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --port 8092"],
+      "runtimeArgs": [
+        "-c",
+        "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --port 8092"
+      ],
       "port": 8092
+    },
+    {
+      "name": "cloud-badkey",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd cloud && OPENROUTER_API_KEY=sk-or-v1-invalid uv run fastapi dev --port 8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8095",
+        "-d",
+        "site",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "port": 8095
+    },
+    {
+      "name": "web-check",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/mobile && node scripts/copy-sqlite-wasm.mjs && npx expo start --web --port 8097"
+      ],
+      "port": 8097
     }
   ]
 }

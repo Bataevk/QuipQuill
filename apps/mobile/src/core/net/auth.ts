@@ -57,6 +57,22 @@ export interface Account {
 /** Where the player left an email for the release waitlist (ADR 66). */
 export type WaitlistSource = 'limit' | 'profile' | 'onboarding';
 
+/** The game as a report shows it (`Game.reportContext()`). */
+export interface ReportContext {
+  storyId: string;
+  saveId: string;
+  character: Record<string, unknown>;
+  transcript: { seq: number; speaker: string; text: string; ts: string }[];
+}
+
+/** A player's report (`POST /reports`). */
+export interface GameReport {
+  message: string;
+  context: ReportContext;
+  /** The app's platform and version, for reproducing. */
+  client: Record<string, unknown>;
+}
+
 export class AuthRequiredError extends Error {
   constructor(message = 'Sign in required') {
     super(message);
@@ -135,6 +151,23 @@ export class AuthSession {
   /** Leaves an email for the release waitlist (ADR 66); the same email again changes nothing. */
   async joinWaitlist(email: string, source: WaitlistSource): Promise<void> {
     await requestJson(`${this.baseUrl}/waitlist`, { body: { email, source }, token: await this.accessToken() });
+  }
+
+  /** The game's Report button: the player's words, the game as it was and the app's version. */
+  async sendReport(report: GameReport): Promise<void> {
+    const { message, context, client } = report;
+    await requestJson(`${this.baseUrl}/reports`, {
+      body: {
+        message,
+        story_id: context.storyId,
+        save_id: context.saveId,
+        character: context.character,
+        transcript: context.transcript,
+        client,
+      },
+      token: await this.accessToken(),
+      timeoutMs: 30_000,
+    });
   }
 
   async logout(): Promise<void> {

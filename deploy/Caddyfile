@@ -1,6 +1,8 @@
 # TLS from Let's Encrypt for $DOMAIN; HTTP is redirected to HTTPS. WebSocket (/ws) passes through.
-# The cloud's own paths go to the cloud; everything else is the web version (ADR 69), a static
-# build that CI puts in /opt/quipquill/web/releases/<sha> behind the `current` symlink.
+# The cloud's own paths go to the cloud; /play/* is the web version (ADR 69, built with
+# `experiments.baseUrl` = /play), a static build that CI puts in /opt/quipquill/web/releases/<sha>
+# behind the `current` symlink; everything else is the landing site (site/, ADR 77), the same way
+# in /opt/quipquill/site.
 {$DOMAIN} {
 	# Caddy's own list misses the story file (SQLite: 1.3 MB → 0.6 MB); this one covers what the
 	# cloud and the web build send.
@@ -17,12 +19,18 @@
 		}
 	}
 
-	@cloud path /auth/* /me /me/* /ws /stories /stories/* /embeddings /waitlist /health /health/*
+	@cloud path /auth/* /me /me/* /ws /stories /stories/* /embeddings /waitlist /waitlist/* /reports /health /health/*
 	handle @cloud {
 		reverse_proxy cloud:8000
 	}
 
-	handle {
+	redir /play /play/ 308
+	# Links to the web version from before ADR 77, when it lived at the root.
+	@old_app path /story/* /game/* /onboarding /onboarding/* /heroes /heroes/* /login
+	redir @old_app /play{uri} 308
+
+	# The web version: the build's own paths start at its root, so /play is stripped.
+	handle_path /play/* {
 		root * /srv/web/current
 		# Hashed bundles and assets never change; the rest (index.html, the SQLite worker) is
 		# checked on every visit, so a new release reaches the next page load.
@@ -37,10 +45,19 @@
 		handle @build {
 			file_server
 		}
-		# A single-page app: any other path (/story/<id>, /game/<id>) is one of its routes.
+		# A single-page app: any other path (/play/story/<id>, /play/game/<id>) is one of its routes.
 		handle {
 			try_files {path} /index.html
 			file_server
 		}
+	}
+
+	# The landing site: plain files; fonts and the icon sprite rarely change, pages are rechecked.
+	handle {
+		root * /srv/site/current
+		header /fonts/* Cache-Control "public, max-age=2592000"
+		header ?Cache-Control "no-cache"
+		try_files {path} {path}/index.html
+		file_server
 	}
 }

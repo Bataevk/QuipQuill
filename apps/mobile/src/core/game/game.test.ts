@@ -110,6 +110,20 @@ describe('Game', () => {
     expect(await game.recover()).toBeUndefined();
   });
 
+  it('gives a report the story, the hero as created and in the world, and every line seen', async () => {
+    character.push({ text: JSON.stringify({ adapted: ADAPTED, alternatives: [ADAPTED, ADAPTED], rationale: 'No elves here.' }) });
+    await game.start();
+    master.push({ text: 'The tavern smokes.' });
+    await game.choose(0);
+
+    const report = await game.reportContext();
+    expect(report).toMatchObject({ storyId: DEMO_STORY_ID, saveId: game.save.id });
+    expect(report.character.sheet).toMatchObject({ name: 'Elaria', race: 'elf' });
+    expect(report.character.inWorld).toMatchObject({ name: 'Elaria' });
+    expect(report.transcript.at(-1)).toMatchObject({ speaker: 'gm', text: 'The tavern smokes.' });
+    expect(report.transcript.map((l) => l.seq)).toEqual((await game.lines()).map((l) => l.seq));
+  });
+
   it('recovers after a failure at any step', async () => {
     character.push({ text: 'oops' });
     await expect(game.start()).rejects.toThrow();

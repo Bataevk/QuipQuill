@@ -89,6 +89,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # The web version's releases (ADR 69); CI switches web/current between them.
       - ./web:/srv/web:ro
+      # The landing site (ADR 77), released the same way by site.yml.
+      - ./site:/srv/site:ro
       - caddy-data:/data      # TLS certificates; losing it means re-issuing (rate-limited)
       - caddy-config:/config
     depends_on:

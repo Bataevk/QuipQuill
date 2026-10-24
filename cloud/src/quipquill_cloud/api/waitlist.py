@@ -2,14 +2,16 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from quipquill_cloud.api.auth import client_ip
 from quipquill_cloud.api.deps import CurrentUser
 from quipquill_cloud.db.models import WaitlistEntry
 from quipquill_cloud.db.session import get_session
+from quipquill_cloud.services import Services, get_services
 
 router = APIRouter(tags=["waitlist"])
 
@@ -30,6 +32,28 @@ async def join_waitlist(
     await session.execute(
         insert(WaitlistEntry)
         .values(email=body.email.lower(), user_id=user.id, source=body.source)
+        .on_conflict_do_nothing(index_elements=["email"])
+    )
+    await session.commit()
+
+
+class SiteWaitlistIn(BaseModel):
+    email: EmailStr
+
+
+@router.post("/waitlist/site", status_code=status.HTTP_204_NO_CONTENT)
+async def join_waitlist_from_site(
+    body: SiteWaitlistIn,
+    request: Request,
+    services: Annotated[Services, Depends(get_services)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """The landing page's form: no account, so limited per client address. Idempotent too."""
+    if not services.rate_limiter.allow(f"waitlist:{client_ip(request)}"):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited")
+    await session.execute(
+        insert(WaitlistEntry)
+        .values(email=body.email.lower(), user_id=None, source="site")
         .on_conflict_do_nothing(index_elements=["email"])
     )
     await session.commit()

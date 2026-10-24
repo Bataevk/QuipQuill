@@ -91,7 +91,11 @@ const LOCK = 'foolore-storage';
 export async function connectWorker(): Promise<WorkerPort> {
   if (!(await holdTabLock())) throw new StorageBusyError();
   void navigator.storage?.persist?.().catch(() => false);
-  return new Worker('/sqlite/db-worker.mjs', { type: 'module' }) as unknown as WorkerPort;
+  // An exported build lives under `experiments.baseUrl` (/play, beside the landing site, ADR 77):
+  // Expo prefixes the bundle, but a file from `public/` is our own URL to prefix. The dev server
+  // (Metro) serves `public/` at its root whatever the base.
+  const base = __DEV__ ? '' : (process.env.EXPO_BASE_URL ?? '').replace(/\/+$/, '');
+  return new Worker(`${base}/sqlite/db-worker.mjs`, { type: 'module' }) as unknown as WorkerPort;
 }
 
 function holdTabLock(): Promise<boolean> {

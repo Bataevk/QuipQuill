@@ -9,6 +9,7 @@ import { ChatInput } from '@/components/chat-input';
 import { feedRows, type FeedRow } from '@/components/feed-rows';
 import { FoolBells } from '@/components/fool-loader';
 import { Prose } from '@/components/prose';
+import { ReportButton } from '@/components/report-sheet';
 import { WaitlistForm } from '@/components/waitlist-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -76,7 +77,7 @@ export default function GameScreen() {
 
   return (
     <ThemedView style={styles.screen}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen options={{ title, headerRight: () => <ReportButton send={game.report} /> }} />
       <SafeAreaView style={styles.column} edges={['bottom']}>
         {/* `padding` on Android too (stage T.1): with edge-to-edge (Android 15+) the system no
             longer shrinks the window for the keyboard, so the field would stay under it. */}
@@ -103,7 +104,7 @@ export default function GameScreen() {
               )
             }
           />
-          {(game.phase === 'playing' || adapting) && limit !== 'prototype' ? (
+          {(game.phase === 'playing' || adapting) && limit !== 'prototype' && limit !== 'budget' ? (
             <View style={[styles.inputRow, { borderTopColor: theme.line }]}>
               {adapting && game.proposal ? <ChangesLeft round={game.proposal.round} maxRounds={game.proposal.maxRounds} /> : null}
               <ChatInput
@@ -165,11 +166,15 @@ function ChangesLeft({ round, maxRounds = 3 }: { round: number; maxRounds?: numb
   );
 }
 
-type Limit = 'prototype' | 'daily';
+type Limit = 'prototype' | 'daily' | 'budget';
 
-/** A spent allowance (protocol `error` codes, ADR 66): the prototype's for good, or today's. */
+/**
+ * A spent allowance (protocol `error` codes, ADR 66): the prototype's for good, or today's; or
+ * the team's own budget for the models — the shared key cannot pay any more.
+ */
 function limitOf(error: string | undefined): Limit | undefined {
   if (!error) return undefined;
+  if (error.includes('budget_exhausted')) return 'budget';
   if (error.includes('prototype_limit')) return 'prototype';
   if (error.includes('limit_exceeded')) return 'daily';
   return undefined;
@@ -195,15 +200,26 @@ function useAllowanceSpent(): boolean {
 }
 
 /** What the player sees instead of an error when the allowance is spent; asks for an email. */
+const NOTICES: Record<Limit, { title: string; text: string }> = {
+  prototype: {
+    title: 'The prototype ends here',
+    text: 'You have played every turn this prototype allows. Thank you for trying foolore!',
+  },
+  daily: { title: 'That is all for today', text: 'Today’s allowance is spent. The story will wait for you tomorrow.' },
+  budget: {
+    title: 'The ink has run dry',
+    text:
+      'This is an early prototype, and the budget our team set aside for the AI models has run out. ' +
+      'Thank you for playing so much! Join the waitlist and we will write to you when foolore is released.',
+  },
+};
+
 function LimitNotice({ limit }: { limit: Limit }) {
+  const notice = NOTICES[limit];
   return (
     <Card>
-      <ThemedText type="title">{limit === 'prototype' ? 'The prototype ends here' : 'That is all for today'}</ThemedText>
-      <ThemedText type="story">
-        {limit === 'prototype'
-          ? 'You have played every turn this prototype allows. Thank you for trying foolore!'
-          : 'Today’s allowance is spent. The story will wait for you tomorrow.'}
-      </ThemedText>
+      <ThemedText type="title">{notice.title}</ThemedText>
+      <ThemedText type="story">{notice.text}</ThemedText>
       <WaitlistForm source="limit" intro="Leave an email and we will tell you when the full version is out." />
     </Card>
   );

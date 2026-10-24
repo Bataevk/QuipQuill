@@ -32,6 +32,8 @@ make cloud-lint
 | `POST /auth/refresh` `{refresh_token}` | 200 → новая пара; старый refresh отзывается. Повтор уже отозванного → отзыв **всех** токенов пользователя, 401 `refresh_token_reused` |
 | `GET /me` (Bearer) | `{id, email (null у гостя), kind, tier, terms_version, terms_accepted_at, created_at, usage_today, limits: {daily_cost_usd}}` |
 | `POST /waitlist` (Bearer) `{email, source: limit\|profile\|onboarding}` | 204; список желающих узнать о релизе (ADR 66), повтор той же почты ничего не меняет |
+| `POST /waitlist/site` `{email}` | 204; форма сайта-обложки без аккаунта (ADR 77), `source = site`, лимит на IP |
+| `POST /reports` (Bearer) `{message, story_id, save_id, character, transcript, client}` | 201 `{id}`; репорт из игры в таблицу `reports` (ADR 79), больше 2 МБ — 413 |
 | `POST /me/consent` (Bearer) `{terms_version}` | 200 → `{terms_version, terms_accepted_at}`: игрок принял условия этой версии (ADR 60) |
 | `GET /stories` (Bearer) | каталог (ADR 61): `[{id, version (sha256 файла), title, tagline, summary, heroes, built_at, size}]` |
 | `GET /stories/{id}/file` (Bearer) | файл `.qqstory` (ETag — `version`); 404 `story_not_found` |

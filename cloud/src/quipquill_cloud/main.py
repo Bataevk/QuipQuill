@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 
 from quipquill_cloud import __version__
-from quipquill_cloud.api import auth, embeddings, health, me, stories, waitlist, ws
+from quipquill_cloud.api import auth, embeddings, health, me, reports, stories, waitlist, ws
 from quipquill_cloud.core import logs
 from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.core.ratelimit import RateLimiter
@@ -159,6 +159,7 @@ def create_app(settings: Settings | None = None, llm_client: AsyncOpenAI | None 
     app.include_router(embeddings.router)
     app.include_router(stories.router)
     app.include_router(waitlist.router)
+    app.include_router(reports.router)
     return app
 
 

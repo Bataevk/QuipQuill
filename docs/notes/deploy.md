@@ -72,13 +72,20 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 
 Провайдер лежит: временно задать порядок для всех маршрутов — `PROVIDER_ORDER=["amazon-bedrock"]` в `CLOUD_CONFIG_ENV` (ADR 50; без переменной — порядок маршрута: Vertex global → Bedrock, ADR 51). Какой провайдер обслужил вызов и задержка — в логе `cloud`: строки `llm … provider= ttft= total=`.
 
-## Веб-версия
+## Веб-версия и сайт
 
-Тот же домен, что у облака (ADR 69). [deploy/Caddyfile](../../deploy/Caddyfile) отправляет в облако его пути: `/auth/*`, `/me*`, `/ws`, `/stories*`, `/embeddings`, `/waitlist`, `/health*`. Остальное — статика из `web/current`:
-- маршруты приложения (`/story/<id>`, `/game/<id>`…) получают `index.html`;
-- отсутствующий файл сборки (`/_expo/*`, `/assets/*`, `/sqlite/*`) — 404;
-- хешированные `/_expo/static/*` и `/assets/*` кэшируются навсегда, остальное — `no-cache`;
-- сжатие zstd/gzip, включая историю `.qqstory` (1,3 → 0,6 МБ).
+Тот же домен, что у облака (ADR 69, 77). [deploy/Caddyfile](../../deploy/Caddyfile) отправляет в облако его пути: `/auth/*`, `/me*`, `/ws`, `/stories*`, `/embeddings`, `/waitlist*`, `/reports`, `/health*`. Дальше:
+- **`/play/*` — веб-версия** из `web/current` (собрана с `experiments.baseUrl = /play`, Caddy снимает префикс): маршруты приложения (`/play/story/<id>`, `/play/game/<id>`…) получают `index.html`; отсутствующий файл сборки (`/_expo/*`, `/assets/*`, `/sqlite/*`) — 404; хешированные `/_expo/static/*` и `/assets/*` кэшируются навсегда, остальное — `no-cache`. `/play` → `/play/`, старые адреса (`/story/*`, `/game/*`, `/onboarding`…) — редирект 308 на `/play…`.
+- **Остальное — сайт-обложка** из `site/current` (папка `site/` репозитория как есть, без сборки); шрифты кэшируются на 30 дней, остальное — `no-cache`.
+- Сжатие zstd/gzip, включая историю `.qqstory` (1,3 → 0,6 МБ).
+
+Сайт выкатывает [`.github/workflows/site.yml`](../../.github/workflows/site.yml) на push в `project-131027`, если изменился `site/`: архив → `/opt/quipquill/site/releases/<sha>` → symlink `current`, три последних релиза. Smoke test ждёт до ~6 минут, пока главная отдаёт сайт и `/waitlist/site` отвечает (Caddyfile приезжает с деплоем облака). Ссылки на соцсети и почта — в начале `site/main.js` (`LINKS`).
+
+Записи сайта в список ожидания — `waitlist` с `source = 'site'`; репорты из игры — таблица `reports` (ADR 79):
+
+```bash
+ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 "cd /opt/quipquill && docker compose exec -T postgres psql -U quipquill -c \"SELECT id, created_at, message, story_id, jsonb_array_length(transcript) AS lines, client FROM reports ORDER BY id DESC LIMIT 20\""
+```
 
 `deploy.sh` после `compose up` перезагружает конфиг Caddy: правка `Caddyfile` контейнер не пересоздаёт.
 
@@ -87,6 +94,8 @@ ssh -i ~/.ssh/quipquill_vps root@146.103.120.112 'sudo -u deploy /opt/quipquill/
 ```bash
 cd /opt/quipquill/web && ls -1t releases && ln -sfn releases/<sha> .current.tmp && mv -T .current.tmp current
 ```
+
+Сайт — так же, в `/opt/quipquill/site`.
 
 Сборку можно проверить локально: `npm run export:web` в `apps/mobile`, затем Caddy в Docker с `DOMAIN=:80`, папкой `web/current` → `web-build` и заглушкой на `cloud:8000` (так проверялся этап W.4).
 

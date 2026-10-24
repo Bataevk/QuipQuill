@@ -140,6 +140,8 @@ class _Embeddings:
 
     async def create(self, *, model: str, input: list[str]) -> CreateEmbeddingResponse:
         self._owner.requests.append({"model": model, "input": input})
+        if self._owner.error is not None:
+            raise self._owner.error
         return CreateEmbeddingResponse.model_validate(
             {
                 "object": "list",

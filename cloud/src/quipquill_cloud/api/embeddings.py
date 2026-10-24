@@ -1,5 +1,6 @@
 """POST /embeddings — vectors for lore search at play time (same model as the story file)."""
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -10,7 +11,10 @@ from pydantic import BaseModel, Field
 from quipquill_cloud.api.deps import CurrentUser
 from quipquill_cloud.core.config import Settings, get_settings
 from quipquill_cloud.llm import usage
+from quipquill_cloud.llm.handler import BUDGET_EXHAUSTED, failure_code
 from quipquill_cloud.services import Services, get_services
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["llm"])
 
@@ -55,6 +59,11 @@ async def embeddings(
     try:
         response = await services.llm_client.embeddings.create(model=body.model, input=body.input)
     except openai.APIError as error:
+        if failure_code(error) == BUDGET_EXHAUSTED:
+            logger.error("Embeddings failed, the key cannot pay: %s", error)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, detail=BUDGET_EXHAUSTED
+            ) from error
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="provider_error") from error
 
     data = response.model_dump()

@@ -1,4 +1,6 @@
+import Constants from 'expo-constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import type { CharacterProposal } from '@/core/agent/character';
 import type { TranscriptLine } from '@/core/agent/transcript';
@@ -38,6 +40,8 @@ export interface GameView {
   /** A card of proposal `round` (the latest when not given). */
   choose(index: number, round?: number): void;
   recover(): void;
+  /** The Report button: the player's words with the hero and the transcript, to the cloud. */
+  report(message: string): Promise<void>;
 }
 
 interface Snapshot {
@@ -196,5 +200,17 @@ export function useGame(saveId: string): GameView {
     clarify: (text) => run((g, signal) => g.clarify(text, signal), text),
     choose: (index, round) => run((g, signal) => g.choose(index, round, signal)),
     recover: () => run((g, signal) => g.recover(signal)),
+    report: async (message) => {
+      const game = gameRef.current;
+      if (!game) throw new Error('The game is not open yet.');
+      const client = {
+        platform: Platform.OS,
+        version: Constants.expoConfig?.version ?? null,
+        // What the screen showed when the player wrote, if anything went wrong.
+        error: error ?? null,
+        phase: state?.phase ?? null,
+      };
+      await getCloud().auth.sendReport({ message, context: await game.reportContext(), client });
+    },
   };
 }

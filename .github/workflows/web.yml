@@ -1,5 +1,5 @@
 # The web version (ADR 69): on project-131027 (or by hand) build the static export and put it on
-# the VPS next to the cloud, which Caddy serves (deploy/Caddyfile). Tests and lint of the app run
+# the VPS next to the cloud, which Caddy serves at /play (deploy/Caddyfile, ADR 77). Tests and lint of the app run
 # in ci.yml. Server layout and rollback: docs/notes/deploy.md.
 name: web
 
@@ -78,8 +78,9 @@ jobs:
       - name: Smoke test
         run: |
           base="https://${{ vars.DEPLOY_DOMAIN }}"
-          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/" | grep -q '<title>foolore</title>'
-          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/story/any" | grep -q '<div id="root">'
-          type=$(curl -fsS -o /dev/null -w '%{content_type}' "$base/sqlite/sqlite3.wasm")
+          # Under /play since ADR 77; the root is the landing site.
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/play/" | grep -q '<title>foolore</title>'
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$base/play/story/any" | grep -q '<div id="root">'
+          type=$(curl -fsS -o /dev/null -w '%{content_type}' "$base/play/sqlite/sqlite3.wasm")
           [ "$type" = "application/wasm" ] || { echo "sqlite3.wasm served as $type"; exit 1; }
           curl -fsS "$base/health"; echo

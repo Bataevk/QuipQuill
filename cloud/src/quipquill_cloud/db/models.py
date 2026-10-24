@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 TIERS = ("free", "pro", "max")
@@ -65,7 +67,7 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-WAITLIST_SOURCES = ("limit", "profile", "onboarding")
+WAITLIST_SOURCES = ("limit", "profile", "onboarding", "site")
 
 
 class WaitlistEntry(Base):
@@ -74,7 +76,7 @@ class WaitlistEntry(Base):
     __tablename__ = "waitlist"
     __table_args__ = (
         CheckConstraint(
-            "source IN ('limit', 'profile', 'onboarding')", name="waitlist_source_valid"
+            "source IN ('limit', 'profile', 'onboarding', 'site')", name="waitlist_source_valid"
         ),
     )
 
@@ -82,8 +84,28 @@ class WaitlistEntry(Base):
     # Stored lowercased; one row per email, whoever leaves it again.
     email: Mapped[str] = mapped_column(String(320), unique=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    # Where the player left it: the prototype limit, the profile or the onboarding.
+    # Where the player left it: the prototype limit, the profile, the onboarding or the site.
     source: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Report(Base):
+    """A player's report from the game (the Report button): what they say and the game as it was."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    message: Mapped[str] = mapped_column(Text)
+    story_id: Mapped[str | None] = mapped_column(String(64))
+    save_id: Mapped[str | None] = mapped_column(String(64))
+    # The hero as played and the transcript the player saw (oldest first), as the app sent them.
+    character: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    transcript: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    # The app's platform and version, for reproducing.
+    client: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

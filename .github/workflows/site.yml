@@ -1,0 +1,65 @@
+# The landing site (ADR 77): on project-131027 (or by hand) put site/ on the VPS, where Caddy
+# serves it at the domain's root (deploy/Caddyfile). No build: the folder is the site.
+# Server layout and rollback: docs/notes/deploy.md.
+name: site
+
+on:
+  push:
+    branches: [project-131027]
+    paths: ["site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false # never interrupt a half-done deploy
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/project-131027'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://${{ vars.DEPLOY_DOMAIN }}
+    permissions:
+      contents: read
+    env:
+      HOST: deploy@${{ vars.DEPLOY_HOST }}
+      RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: tar -czf site.tar.gz -C site --exclude=LICENSES.md .
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Release
+        run: |
+          # As the web version: unpacked beside the live one, then `current` switches in one step.
+          scp -q site.tar.gz "$HOST:/tmp/site-$RELEASE.tar.gz"
+          # shellcheck disable=SC2029 # the release id is meant to expand here, on the runner
+          ssh "$HOST" "set -e; install -d -m 755 /opt/quipquill/site/releases && cd /opt/quipquill/site \
+            && install -d -m 755 releases/$RELEASE \
+            && tar -xzf /tmp/site-$RELEASE.tar.gz -C releases/$RELEASE \
+            && rm /tmp/site-$RELEASE.tar.gz \
+            && ln -sfn releases/$RELEASE .current.tmp && mv -T .current.tmp current \
+            && ls -1t releases | tail -n +4 | sed 's|^|releases/|' | xargs -r rm -rf"
+      - name: Smoke test
+        run: |
+          base="https://${{ vars.DEPLOY_DOMAIN }}"
+          # The Caddyfile that serves the site at the root comes with the cloud's deploy (cloud.yml),
+          # which may still be running: wait for it up to ~6 minutes.
+          check() {
+            curl -fsS "$base/" | grep -q 'stories that answer back' \
+              && curl -fsS -o /dev/null "$base/img/icons.svg" \
+              && curl -fsS -o /dev/null "$base/fonts/inter-latin-wght-normal.woff2" \
+              && [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+                -d '{"email":"not an email"}' "$base/waitlist/site")" = "422" ]
+          }
+          for _ in $(seq 36); do check && exit 0; sleep 10; done
+          echo "The site or its waitlist endpoint is not served"; exit 1

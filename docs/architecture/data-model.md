@@ -221,7 +221,13 @@ usage_events   (id bigserial PK, user_id uuid FK → users ON DELETE CASCADE, re
                 INDEX (user_id, created_at))
 waitlist       (id bigserial PK, email varchar(320) UNIQUE  -- нижний регистр; ADR 66
                 , user_id uuid FK → users ON DELETE SET NULL
-                , source varchar(16) CHECK (source IN ('limit','profile','onboarding')), created_at)
+                , source varchar(16) CHECK (source IN ('limit','profile','onboarding','site')), created_at)
+reports        (id bigserial PK, user_id uuid FK → users ON DELETE SET NULL (index)  -- ADR 79
+                , message text, story_id varchar(64), save_id varchar(64)
+                , character jsonb             -- {sheet, inWorld}: лист героя и сущность player
+                , transcript jsonb            -- [{seq, speaker, text, ts}], что видел игрок
+                , client jsonb                -- {platform, version, error, phase}
+                , created_at timestamptz)
 -- лимиты (2.3): сумма usage_events за UTC-сутки по user_id против конфигурации тарифа;
 -- у гостя ещё и за всё время против GUEST_TOTAL_COST_LIMIT_USD (ADR 66)
 ```

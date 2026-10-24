@@ -26,6 +26,23 @@ from quipquill_cloud.mq.schemas import NO_USAGE, Command, Event, LlmRequest, Usa
 
 logger = logging.getLogger(__name__)
 
+# The shared OpenRouter key cannot pay (protocol.md): its credits or its limit are spent (402) or
+# it is no longer valid (401). Nothing the player can retry; the app says the prototype's model
+# budget has run out and offers the waitlist.
+BUDGET_EXHAUSTED = "budget_exhausted"
+_KEY_STATUSES = (401, 402)
+# Errors a retry will not fix.
+FINAL = ("bad_request", BUDGET_EXHAUSTED)
+
+
+def failure_code(error: openai.APIError) -> str:
+    """The protocol error code of a failed OpenRouter call."""
+    if isinstance(error, openai.APIStatusError) and error.status_code in _KEY_STATUSES:
+        return BUDGET_EXHAUSTED
+    if isinstance(error, openai.BadRequestError):
+        return "bad_request"
+    return "provider_error"
+
 
 class _ToolCallBuffer:
     """Accumulates streamed tool-call fragments by their index."""
@@ -116,21 +133,18 @@ class OpenRouterHandler:
                         yield Event(**event, **common)
             except (TimeoutError, openai.APITimeoutError):
                 failure = "timeout"
-            except openai.BadRequestError as error:
-                logger.warning(
-                    "%s rejected request %s: %s", attempt.model, request.request_id, error
-                )
-                failure = "bad_request"
             except openai.APIError as error:
-                logger.warning("%s error for %s: %s", attempt.model, request.request_id, error)
-                failure = "provider_error"
+                failure = failure_code(error)
+                log = logger.error if failure == BUDGET_EXHAUSTED else logger.warning
+                log("%s failed for %s: %s", attempt.model, request.request_id, error)
 
             if failure is None:
                 async for event in self._finish(command, attempt.model, answer):
                     yield event
                 return
-            # The spare model only while the player has seen nothing of this answer.
-            if number < len(attempts) and not answer.streamed:
+            # The spare model only while the player has seen nothing of this answer; the spare
+            # goes through the same key, so a spent key fails it too.
+            if number < len(attempts) and not answer.streamed and failure != BUDGET_EXHAUSTED:
                 logger.warning(
                     "%s failed (%s) for %s; trying %s",
                     attempt.model,
@@ -139,7 +153,7 @@ class OpenRouterHandler:
                     attempts[number].model,
                 )
                 continue
-            yield error_event(failure, retryable=failure != "bad_request", **common)
+            yield error_event(failure, retryable=failure not in FINAL, **common)
             return
 
     async def _decide(self, command: Command, model: str) -> AsyncIterator[Event]:
@@ -164,13 +178,11 @@ class OpenRouterHandler:
         except (TimeoutError, openai.APITimeoutError):
             yield error_event("timeout", retryable=True, **common)
             return
-        except openai.BadRequestError as error:
-            logger.warning("Decision rejected %s: %s", request.request_id, error)
-            yield error_event("bad_request", **common)
-            return
         except openai.APIError as error:
-            logger.warning("Decision error for %s: %s", request.request_id, error)
-            yield error_event("provider_error", retryable=True, **common)
+            failure = failure_code(error)
+            log = logger.error if failure == BUDGET_EXHAUSTED else logger.warning
+            log("Decision failed for %s: %s", request.request_id, error)
+            yield error_event(failure, retryable=failure not in FINAL, **common)
             return
         answers = reply.get("answers") if isinstance(reply, dict) else None
         if not isinstance(answers, dict):

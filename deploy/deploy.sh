@@ -13,7 +13,7 @@ if [[ $# -ge 1 ]]; then
 fi
 
 # The web version's folder (ADR 69): ours before compose mounts it, or Docker makes it root's.
-install -d -m 755 web/releases
+install -d -m 755 web/releases site/releases
 docker compose pull --quiet
 docker compose up -d --wait --remove-orphans
 # A changed Caddyfile does not recreate the container (it is a bind mount): load it by hand.

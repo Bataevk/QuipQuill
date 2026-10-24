@@ -7,6 +7,7 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 import type { CharacterProposal } from '../agent/character';
+import type { ReportContext } from '../net/auth';
 import { lastProposal } from '../agent/character';
 import { ChatStore, GM_CHAT } from '../agent/chat-store';
 import { BackgroundWork } from '../agent/background';
@@ -229,6 +230,20 @@ export class Game {
   /** Everything the player has seen, oldest first. */
   lines(): Promise<TranscriptLine[]> {
     return this.transcript.lines();
+  }
+
+  /**
+   * What the Report button sends besides the player's words: the story and save, the hero as
+   * created and as the world has it now, and every line the player has seen.
+   */
+  async reportContext(): Promise<ReportContext> {
+    const [lines, player] = await Promise.all([this.transcript.lines(), this.world.state.player()]);
+    return {
+      storyId: this.save.storyId,
+      saveId: this.save.id,
+      character: { sheet: this.sheet(), inWorld: player ?? null },
+      transcript: lines.map(({ seq, speaker, text, ts }) => ({ seq, speaker, text, ts })),
+    };
   }
 
   /** The pending character proposal while adapting. */

@@ -271,6 +271,13 @@ def test_daily_limit_blocks_before_calling_the_model(
     assert fake.requests == []
 
 
+def key_error(code: int) -> openai.APIStatusError:
+    """OpenRouter refusing the shared key: 402 — no credits left, 401 — the key is not valid."""
+    response = httpx2.Response(code, request=httpx2.Request("POST", "http://x"))
+    kind = openai.AuthenticationError if code == 401 else openai.APIStatusError
+    return kind("key", response=response, body=None)
+
+
 @pytest.mark.parametrize(
     ("error", "code", "retryable"),
     [
@@ -289,6 +296,8 @@ def test_daily_limit_blocks_before_calling_the_model(
             True,
         ),
         (openai.APITimeoutError(request=httpx2.Request("POST", "http://x")), "timeout", True),
+        (key_error(402), "budget_exhausted", False),
+        (key_error(401), "budget_exhausted", False),
     ],
 )
 def test_provider_errors_become_error_events(
@@ -525,3 +534,36 @@ def test_the_items_of_a_request_become_questions(
     (body,) = fake.requests
     assert list(body["questions"]) == ["decision", "reason", "sentence_0", "sentence_1"]
     assert body["questions"]["sentence_1"]["instructions"].endswith("\nText: A bard.")
+
+
+def test_a_spent_key_skips_the_spare_model(settings: Settings, fake: FakeOpenRouter) -> None:
+    live = settings.model_copy(
+        update={
+            "llm_handler": "openrouter",
+            "llm_model": "inception/mercury-3",
+            "llm_fallback_model": "anthropic/claude-haiku-5.5",
+        }
+    )
+    fake.error = key_error(402)
+    with TestClient(create_app(live, llm_client=fake)) as client:
+        events = run(client, gm_request())
+    assert len(fake.requests) == 1  # the spare goes through the same key
+    assert (events[-1]["code"], events[-1]["retryable"]) == ("budget_exhausted", False)
+
+
+def test_a_spent_key_stops_decisions_and_embeddings(
+    app_client: TestClient, fake: FakeOpenRouter
+) -> None:
+    fake.error = key_error(402)
+    headers = {"Authorization": f"Bearer {token_for(app_client)}"}
+    body = {"model": "openai/text-embedding-3-small", "input": ["abc"]}
+    response = app_client.post("/embeddings", json=body, headers=headers)
+    assert response.status_code == 503
+    assert response.json()["detail"] == "budget_exhausted"
+
+    fake.decision_error = key_error(402)
+    with ws_connect(app_client, headers["Authorization"].split()[1]) as ws:
+        ws.send_json(guard_request())
+        while (event := ws.receive_json())["type"] != "error":
+            pass
+    assert (event["code"], event["retryable"]) == ("budget_exhausted", False)
